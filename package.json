@@ -1,0 +1,45 @@
+{
+  "name": "loan-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --configLoader native",
+    "build": "vite build --configLoader native",
+    "lint": "eslint .",
+    "preview": "vite preview --configLoader native",
+    "cap:sync": "cap sync",
+    "cap:android": "cap open android",
+    "android:apk": "npm run build && npx cap sync android && cd android && .\\gradlew.bat assembleDebug",
+    "deploy:hosting": "npm run build && npx firebase deploy --only hosting,firestore:rules",
+    "deploy:firebase": "npm run build && npx firebase deploy --only hosting,firestore:rules",
+    "deploy:firestore": "npx firebase deploy --only firestore",
+    "deploy:firestore-rules": "npx firebase deploy --only firestore:rules"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.2.0",
+    "@capacitor/core": "^7.2.0",
+    "@tailwindcss/vite": "^4.2.4",
+    "firebase": "^12.12.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
+    "lucide-react": "^1.11.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-router-dom": "^7.14.2",
+    "tailwindcss": "^4.2.4",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.2.0",
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^10.2.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.5.0",
+    "vite": "^8.0.10"
+  }
+}

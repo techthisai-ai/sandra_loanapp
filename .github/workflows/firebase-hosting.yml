@@ -1,0 +1,171 @@
+# Firebase Hosting only ? never deploys Firestore, Auth, or Storage rules.
+# Live: push or merge to main. Preview: pull requests targeting main.
+name: Firebase Hosting
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+  deployments: write
+  statuses: write
+
+concurrency:
+  group: firebase-hosting-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (Vite ? dist)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Verify dist output
+        id: verify
+        run: |
+          test -f dist/index.html
+          echo "dist/index.html present"
+          du -sh dist
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: dist
+          path: dist
+          retention-days: 2
+          if-no-files-found: error
+
+  deploy_production:
+    name: Deploy production (cafe-c396e.web.app)
+    needs: build
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+
+      - name: Validate hosting config
+        run: |
+          test -f firebase.json
+          test -f .firebaserc
+          test -f dist/index.html
+          node -e 'const c=require("./firebase.json"); if(!c.hosting||c.hosting.public!=="dist"){process.exit(1)}'
+          node -e 'const fs=require("fs"); const c=JSON.parse(fs.readFileSync(".firebaserc","utf8")); if(!c.projects||!c.projects.default){process.exit(1)}; console.log(c.projects.default)'
+          echo "Deploy scope: hosting only (no Firestore/Auth/Storage)"
+
+      - name: Verify Firebase service account secret
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_CAFE_C396E }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
+            echo "::error::Firebase service account secret is missing."
+            echo "Firebase Console -> Project settings -> Service accounts -> Generate new private key"
+            echo "GitHub -> Settings -> Secrets and variables -> Actions -> New repository secret"
+            echo "Accepted secret names: FIREBASE_SERVICE_ACCOUNT or FIREBASE_SERVICE_ACCOUNT_CAFE_C396E"
+            echo "Service account needs: Firebase Hosting Admin (roles/firebasehosting.admin)"
+            exit 1
+          fi
+          echo "Firebase service account secret is configured."
+
+      - name: Deploy Firebase Hosting (hosting only)
+        id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_CAFE_C396E }}
+          projectId: cafe-c396e
+          channelId: live
+          firebaseToolsVersion: latest
+
+      - name: Deployment summary
+        if: steps.deploy.outcome == 'success'
+        run: |
+          echo "## Production deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Live: https://cafe-c396e.web.app" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Console: https://console.firebase.google.com/project/cafe-c396e/hosting" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${{ steps.deploy.outputs.details_url }}" ]; then
+            echo "- Details: ${{ steps.deploy.outputs.details_url }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  deploy_preview:
+    name: Deploy PR preview
+    needs: build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+
+      - name: Validate hosting config
+        run: test -f dist/index.html && test -f firebase.json
+
+      - name: Verify Firebase service account secret
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_CAFE_C396E }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
+            echo "::error::Firebase service account secret is not set ? cannot deploy PR preview or update GitHub Deployments."
+            echo "Accepted secret names: FIREBASE_SERVICE_ACCOUNT or FIREBASE_SERVICE_ACCOUNT_CAFE_C396E"
+            echo "Add the secret to enable preview URLs and clear the Deployments panel on pull requests."
+            exit 1
+          fi
+          echo "Firebase service account secret is configured."
+
+      - name: Deploy preview channel
+        id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_CAFE_C396E }}
+          projectId: cafe-c396e
+          channelId: pr-${{ github.event.pull_request.number }}
+          firebaseToolsVersion: latest
+
+      - name: Preview summary
+        if: steps.deploy.outcome == 'success'
+        run: |
+          echo "## PR preview deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "- PR: #${{ github.event.pull_request.number }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${{ steps.deploy.outputs.details_url }}" ]; then
+            echo "- Preview: ${{ steps.deploy.outputs.details_url }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -n "${{ steps.deploy.outputs.deploy_url }}" ]; then
+            echo "- URL: ${{ steps.deploy.outputs.deploy_url }}" >> "$GITHUB_STEP_SUMMARY"
+          fi

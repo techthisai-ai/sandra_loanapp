@@ -1,0 +1,145 @@
+rules_version = '2';
+// Project: cafe-c396e — deploy these rules or the Console default deny will block the app:
+//   firebase deploy --only firestore:rules
+//
+// Collections: users, customers, loanApplications, loanRequests, customerAmounts, notifications,
+// walletTransactions, auditLogs, accounts_* (see src/services/accounts.js + Accounts.jsx).
+// Roles live in Firestore `users` docs, not Auth custom claims.
+//
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function adminProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && adminProfile().data.role == "admin";
+    }
+
+    function isSelf(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isAllowedBootstrapProfile(userId) {
+      return request.auth == null
+        && request.resource.data.uid == userId
+        && (
+          (request.resource.data.email == "admin@loanweb.com" && request.resource.data.role == "admin")
+          || (request.resource.data.email == "employee@loanweb.com" && request.resource.data.role == "employee")
+        );
+    }
+
+    // Default admin/employee can create or repair their own profile after Firebase Auth sign-in
+    // (bootstrap seed and login call ensureAdminProfileForUid while signed in).
+    function isSelfDefaultAccountBootstrap(userId) {
+      return signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && (
+          (request.resource.data.email == "admin@loanweb.com" && request.resource.data.role == "admin")
+          || (request.resource.data.email == "employee@loanweb.com" && request.resource.data.role == "employee")
+        );
+    }
+
+    // REST signUp (createAuthAccount) creates the Auth user without a Firebase client session.
+    // ensureUserProfile/getDoc runs before setDoc while still signed out: allow get only if the
+    // profile doc does not exist yet (so existing user docs are not world-readable). Prefer
+    // Cloud Functions + Admin SDK for production bootstrap.
+    match /users/{userId} {
+      // Split get rules so employee self-read does not evaluate isAdmin() (avoids circular get).
+      allow get: if isSelf(userId);
+      allow get: if !signedIn()
+        && !exists(/databases/$(database)/documents/users/$(userId));
+      allow get: if signedIn()
+        && request.auth.uid != userId
+        && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        || isAllowedBootstrapProfile(userId)
+        || isSelfDefaultAccountBootstrap(userId);
+      allow update: if isAdmin()
+        || isSelfDefaultAccountBootstrap(userId)
+        || (isSelf(userId)
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'displayName',
+            'phone',
+            'location',
+            'preferences',
+          ]));
+      allow delete: if isAdmin();
+    }
+
+    match /customers/{document} {
+      allow read, write: if signedIn();
+    }
+
+    match /loanApplications/{document} {
+      allow read, write: if signedIn();
+    }
+
+    match /loanRequests/{document} {
+      allow read, write: if signedIn();
+    }
+
+    // Username → Firebase login email mapping (read before sign-in for employee login).
+    match /employee_logins/{document} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+
+    match /customerAmounts/{document} {
+      allow read, write: if signedIn();
+    }
+
+    match /notifications/{document} {
+      allow read, write: if signedIn();
+    }
+
+    match /walletTransactions/{document} {
+      allow read, write: if signedIn();
+    }
+
+    match /auditLogs/{document} {
+      allow read, write: if signedIn();
+    }
+
+    // Company accounts (Transactions / Categories / Salary / Reports) — same access model as
+    // customers & collections: any signed-in dashboard user. Admin-only here blocked employees
+    // and surfaced "Missing or insufficient permissions" on the Accounts page.
+    match /accounts_transactions/{document} {
+      allow read, write: if signedIn();
+    }
+
+    match /accounts_categories/{document} {
+      allow read, write: if signedIn();
+    }
+
+    match /accounts_salary/{document} {
+      allow read, write: if signedIn();
+    }
+
+    match /accounts_reports/{document} {
+      allow read, write: if signedIn();
+    }
+
+    // Employee ↔ center assignments managed from the Employee Register page.
+    match /employee_centers/{document} {
+      allow read, write: if signedIn();
+    }
+
+    // Soft-delete archive written by deleteCustomer (admin customer removal).
+    match /deletedCustomers/{document} {
+      allow read, write: if signedIn();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
