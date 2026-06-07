@@ -249,7 +249,9 @@ async function applyEmployeePasswordChange({
   employeeDocId,
   currentPassword = "",
 }) {
-  const loginEmail = normalizeText(email).toLowerCase();
+  const loginEmail = username
+    ? await resolveLoginEmail(username)
+    : normalizeText(email).toLowerCase();
   const trimmedCurrentPassword = String(currentPassword ?? "").trim();
 
   if (trimmedCurrentPassword) {
@@ -272,7 +274,7 @@ async function applyEmployeePasswordChange({
     await migrateEmployeeProfile(authResult.localId, profileData, employeeDocId, username, loginEmail);
     return authResult;
   } catch (error) {
-    if (!String(error?.message || "").includes("EMAIL_EXISTS")) {
+    if (!isAuthEmailExistsError(error)) {
       throw error;
     }
   }
@@ -309,10 +311,36 @@ function finalizeAssignedCenters(centers = []) {
   return pruneAssignedCenters(normalizeAssignedCenters(centers), loadLoanCenters());
 }
 
-function makeCustomerId() {
-  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `CUST-${datePart}-${randomPart}`;
+const CUSTOMER_SEQUENTIAL_ID_PATTERN = /^CX(\d{4})$/;
+
+function formatSequentialCustomerId(sequenceNumber) {
+  const next = Number(sequenceNumber);
+  if (!Number.isFinite(next) || next < 1 || next > 9999) {
+    throw new Error("Customer ID limit reached (CX9999).");
+  }
+  return `CX${String(next).padStart(4, "0")}`;
+}
+
+function maxSequentialCustomerNumber(customerIds = []) {
+  return customerIds.reduce((max, customerId) => {
+    const match = String(customerId || "").toUpperCase().match(CUSTOMER_SEQUENTIAL_ID_PATTERN);
+    if (!match) return max;
+    return Math.max(max, Number(match[1]));
+  }, 0);
+}
+
+/** Returns the next available customer ID in the format CX0001. */
+export async function getNextCustomerId() {
+  const snapshot = await getDocs(collection(db, "customers"));
+  const ids = snapshot.docs.flatMap((docSnap) => [docSnap.id, docSnap.data()?.customerId].filter(Boolean));
+  const max = maxSequentialCustomerNumber(ids);
+  const candidate = formatSequentialCustomerId(max + 1);
+  await assertCustomerIdAvailable(candidate);
+  return candidate;
+}
+
+async function makeCustomerId() {
+  return getNextCustomerId();
 }
 
 /** Validates the manual Customer ID format and ensures it is not already used. */
@@ -492,7 +520,7 @@ async function createAuditLog({
   };
 }
 
-function buildLoanApplicationRecord({
+async function buildLoanApplicationRecord({
   customerId,
   applicationId,
   customerName,
@@ -521,8 +549,11 @@ function buildLoanApplicationRecord({
   nomineeContact,
   additionalContact,
   idDocumentName,
+  idDocumentDataUrl = "",
   addressProofName,
+  addressProofDataUrl = "",
   loanAgreementName,
+  loanAgreementDataUrl = "",
   supportingDocumentNames = [],
   coApplicantName,
   coApplicantContact,
@@ -531,6 +562,7 @@ function buildLoanApplicationRecord({
   coApplicantIdentityType,
   coApplicantIdentityNumber,
   coApplicantIdProofName,
+  coApplicantIdProofDataUrl = "",
   coApplicantPhotoName,
   customerPhotoName = "",
   customerPhotoDataUrl = "",
@@ -543,7 +575,7 @@ function buildLoanApplicationRecord({
   rescheduleReason = "",
 }) {
   const now = new Date();
-  const finalCustomerId = customerId || makeCustomerId();
+  const finalCustomerId = customerId || (await makeCustomerId());
   const finalApplicationId = applicationId || makeApplicationId();
   const preset = {
     id: loanPresetId,
@@ -591,8 +623,11 @@ function buildLoanApplicationRecord({
     nomineeContact: normalizeText(nomineeContact),
     additionalContact: normalizeText(additionalContact),
     idDocumentName: normalizeText(idDocumentName),
+    idDocumentDataUrl: normalizeText(idDocumentDataUrl),
     addressProofName: normalizeText(addressProofName),
+    addressProofDataUrl: normalizeText(addressProofDataUrl),
     loanAgreementName: normalizeText(loanAgreementName),
+    loanAgreementDataUrl: normalizeText(loanAgreementDataUrl),
     supportingDocumentNames: Array.isArray(supportingDocumentNames)
       ? supportingDocumentNames.map((name) => normalizeText(name)).filter(Boolean)
       : [],
@@ -603,6 +638,7 @@ function buildLoanApplicationRecord({
     coApplicantIdentityType: normalizeText(coApplicantIdentityType),
     coApplicantIdentityNumber: normalizeText(coApplicantIdentityNumber),
     coApplicantIdProofName: normalizeText(coApplicantIdProofName),
+    coApplicantIdProofDataUrl: normalizeText(coApplicantIdProofDataUrl),
     coApplicantPhotoName: normalizeText(coApplicantPhotoName),
     customerPhotoName: normalizeText(customerPhotoName),
     customerPhotoDataUrl: normalizeText(customerPhotoDataUrl),
@@ -619,6 +655,17 @@ function buildLoanApplicationRecord({
     createdAt: serverTimestamp(),
     submittedAt: now.toISOString(),
   };
+}
+
+function isAuthEmailExistsError(error) {
+  const message = String(error?.message || "");
+  const code = String(error?.code || "");
+  return (
+    code === "EMAIL_EXISTS" ||
+    message === "EMAIL_EXISTS" ||
+    message.includes("EMAIL_EXISTS") ||
+    message.toLowerCase().includes("already registered")
+  );
 }
 
 async function createAuthAccount(email, password) {
@@ -642,7 +689,9 @@ async function createAuthAccount(email, password) {
   if (!response.ok) {
     const errorMessage = payload?.error?.message || "Unable to create account";
     if (errorMessage === "EMAIL_EXISTS") {
-      throw new Error("This email is already registered. Use another email.");
+      const error = new Error("This login is already registered.");
+      error.code = "EMAIL_EXISTS";
+      throw error;
     }
     throw new Error(errorMessage);
   }
@@ -747,6 +796,7 @@ async function ensureDemoEmployeeProfileForUid(uid) {
   };
   if (!snapshot.exists()) {
     await setDoc(userRef, { ...base, createdAt: serverTimestamp() });
+    await setEmployeeLoginMapping("demo", DEMO_EMPLOYEE_EMAIL, uid);
     return;
   }
   await setDoc(
@@ -757,6 +807,7 @@ async function ensureDemoEmployeeProfileForUid(uid) {
     },
     { merge: true }
   );
+  await setEmployeeLoginMapping("demo", DEMO_EMPLOYEE_EMAIL, uid);
 }
 
 /** Avoids re-running sign-in bootstrap on every refresh (Firebase rate-limits burst sign-ins). */
@@ -876,6 +927,7 @@ async function seedDemoEmployeeUser() {
         location: "Monday Centre",
         createdAt: serverTimestamp(),
       });
+      await setEmployeeLoginMapping("demo", DEMO_EMPLOYEE_EMAIL, authResult.localId);
       return true;
     } catch (createError) {
       const message = createError?.message || String(createError);
@@ -962,12 +1014,12 @@ export async function seedDefaultAccounts() {
   defaultAccountsSeedAttempted = true;
 
   try {
-    const adminOk = await seedAdminUser();
-    const employeeOk = await seedDemoEmployeeUser();
+    const adminOk = await withBootstrapTimeout(seedAdminUser(), "Admin account setup");
+    const employeeOk = await withBootstrapTimeout(seedDemoEmployeeUser(), "Employee account setup");
     // Only skip future bootstrap attempts when both demo accounts are ready — avoids poisoning
     // the tab with sessionStorage after a failed create (e.g. sign-up disabled in Firebase).
     if (adminOk && employeeOk) {
-      await seedDemoCustomerIfMissing();
+      await withBootstrapTimeout(seedDemoCustomerIfMissing(), "Demo customer setup");
       markSeedFinishedThisBrowserSession();
     }
   } catch (e) {
@@ -1092,6 +1144,29 @@ export async function loginWithRole({ email, password }) {
 }
 
 const LOGIN_TIMEOUT_MS = 30_000;
+const BOOTSTRAP_TIMEOUT_MS = 15_000;
+
+async function withBootstrapTimeout(promise, label) {
+  let timeoutId;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        const schedule =
+          typeof window !== "undefined" ? window.setTimeout.bind(window) : setTimeout;
+        timeoutId = schedule(() => {
+          reject(new Error(`${label} timed out. Check your internet connection and reload.`));
+        }, BOOTSTRAP_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId != null) {
+      const clear =
+        typeof window !== "undefined" ? window.clearTimeout.bind(window) : clearTimeout;
+      clear(timeoutId);
+    }
+  }
+}
 
 export async function loginWithRoleTimed(credentials, timeoutMs = LOGIN_TIMEOUT_MS) {
   let timeoutId;
@@ -1141,7 +1216,7 @@ async function assertEmployeeEmailAvailable(email) {
   const existingQuery = query(collection(db, USERS_COLLECTION), where("email", "==", normalizedEmail));
   const existingSnap = await getDocs(existingQuery);
   if (!existingSnap.empty) {
-    throw new Error("This email is already registered. Use another email.");
+    throw new Error("This username is already registered for login. Choose another username.");
   }
   return normalizedEmail;
 }
@@ -1748,14 +1823,18 @@ export async function upsertLoanApplication({
   nomineeContact,
   additionalContact,
   idDocumentName,
+  idDocumentDataUrl = "",
   addressProofName,
+  addressProofDataUrl = "",
   loanAgreementName,
+  loanAgreementDataUrl = "",
   supportingDocumentNames,
   coApplicantName,
   coApplicantContact,
   coApplicantRelation,
   coApplicantAddress,
   coApplicantIdProofName,
+  coApplicantIdProofDataUrl = "",
   isArchived,
   archivedAt,
   loanStatus,
@@ -1771,7 +1850,7 @@ export async function upsertLoanApplication({
 }) {
   await validateCustomerUniqueness({ customerId, mobileNumber, alternateNumber, identityNumber });
 
-  let record = buildLoanApplicationRecord({
+  let record = await buildLoanApplicationRecord({
     customerId,
     applicationId,
     customerName,
@@ -1800,8 +1879,11 @@ export async function upsertLoanApplication({
     nomineeContact,
     additionalContact,
     idDocumentName,
+    idDocumentDataUrl,
     addressProofName,
+    addressProofDataUrl,
     loanAgreementName,
+    loanAgreementDataUrl,
     supportingDocumentNames,
     coApplicantName,
     coApplicantContact,
@@ -1810,6 +1892,7 @@ export async function upsertLoanApplication({
     coApplicantIdentityType,
     coApplicantIdentityNumber,
     coApplicantIdProofName,
+    coApplicantIdProofDataUrl,
     coApplicantPhotoName,
     customerPhotoName,
     customerPhotoDataUrl,
@@ -1967,8 +2050,11 @@ export async function createCustomer({
   country,
   griefId = "",
   idDocumentName = "",
+  idDocumentDataUrl = "",
   addressProofName = "",
+  addressProofDataUrl = "",
   loanAgreementName = "",
+  loanAgreementDataUrl = "",
   supportingDocumentNames = [],
   coApplicantName = "",
   coApplicantContact = "",
@@ -1977,6 +2063,7 @@ export async function createCustomer({
   coApplicantIdentityType = "",
   coApplicantIdentityNumber = "",
   coApplicantIdProofName = "",
+  coApplicantIdProofDataUrl = "",
   coApplicantPhotoName = "",
   customerPhotoName = "",
   customerPhotoDataUrl = "",
@@ -1987,7 +2074,9 @@ export async function createCustomer({
   crifDemoEligibility = null,
   lastEligibilityCheckedAt = "",
 }) {
-  const customerId = await assertCustomerIdAvailable(requestedCustomerId);
+  const customerId = requestedCustomerId
+    ? await assertCustomerIdAvailable(requestedCustomerId)
+    : await getNextCustomerId();
   await validateCustomerUniqueness({ customerId, mobileNumber, alternateNumber, identityNumber });
 
   const now = new Date();
@@ -2008,8 +2097,11 @@ export async function createCustomer({
     country: normalizeText(country),
     griefId: demoInternalReference,
     idDocumentName: normalizeText(idDocumentName),
+    idDocumentDataUrl: normalizeText(idDocumentDataUrl),
     addressProofName: normalizeText(addressProofName),
+    addressProofDataUrl: normalizeText(addressProofDataUrl),
     loanAgreementName: normalizeText(loanAgreementName),
+    loanAgreementDataUrl: normalizeText(loanAgreementDataUrl),
     selectedDay: normalizeText(selectedDay),
     parentCenterLabel: normalizeText(parentCenterLabel),
     subCenterLabel: normalizeText(subCenterLabel),
@@ -2035,6 +2127,7 @@ export async function createCustomer({
     coApplicantIdentityType: normalizeText(coApplicantIdentityType),
     coApplicantIdentityNumber: normalizeText(coApplicantIdentityNumber),
     coApplicantIdProofName: normalizeText(coApplicantIdProofName),
+    coApplicantIdProofDataUrl: normalizeText(coApplicantIdProofDataUrl),
     coApplicantPhotoName: normalizeText(coApplicantPhotoName),
     customerPhotoName: normalizeText(customerPhotoName),
     customerPhotoDataUrl: normalizeText(customerPhotoDataUrl),

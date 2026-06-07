@@ -22,7 +22,7 @@ export default function EmployeeAppLayout() {
         <EmployeeHeaderProfileMenu />
       </header>
 
-      <div className="employee-main-pad flex flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 pt-3 sm:px-5 sm:pt-4 md:px-6">
+      <div className="employee-main-pad mx-auto flex w-full min-w-0 max-w-full flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 pt-3 sm:px-5 sm:pt-4 md:px-6 lg:max-w-6xl xl:max-w-7xl">
         <Outlet />
       </div>
 

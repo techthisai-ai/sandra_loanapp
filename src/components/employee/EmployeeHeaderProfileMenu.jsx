@@ -3,6 +3,7 @@ import { signOut } from "firebase/auth";
 import { LogOut, UserRound } from "lucide-react";
 import { auth } from "../../firebase/config";
 import useAuth from "../../hooks/useAuth";
+import { clearAuthSession } from "../../utils/authSession";
 
 export default function EmployeeHeaderProfileMenu() {
   const { profile } = useAuth();
@@ -35,6 +36,7 @@ export default function EmployeeHeaderProfileMenu() {
 
   const handleSignOut = async () => {
     setOpen(false);
+    clearAuthSession();
     await signOut(auth);
     window.location.href = "/login";
   };

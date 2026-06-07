@@ -66,7 +66,25 @@ function generateLoanId(now) {
   return `LOAN-${dd}${mm}${yyyy}-${rand}`;
 }
 
-function InfoRow({ icon: Icon, label, value }) {
+function InfoRow({ icon: Icon, label, value, compact = false, wide = false }) {
+  if (compact) {
+    return (
+      <div className="flex min-w-0 items-center gap-1.5 rounded-lg border border-slate-200/80 bg-white px-2 py-1">
+        <Icon className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+          <p
+            className={`text-xs font-medium text-slate-900 ${
+              wide ? "line-clamp-2 break-words leading-snug" : "truncate"
+            }`}
+          >
+            {value || "--"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm">
       <Icon className="h-5 w-5 shrink-0 text-blue-600" />
@@ -78,13 +96,29 @@ function InfoRow({ icon: Icon, label, value }) {
   );
 }
 
-function LoanSummaryStatCard({ icon: Icon, label, value, highlight = false, tone = "slate", className = "" }) {
+function LoanSummaryStatCard({ icon: Icon, label, value, highlight = false, tone = "slate", className = "", compact = false }) {
   const toneStyles = {
     blue: "border-blue-100/90 bg-gradient-to-br from-blue-50/95 via-white to-white text-blue-600",
     emerald: "border-emerald-100/90 bg-gradient-to-br from-emerald-50/95 via-white to-white text-emerald-600",
     amber: "border-amber-100/90 bg-gradient-to-br from-amber-50/95 via-white to-white text-amber-600",
     slate: "border-slate-200/90 bg-gradient-to-br from-slate-50/95 via-white to-white text-slate-600",
   };
+
+  if (compact) {
+    return (
+      <div
+        className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 ${toneStyles[tone] || toneStyles.slate} ${className}`}
+      >
+        <div className="min-w-0">
+          <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+          <p className={`truncate text-xs tabular-nums ${highlight ? "font-bold text-slate-950" : "font-semibold text-slate-900"}`}>
+            {value}
+          </p>
+        </div>
+        <Icon className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -105,18 +139,29 @@ function LoanSummaryStatCard({ icon: Icon, label, value, highlight = false, tone
   );
 }
 
-function LoanSummaryStatsGrid({ emiAmount, interestAmount, totalPayable, loanIssueDate, emiStartDate, emiEndDate }) {
+function LoanSummaryStatsGrid({
+  emiAmount,
+  interestAmount,
+  totalPayable,
+  loanIssueDate,
+  emiStartDate,
+  emiEndDate,
+  compact = false,
+}) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <LoanSummaryStatCard icon={IndianRupee} label="EMI amount" value={formatInr(emiAmount)} highlight tone="blue" />
-      <LoanSummaryStatCard icon={Wallet} label="Interest amount" value={formatInr(interestAmount)} tone="amber" />
-      <LoanSummaryStatCard icon={IndianRupee} label="Total payable" value={formatInr(totalPayable)} highlight tone="emerald" />
-      <LoanSummaryStatCard icon={CalendarDays} label="EMI end date" value={formatSummaryDate(emiEndDate)} tone="emerald" />
-      <LoanSummaryStatCard icon={Clock} label="Loan issue date" value={formatSummaryDate(loanIssueDate)} tone="slate" />
-      <LoanSummaryStatCard icon={CalendarDays} label="EMI start date" value={formatSummaryDate(emiStartDate)} tone="blue" />
+    <div className={`grid gap-2 ${compact ? "grid-cols-2" : "grid-cols-1 gap-3 sm:grid-cols-2"}`}>
+      <LoanSummaryStatCard compact={compact} icon={IndianRupee} label="EMI amount" value={formatInr(emiAmount)} highlight tone="blue" />
+      <LoanSummaryStatCard compact={compact} icon={Wallet} label="Interest amount" value={formatInr(interestAmount)} tone="amber" />
+      <LoanSummaryStatCard compact={compact} icon={IndianRupee} label="Total payable" value={formatInr(totalPayable)} highlight tone="emerald" />
+      <LoanSummaryStatCard compact={compact} icon={CalendarDays} label="EMI end date" value={formatSummaryDate(emiEndDate)} tone="emerald" />
+      <LoanSummaryStatCard compact={compact} icon={Clock} label="Loan issue date" value={formatSummaryDate(loanIssueDate)} tone="slate" />
+      <LoanSummaryStatCard compact={compact} icon={CalendarDays} label="EMI start date" value={formatSummaryDate(emiStartDate)} tone="blue" />
     </div>
   );
 }
+
+const loanFieldClass =
+  "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-blue-300 focus:bg-white";
 
 export default function LoanApply() {
   const { customerId } = useParams();
@@ -716,160 +761,156 @@ export default function LoanApply() {
       description="Nominee details and loan terms — captured when applying a loan for an existing customer."
     >
       <div className="w-full min-w-0 max-w-[min(1460px,100%)]">
-        <section className="dash-glass-panel rounded-3xl p-3 sm:p-4 md:p-5">
-          <p className="mb-3 text-xs font-bold uppercase tracking-[0.22em] text-blue-600/90">Customer details</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <InfoRow icon={UserRound} label="Name" value={customer?.customerName} />
-            <InfoRow icon={Phone} label="Phone" value={customer?.mobileNumber} />
-            <InfoRow icon={IdCard} label={customer?.identityType || "ID"} value={customer?.identityNumber} />
-            <InfoRow icon={CalendarDays} label="Collection day" value={collectionDay} />
-            <div className="sm:col-span-2">
-              <InfoRow icon={MapPin} label="Address" value={customer?.address} />
-            </div>
+        <section className="dash-glass-panel rounded-2xl p-2.5 sm:p-3">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-600/90">Customer details</p>
+          <div className="loan-apply-customer-strip">
+            <InfoRow compact icon={UserRound} label="Name" value={customer?.customerName} />
+            <InfoRow compact icon={Phone} label="Phone" value={customer?.mobileNumber} />
+            <InfoRow compact icon={IdCard} label={customer?.identityType || "ID"} value={customer?.identityNumber} />
+            <InfoRow compact icon={CalendarDays} label="Collection day" value={collectionDay} />
+            <InfoRow compact wide icon={MapPin} label="Address" value={customer?.address} />
           </div>
 
-          <div className="my-5 border-t border-slate-200/80" />
+          <div className="my-3 border-t border-slate-200/80" />
 
-          <LoanNomineeSection
-            nominee={{
-              nomineeName,
-              nomineeContact,
-              additionalContact,
-              nomineeAddress,
-              nomineeRelation,
-              nomineeIdentityType,
-              nomineeIdentityNumber,
-              nomineePhotoName,
-              nomineeIdProofName,
-            }}
-            onFieldChange={onNomineeFieldChange}
-            onNomineePhoneChange={onNomineePhoneChange}
-            nameError={nomineeNameError}
-            contactRequiredError={nomineeContactRequiredError}
-            phoneError={nomineePhoneError}
-            relationshipError={nomineeRelationError}
-            identityError={nomineeIdentityError}
-            phoneVerified
-            canOpenOtp={false}
-            disableOtp
-            validationPulse={validationPulse}
-            photoPreview={nomineePhotoPreview}
-            onPhotoPick={pickNomineeFile("nomineePhotoName", setNomineePhotoPreview, "nomineePhotoDataUrl")}
-            onPhotoClear={() => clearNomineeFile("nomineePhotoName", setNomineePhotoPreview, "nomineePhotoDataUrl")}
-            onIdProofPick={pickNomineeFile("nomineeIdProofName")}
-            onIdProofClear={() => clearNomineeFile("nomineeIdProofName")}
-            attachmentUrls={nomineeAttachmentUrls}
-          />
-
-          <div className="my-5 border-t border-slate-200/80" />
-
-          <p className="mb-3 text-xs font-bold uppercase tracking-[0.22em] text-blue-600/90">Loan details</p>
-
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200/90 bg-gradient-to-r from-slate-50 to-blue-50/40 px-3 py-2.5 text-xs shadow-sm ring-1 ring-slate-100">
-            <span className="font-semibold uppercase tracking-wide text-slate-500">Available wallet</span>
-            <span className={`font-mono text-sm font-bold tabular-nums ${walletBalance <= 0 ? "text-amber-700" : "text-emerald-700"}`}>
-              {formatInr(walletBalance)}
-            </span>
-          </div>
-
-          {insufficientWalletForSave ? (
-            <div className="mb-3 flex items-start gap-2 rounded-2xl border border-rose-200/80 bg-gradient-to-r from-rose-50 to-orange-50/90 px-3 py-2.5 text-xs text-rose-950 shadow-sm ring-1 ring-rose-100">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" strokeWidth={2} />
-              <div>
-                <p className="font-semibold tracking-tight">Insufficient wallet balance</p>
-                <p className="mt-0.5 leading-snug text-rose-900/90">
-                  Approved book increases need {formatInr(principalDelta)}; only {formatInr(walletBalance)} is available.
-                  Add an investor deposit or reduce the principal increase before saving.
-                </p>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Loan ID</p>
-                <p className="mt-0.5 break-all text-sm font-bold leading-snug text-slate-900">{loanId}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Collection day</p>
-                <p className="mt-0.5 truncate text-sm font-bold text-slate-900">{collectionDay}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label className="space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Loan amount</span>
-                <input
-                  value={loanAmount}
-                  onChange={(event) => setLoanAmount(event.target.value)}
-                  inputMode="numeric"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-blue-300 focus:bg-white"
-                  placeholder="Enter loan amount"
-                />
-              </label>
-              <label className="space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Tenure (weeks)</span>
-                <input
-                  value={loanWeeks}
-                  onChange={(e) => setLoanWeeks(e.target.value.replace(/\D/g, ""))}
-                  inputMode="numeric"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-blue-300 focus:bg-white"
-                  placeholder="Enter number of weeks"
-                />
-              </label>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <label className="space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Collection frequency</span>
-                <select
-                  value={collectionFrequency}
-                  onChange={(event) => setCollectionFrequency(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-blue-300 focus:bg-white"
-                >
-                  <option>Weekly</option>
-                  <option>Daily</option>
-                  <option>Monthly</option>
-                </select>
-              </label>
-              <label className="space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">First EMI date</span>
-                <input
-                  type="date"
-                  value={disbursementDate}
-                  onChange={(event) => setDisbursementDate(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-blue-300 focus:bg-white"
-                />
-              </label>
-              <label className="space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">End EMI date</span>
-                <input
-                  type="date"
-                  value={resolvedDueDate}
-                  onChange={(event) => setDueDate(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-blue-300 focus:bg-white"
-                />
-              </label>
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-slate-500">First EMI date is used to calculate end EMI date and schedule.</p>
-
-          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-            <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-600/90">Loan summary preview</p>
-            <LoanSummaryStatsGrid
-              emiAmount={emiAmount}
-              interestAmount={interestAmount}
-              totalPayable={totalPayable}
-              loanIssueDate={loanTimelinePreview.loanIssueDate}
-              emiStartDate={loanTimelinePreview.emiStartDate}
-              emiEndDate={loanTimelinePreview.emiEndDate}
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-start">
+            <LoanNomineeSection
+              nominee={{
+                nomineeName,
+                nomineeContact,
+                additionalContact,
+                nomineeAddress,
+                nomineeRelation,
+                nomineeIdentityType,
+                nomineeIdentityNumber,
+                nomineePhotoName,
+                nomineeIdProofName,
+              }}
+              onFieldChange={onNomineeFieldChange}
+              onNomineePhoneChange={onNomineePhoneChange}
+              nameError={nomineeNameError}
+              contactRequiredError={nomineeContactRequiredError}
+              phoneError={nomineePhoneError}
+              relationshipError={nomineeRelationError}
+              identityError={nomineeIdentityError}
+              phoneVerified
+              canOpenOtp={false}
+              disableOtp
+              validationPulse={validationPulse}
+              photoPreview={nomineePhotoPreview}
+              onPhotoPick={pickNomineeFile("nomineePhotoName", setNomineePhotoPreview, "nomineePhotoDataUrl")}
+              onPhotoClear={() => clearNomineeFile("nomineePhotoName", setNomineePhotoPreview, "nomineePhotoDataUrl")}
+              onIdProofPick={pickNomineeFile("nomineeIdProofName")}
+              onIdProofClear={() => clearNomineeFile("nomineeIdProofName")}
+              attachmentUrls={nomineeAttachmentUrls}
             />
+
+            <div className="space-y-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-600/90">Loan details</p>
+
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-gradient-to-r from-slate-50 to-blue-50/40 px-2.5 py-1.5 text-xs">
+                <span className="font-semibold uppercase tracking-wide text-slate-500">Available wallet</span>
+                <span className={`font-mono text-xs font-bold tabular-nums ${walletBalance <= 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                  {formatInr(walletBalance)}
+                </span>
+              </div>
+
+              {insufficientWalletForSave ? (
+                <div className="flex items-start gap-2 rounded-xl border border-rose-200/80 bg-gradient-to-r from-rose-50 to-orange-50/90 px-2.5 py-2 text-[11px] text-rose-950">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-600" strokeWidth={2} />
+                  <p className="leading-snug">
+                    Need {formatInr(principalDelta)}; only {formatInr(walletBalance)} available.
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1.5">
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Loan ID</p>
+                  <p className="mt-0.5 break-all text-xs font-bold text-slate-900">{loanId}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Collection day</p>
+                  <p className="mt-0.5 truncate text-xs font-bold text-slate-900">{collectionDay}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <label className="space-y-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Loan amount</span>
+                  <input
+                    value={loanAmount}
+                    onChange={(event) => setLoanAmount(event.target.value)}
+                    inputMode="numeric"
+                    className={loanFieldClass}
+                    placeholder="Enter loan amount"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Tenure (weeks)</span>
+                  <input
+                    value={loanWeeks}
+                    onChange={(e) => setLoanWeeks(e.target.value.replace(/\D/g, ""))}
+                    inputMode="numeric"
+                    className={loanFieldClass}
+                    placeholder="Weeks"
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <label className="space-y-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Frequency</span>
+                  <select
+                    value={collectionFrequency}
+                    onChange={(event) => setCollectionFrequency(event.target.value)}
+                    className={loanFieldClass}
+                  >
+                    <option>Weekly</option>
+                    <option>Daily</option>
+                    <option>Monthly</option>
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">First EMI</span>
+                  <input
+                    type="date"
+                    value={disbursementDate}
+                    onChange={(event) => setDisbursementDate(event.target.value)}
+                    className={loanFieldClass}
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">End EMI</span>
+                  <input
+                    type="date"
+                    value={resolvedDueDate}
+                    onChange={(event) => setDueDate(event.target.value)}
+                    className={loanFieldClass}
+                  />
+                </label>
+              </div>
+
+              <p className="text-[10px] text-slate-500">First EMI date calculates end EMI date and schedule.</p>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5">
+                <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.16em] text-blue-600/90">Loan summary preview</p>
+                <LoanSummaryStatsGrid
+                  compact
+                  emiAmount={emiAmount}
+                  interestAmount={interestAmount}
+                  totalPayable={totalPayable}
+                  loanIssueDate={loanTimelinePreview.loanIssueDate}
+                  emiStartDate={loanTimelinePreview.emiStartDate}
+                  emiEndDate={loanTimelinePreview.emiEndDate}
+                />
+              </div>
+
+              {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p> : null}
+            </div>
           </div>
 
-          {error ? <p className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-
-          <div className="mt-5 flex gap-3">
+          <div className="mt-4 flex gap-3">
             <button
               type="button"
               onClick={() => navigate("/dashboard/loan-apply")}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { CalendarDays, ChevronRight, ClipboardList, Search, Sparkles, UsersRound } from "lucide-react";
+import { CalendarDays, Search, UsersRound } from "lucide-react";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import LoanRequestsPanel from "../components/loan/LoanRequestsPanel";
 import { DEFAULT_DAY_CENTERS, loadLoanCenters } from "../constants/dayCenters";
@@ -234,10 +234,16 @@ export default function LoanApplyHome() {
     () => centers.filter((center) => center.parent === selectedDay),
     [centers, selectedDay]
   );
-  const centerCustomers = useMemo(
-    () => allCustomers.filter((customer) => customer.selectedDay === selectedCenter),
-    [allCustomers, selectedCenter]
-  );
+  const centerCustomers = useMemo(() => {
+    if (!selectedDay) return [];
+    if (selectedCenter) {
+      return allCustomers.filter((customer) => customer.selectedDay === selectedCenter);
+    }
+    const subLabels = childCenters.map((center) => center.label);
+    return allCustomers.filter(
+      (customer) => customer.selectedDay === selectedDay || subLabels.includes(customer.selectedDay)
+    );
+  }, [allCustomers, selectedDay, selectedCenter, childCenters]);
   const filteredCustomers = useMemo(() => {
     const key = searchTerm.trim().toLowerCase();
     if (!key) return centerCustomers;
@@ -252,15 +258,6 @@ export default function LoanApplyHome() {
       return fields.some((value) => value.includes(key));
     });
   }, [centerCustomers, searchTerm]);
-
-  const selectedCustomerOptions = useMemo(
-    () =>
-      centerCustomers.map((customer) => ({
-        id: customer.customerId,
-        label: `${customer.customerName || "Unnamed"} · ${customer.mobileNumber || customer.customerId}`,
-      })),
-    [centerCustomers]
-  );
 
   const goToLoanForm = (customerId) => {
     const customer = allCustomers.find((item) => item.customerId === customerId);
@@ -306,7 +303,7 @@ export default function LoanApplyHome() {
   }, [allCustomers, collectedAmountByCustomer]);
 
   const classicSheetRows = useMemo(() => {
-    const sourceRows = selectedCenter
+    const sourceRows = selectedDay
       ? filteredCustomers.filter((customer) => hasValidLoanApplied(customer)).map((customer) => {
           const profile = getRepaymentProfile(customer.customerId);
           return {
@@ -364,7 +361,7 @@ export default function LoanApplyHome() {
         od: lastEntry?.approvalStatus === "approved" ? "0D" : "Pending",
       };
     });
-  }, [selectedCenter, filteredCustomers, recentLoanRows, amountEntries, collectedAmountByCustomer]);
+  }, [selectedDay, filteredCustomers, recentLoanRows, amountEntries, collectedAmountByCustomer]);
 
   return (
     <AdminLayout
@@ -383,7 +380,6 @@ export default function LoanApplyHome() {
                   : "text-slate-600 hover:bg-slate-50"
               }`}
             >
-              <Sparkles className="h-4 w-4 shrink-0" />
               Loan apply
             </button>
             <button
@@ -395,7 +391,6 @@ export default function LoanApplyHome() {
                   : "text-slate-600 hover:bg-slate-50"
               }`}
             >
-              <ClipboardList className="h-4 w-4 shrink-0" />
               Loan requests
             </button>
           </div>
@@ -406,144 +401,100 @@ export default function LoanApplyHome() {
 
         {mainTab === "apply" ? (
         <>
-        <section className="app-section-card mb-4 p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-blue-600" />
-            <p className="text-sm font-semibold text-slate-900">Quick Apply Flow</p>
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+            {dayCenters.map((dayCenter) => {
+              const active = selectedDay === dayCenter.label;
+              return (
+                <button
+                  key={dayCenter.label}
+                  type="button"
+                  onClick={() => {
+                    setSelectedDay(dayCenter.label);
+                    setSelectedCenter(null);
+                    setSearchTerm("");
+                  }}
+                  className={`shrink-0 rounded-xl border px-3 py-2 text-left transition ${
+                    active ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700"
+                  }`}
+                >
+                  <p className="text-xs font-semibold">{dayCenter.label}</p>
+                  <p className="text-[11px] text-slate-500">{loading ? "..." : `${dayCounts.get(dayCenter.label) || 0} customers`}</p>
+                </button>
+              );
+            })}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">1) Select day center</span>
-              <select
-                value={selectedDay || ""}
-                onChange={(event) => {
-                  setSelectedDay(event.target.value || null);
-                  setSelectedCenter(null);
-                  setSearchTerm("");
-                }}
-                className="app-select"
-              >
-                <option value="">Choose day center</option>
-                {dayCenters.map((dayCenter) => (
-                  <option key={dayCenter.label} value={dayCenter.label}>
-                    {dayCenter.label} ({dayCounts.get(dayCenter.label) || 0})
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">2) Select sub-center</span>
-              <select
-                value={selectedCenter || ""}
-                onChange={(event) => {
-                  setSelectedCenter(event.target.value || null);
-                  setSearchTerm("");
-                }}
-                className="app-select"
+          {selectedDay ? (
+            <label className="loan-apply-search-field flex w-full shrink-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 sm:w-56 md:w-64 lg:w-72">
+              <Search className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search customer"
+                className="min-w-0 flex-1 text-sm text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={!selectedDay}
-              >
-                <option value="">{selectedDay ? "Choose sub-center" : "Select day center first"}</option>
-                {childCenters.map((center) => (
-                  <option key={center.label} value={center.label}>
-                    {center.label} ({allCustomers.filter((customer) => customer.selectedDay === center.label).length})
-                  </option>
-                ))}
-              </select>
+              />
             </label>
-
-            <label className="space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">3) Select customer</span>
-              <select
-                value=""
-                onChange={(event) => {
-                  if (!event.target.value) return;
-                  goToLoanForm(event.target.value);
-                }}
-                className="app-select"
-                disabled={!selectedCenter}
-              >
-                <option value="">{selectedCenter ? "Choose customer and continue" : "Select sub-center first"}</option>
-                {selectedCustomerOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </section>
-
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-          {dayCenters.map((dayCenter) => {
-            const active = selectedDay === dayCenter.label;
-            return (
-              <button
-                key={dayCenter.label}
-                type="button"
-                onClick={() => {
-                  setSelectedDay(dayCenter.label);
-                  setSelectedCenter(null);
-                  setSearchTerm("");
-                }}
-                className={`shrink-0 rounded-xl border px-3 py-2 text-left transition ${
-                  active ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700"
-                }`}
-              >
-                <p className="text-xs font-semibold">{dayCenter.label}</p>
-                <p className="text-[11px] text-slate-500">{loading ? "..." : `${dayCounts.get(dayCenter.label) || 0} customers`}</p>
-              </button>
-            );
-          })}
+          ) : null}
         </div>
 
-        <section className="app-section-card p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        {selectedDay && childCenters.length > 0 ? (
+          <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCenter(null);
+                setSearchTerm("");
+              }}
+              className={`shrink-0 rounded-xl border px-3 py-2 text-left transition ${
+                !selectedCenter
+                  ? "border-blue-300 bg-blue-50 text-blue-700"
+                  : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50"
+              }`}
+            >
+              <p className="text-xs font-semibold">All</p>
+              <p className="text-[11px] text-slate-500">
+                {loading ? "..." : `${dayCounts.get(selectedDay) || 0} customers`}
+              </p>
+            </button>
+            {childCenters.map((center) => {
+              const active = selectedCenter === center.label;
+              return (
+                <button
+                  key={center.label}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCenter(center.label);
+                    setSearchTerm("");
+                  }}
+                  className={`shrink-0 rounded-xl border px-3 py-2 text-left transition ${
+                    active
+                      ? "border-blue-300 bg-blue-50 text-blue-700"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50"
+                  }`}
+                >
+                  <p className="text-xs font-semibold">{center.label}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {allCustomers.filter((customer) => customer.selectedDay === center.label).length} customers
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {selectedDay ? (
+        <section className="app-section-card p-3">
+          <div className="mb-2">
             <p className="text-sm font-semibold text-slate-900">
-              {selectedCenter ? `Customers in ${selectedCenter}` : "Select center and sub-center to continue"}
+              {selectedCenter ? `Customers in ${selectedCenter}` : `Customers in ${selectedDay}`}
             </p>
-            {selectedCenter ? (
-              <label className="relative w-full max-w-xs">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search customer"
-                  className="app-input pl-9"
-                />
-              </label>
-            ) : null}
           </div>
 
-          {!selectedDay ? (
-            <p className="app-empty-state">Select a day center to start.</p>
-          ) : selectedDay && !selectedCenter ? (
-            childCenters.length > 0 ? (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {childCenters.map((center) => (
-                  <button
-                    key={center.label}
-                    type="button"
-                    onClick={() => setSelectedCenter(center.label)}
-                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-left hover:bg-slate-50"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{center.label}</p>
-                      <p className="text-xs text-slate-500">
-                        {allCustomers.filter((customer) => customer.selectedDay === center.label).length} customers
-                      </p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-slate-400" />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="app-empty-state">No sub-centers available under this day.</p>
-            )
-          ) : filteredCustomers.length > 0 ? (
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <div className="grid grid-cols-[48px_minmax(170px,1.3fr)_minmax(120px,1fr)_minmax(130px,1fr)_minmax(110px,.8fr)_minmax(110px,.8fr)_120px] gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+          {filteredCustomers.length > 0 ? (
+            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <div className="loan-apply-customer-grid min-w-[640px] border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                 <span>#</span>
                 <span>Customer</span>
                 <span>Mobile</span>
@@ -559,28 +510,28 @@ export default function LoanApplyHome() {
                     return (
                   <div
                     key={customer.customerId}
-                    className="grid grid-cols-[48px_minmax(170px,1.3fr)_minmax(120px,1fr)_minmax(130px,1fr)_minmax(110px,.8fr)_minmax(110px,.8fr)_120px] items-center gap-2 border-b border-slate-100 px-3 py-2 text-xs text-slate-700"
+                    className="loan-apply-customer-grid min-w-[640px] items-center border-b border-slate-100 px-3 py-1.5 text-xs text-slate-700"
                   >
                     <span className="font-semibold text-slate-500">{index + 1}</span>
-                    <div className="min-w-0">
-                      <span className="truncate font-medium text-slate-900">{customer.customerName || "Unnamed"}</span>
-                      <div className="mt-0.5 flex items-center gap-1.5">
-                        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${scoreBadgeClass(profile.score)}`}>
+                    <div className="loan-apply-customer-cell gap-1.5">
+                      <span className="shrink-0 font-medium text-slate-900">{customer.customerName || "Unnamed"}</span>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span className={`rounded border px-1.5 py-px text-xs font-semibold leading-tight ${scoreBadgeClass(profile.score)}`}>
                           {profile.score}
                         </span>
-                        <span className={`text-[10px] font-semibold ${decisionClass(profile.decision)}`}>
+                        <span className={`text-xs font-semibold leading-tight ${decisionClass(profile.decision)}`}>
                           {profile.decision}
                         </span>
                       </div>
                     </div>
                     <span className="truncate">{customer.mobileNumber || "--"}</span>
                     <span>{profile.onTimeRate}</span>
-                    <span className="text-[11px] text-slate-600">L:{profile.late} / M:{profile.missed}</span>
+                    <span className="text-xs text-slate-600">L:{profile.late}/M:{profile.missed}</span>
                     <span>{profile.lastPaidAt}</span>
                     <button
                       type="button"
                       onClick={() => goToLoanForm(customer.customerId)}
-                      className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                      className="loan-apply-action-btn"
                     >
                       Apply loan
                     </button>
@@ -594,6 +545,11 @@ export default function LoanApplyHome() {
             <p className="app-empty-state">No customers match this filter.</p>
           )}
         </section>
+        ) : null}
+
+        {!selectedDay ? (
+          <p className="mb-4 app-empty-state">Select a day center to start.</p>
+        ) : null}
 
         <section className="app-section-card mt-4 min-w-0 max-w-full overflow-hidden p-3 sm:p-4">
           <div className="mb-2 flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
@@ -601,7 +557,9 @@ export default function LoanApplyHome() {
             <p className="shrink-0 text-xs text-slate-500">
               {selectedCenter
                 ? `Showing ${classicSheetRows.length} records for ${selectedCenter}`
-                : `Showing latest ${classicSheetRows.length} records`}
+                : selectedDay
+                  ? `Showing ${classicSheetRows.length} records for ${selectedDay}`
+                  : `Showing latest ${classicSheetRows.length} records`}
             </p>
           </div>
 

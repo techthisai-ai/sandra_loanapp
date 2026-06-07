@@ -18,11 +18,12 @@ import { DocumentCompactAttach, DocumentPhotoTile } from "./DocumentUploadContro
 import {
   IDENTITY_TYPE_OPTIONS,
   coerceIdentityType,
-  formatCustomerIdInput,
   safeValidateIdentityNumber,
   validateCustomerId,
   validatePhoneNumber,
 } from "../utils/customerValidation";
+import { getNextCustomerId } from "../services/userAuth";
+import { getDocumentDataUrlField } from "../utils/customerDocumentAttachments";
 import { persistableCenterFieldsFromSelectedDay } from "../utils/centerDisplay";
 import { DAY_CENTER_LABELS, loadLoanCenters } from "../constants/dayCenters";
 
@@ -111,10 +112,13 @@ const buildInitialForm = (initialSelectedDay, initialSelectedCenter) => ({
   identityNumber: "",
   address: "",
   idDocumentName: "",
+  idDocumentDataUrl: "",
   customerPhotoName: "",
   customerPhotoDataUrl: "",
   addressProofName: "",
+  addressProofDataUrl: "",
   loanAgreementName: "",
+  loanAgreementDataUrl: "",
   selectedDay: initialSelectedDay,
   selectedCenter: initialSelectedCenter,
 });
@@ -244,6 +248,10 @@ export default function CustomerCreateStreamlinedForm({
       identityNumber: initialData.identityNumber || "",
       address: initialData.address || "",
       idDocumentName: initialData.idDocumentName || "",
+      idDocumentDataUrl: initialData.idDocumentDataUrl || "",
+      addressProofDataUrl: initialData.addressProofDataUrl || "",
+      loanAgreementDataUrl: initialData.loanAgreementDataUrl || "",
+      coApplicantIdProofDataUrl: initialData.coApplicantIdProofDataUrl || "",
       customerPhotoName: initialData.customerPhotoName || "",
       customerPhotoDataUrl: initialData.customerPhotoDataUrl || "",
       addressProofName: initialData.addressProofName || "",
@@ -277,7 +285,7 @@ export default function CustomerCreateStreamlinedForm({
       strictOnboarding || form.alternateNumber?.trim()
         ? validatePhoneNumber(form.alternateNumber, "Alternate number")
         : "";
-    const nextCustomerIdError = validateCustomerId(form.customerId);
+    const nextCustomerIdError = validateCustomerId(form.customerId, { allowLegacy: isEdit });
     const issues = new Set();
 
     if (nextCustomerIdError) issues.add("customerId");
@@ -293,17 +301,29 @@ export default function CustomerCreateStreamlinedForm({
     if (strictOnboarding && !form.idDocumentName?.trim()) issues.add("idDocumentName");
 
     return { issues, nextIdentityError, nextPhoneError, nextAltError, nextCustomerIdError };
-  }, [form, strictOnboarding, subOptions.length]);
+  }, [form, isEdit, strictOnboarding, subOptions.length]);
+
+  useEffect(() => {
+    if (isEdit || initialData) return;
+    let active = true;
+    getNextCustomerId()
+      .then((nextCustomerId) => {
+        if (!active) return;
+        setForm((current) => ({ ...current, customerId: nextCustomerId }));
+        setCustomerIdError("");
+      })
+      .catch((loadError) => {
+        if (!active) return;
+        setCustomerIdError(loadError.message || "Unable to generate customer ID.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [initialData, isEdit]);
 
   const update = (field) => (event) => {
     const value = event?.target?.value ?? "";
     clearHighlight(field);
-    if (field === "customerId") {
-      const formatted = formatCustomerIdInput(value);
-      setForm((c) => ({ ...c, customerId: formatted }));
-      setCustomerIdError(formatted ? validateCustomerId(formatted) : "");
-      return;
-    }
     if (field === "selectedDay") {
       setForm((c) => ({ ...c, selectedDay: value, selectedCenter: "" }));
       clearHighlight("selectedCenter");
@@ -381,24 +401,30 @@ export default function CustomerCreateStreamlinedForm({
     if (!file) return;
     clearHighlight(field);
     const url = URL.createObjectURL(file);
+    const resolvedDataField = dataField || getDocumentDataUrlField(field);
     setAttachmentUrls((c) => {
       if (c[field]) URL.revokeObjectURL(c[field]);
       return { ...c, [field]: url };
     });
     setForm((cur) => ({ ...cur, [field]: file.name || "" }));
-    if (previewSetter) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = typeof reader.result === "string" ? reader.result : "";
-        previewSetter(dataUrl);
-        if (dataField) setForm((cur) => ({ ...cur, [dataField]: dataUrl }));
-      };
-      reader.readAsDataURL(file);
-    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (previewSetter) previewSetter(dataUrl);
+      if (resolvedDataField) {
+        setForm((cur) => ({ ...cur, [resolvedDataField]: dataUrl }));
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const clearAttachment = (field, previewSetter, dataField = "") => {
-    setForm((c) => ({ ...c, [field]: "", ...(dataField ? { [dataField]: "" } : {}) }));
+    const resolvedDataField = dataField || getDocumentDataUrlField(field);
+    setForm((c) => ({
+      ...c,
+      [field]: "",
+      ...(resolvedDataField ? { [resolvedDataField]: "" } : {}),
+    }));
     if (previewSetter) previewSetter("");
     setAttachmentUrls((c) => {
       if (c[field]) URL.revokeObjectURL(c[field]);
@@ -469,6 +495,9 @@ export default function CustomerCreateStreamlinedForm({
     setLoading(true);
     try {
       const payload = buildPayload();
+      if (!payload.customerId && !isEdit) {
+        payload.customerId = await getNextCustomerId();
+      }
       if (onSubmitForm) await onSubmitForm(payload);
       else {
         const { createCustomer } = await import("../services/userAuth");
@@ -512,19 +541,26 @@ export default function CustomerCreateStreamlinedForm({
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_190px]">
             <div className="space-y-4">
               <div>
-                <RequiredLabel label="Customer ID" required hint="Format CUST-26001" />
+                <RequiredLabel label="Customer ID" required hint="Auto-generated (CX0001)" />
                 <input
                   value={form.customerId}
-                  onChange={update("customerId")}
-                  className={fieldClass("app-input h-11 w-full text-sm uppercase tracking-wide transition", isHighlighted("customerId"))}
-                  placeholder="CUST-26001"
-                  maxLength={10}
-                  inputMode="numeric"
+                  readOnly
+                  className={fieldClass(
+                    "app-input h-11 w-full cursor-not-allowed bg-slate-50 text-sm uppercase tracking-wide transition",
+                    isHighlighted("customerId")
+                  )}
+                  placeholder="CX0001"
                   autoComplete="off"
                   required
                   aria-invalid={isHighlighted("customerId") || customerIdError ? true : undefined}
                 />
-                <FieldError message={isHighlighted("customerId") || customerIdError ? customerIdError || "Customer ID must be in the format CUST-26001" : ""} />
+                <FieldError
+                  message={
+                    isHighlighted("customerId") || customerIdError
+                      ? customerIdError || "Customer ID must be in the format CX0001"
+                      : ""
+                  }
+                />
               </div>
 
               <div>

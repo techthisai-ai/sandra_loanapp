@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
+import { isAuthSessionActive } from "../utils/authSession";
 
 export default function RouteGuard({ allowedRoles }) {
   const { loading, user, profile } = useAuth();
@@ -14,7 +15,7 @@ export default function RouteGuard({ allowedRoles }) {
     );
   }
 
-  if (!user || !profile) {
+  if (!user || !profile || !isAuthSessionActive()) {
     return <Navigate to="/login" replace />;
   }
 

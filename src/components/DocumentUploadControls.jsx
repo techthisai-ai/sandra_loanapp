@@ -20,6 +20,7 @@ export function DocumentCompactAttach({
   invalid = false,
   helperText = "",
   emptyHint = "Drop a file here or use Camera / Upload",
+  dense = false,
 }) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -49,12 +50,17 @@ export function DocumentCompactAttach({
     handleUpload(event.dataTransfer.files?.[0]);
   };
 
-  const btn =
-    "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-[11px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50";
+  const btn = dense
+    ? "inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border px-2 text-[10px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+    : "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-[11px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50";
+
+  const resolvedEmptyHint = dense ? "Camera or Upload" : emptyHint;
 
   return (
     <div
-      className={`rounded-2xl border bg-white p-3 shadow-sm ring-1 transition hover:shadow-md ${
+      className={`rounded-2xl border bg-white shadow-sm ring-1 transition hover:shadow-md ${
+        dense ? "p-2" : "p-3"
+      } ${
         invalid
           ? "border-rose-300 ring-rose-100/80"
           : "border-slate-200/90 ring-slate-100/80 hover:border-blue-200/70"
@@ -63,18 +69,19 @@ export function DocumentCompactAttach({
       }`}
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600">
+        <p className={`font-bold uppercase tracking-[0.12em] text-slate-600 ${dense ? "text-[9px]" : "text-[10px]"}`}>
           {label}
           {required ? <span className="ml-1 text-rose-500">*</span> : null}
         </p>
         {hasFile ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-bold uppercase text-emerald-800">
-            <CheckCircle2 className="h-3 w-3" />
-            Uploaded
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[8px] font-bold uppercase text-emerald-800">
+            <CheckCircle2 className="h-2.5 w-2.5" />
+            {dense ? "OK" : "Uploaded"}
           </span>
         ) : null}
       </div>
 
+      {!dense ? (
       <div
         className={`mt-2 rounded-xl border border-dashed px-3 py-3 text-center transition ${
           invalid
@@ -93,20 +100,25 @@ export function DocumentCompactAttach({
         <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm">
           <FileImage className="h-4.5 w-4.5" />
         </div>
-        <p className="mt-2 text-[11px] font-medium text-slate-600">{hasFile ? "Document ready" : emptyHint}</p>
+        <p className="mt-2 text-[11px] font-medium text-slate-600">{hasFile ? "Document ready" : resolvedEmptyHint}</p>
         <p className="mt-1 truncate text-[10px] text-slate-400" title={value || undefined}>
           {hasFile ? value : helperText || "JPG, PNG, PDF supported"}
         </p>
       </div>
+      ) : (
+        <p className="mt-1.5 truncate text-[9px] text-slate-400" title={value || undefined}>
+          {hasFile ? value : helperText || "JPG, PNG, PDF"}
+        </p>
+      )}
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className={`grid grid-cols-2 gap-1.5 ${dense ? "mt-2" : "mt-3 gap-2"}`}>
         <button
           type="button"
           onClick={openCamera}
           disabled={disabled}
           className={`${btn} border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100`}
         >
-          <Camera className="h-3.5 w-3.5 shrink-0" />
+          <Camera className={`shrink-0 ${dense ? "h-3 w-3" : "h-3.5 w-3.5"}`} />
           Camera
         </button>
         <button
@@ -115,7 +127,7 @@ export function DocumentCompactAttach({
           disabled={disabled}
           className={`${btn} border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50`}
         >
-          <Upload className="h-3.5 w-3.5 shrink-0" />
+          <Upload className={`shrink-0 ${dense ? "h-3 w-3" : "h-3.5 w-3.5"}`} />
           Upload
         </button>
         <input
@@ -150,11 +162,11 @@ export function DocumentCompactAttach({
         title={`Camera — ${label}`}
       />
       {hasFile ? (
-        <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-emerald-100 bg-emerald-50/60 px-2.5 py-2">
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-          <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-emerald-900">{value}</span>
+        <div className={`mt-1.5 flex items-center gap-1 rounded-lg border border-emerald-100 bg-emerald-50/60 ${dense ? "px-2 py-1" : "px-2.5 py-2"}`}>
+          <CheckCircle2 className={`shrink-0 text-emerald-600 ${dense ? "h-3 w-3" : "h-3.5 w-3.5"}`} />
+          <span className="min-w-0 flex-1 truncate text-[9px] font-medium text-emerald-900">{value}</span>
           {url ? (
-            <a href={url} target="_blank" rel="noreferrer" className="shrink-0 text-[10px] font-semibold text-blue-600 hover:underline">
+            <a href={url} target="_blank" rel="noreferrer" className="shrink-0 text-[9px] font-semibold text-blue-600 hover:underline">
               View
             </a>
           ) : null}
@@ -165,14 +177,14 @@ export function DocumentCompactAttach({
             className="shrink-0 rounded p-0.5 text-rose-600 hover:bg-rose-50"
             aria-label={`Remove ${label}`}
           >
-            <X className="h-3.5 w-3.5" />
+            <X className={`${dense ? "h-3 w-3" : "h-3.5 w-3.5"}`} />
           </button>
         </div>
-      ) : (
+      ) : !dense ? (
         <p className={`mt-2 text-[10px] font-medium ${invalid ? "text-rose-600" : "text-slate-400"}`}>
           {helperText || "No file selected"}
         </p>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -190,6 +202,7 @@ export function DocumentPhotoTile({
   required = false,
   invalid = false,
   helperText = "",
+  dense = false,
 }) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -224,30 +237,33 @@ export function DocumentPhotoTile({
     handleUpload(event.dataTransfer.files?.[0]);
   };
 
-  const actionBtn =
-    "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-[11px] font-semibold leading-none shadow-sm transition hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50";
+  const actionBtn = dense
+    ? "inline-flex !min-h-0 aspect-square h-9 w-full min-w-0 items-center justify-center rounded-lg border p-0 shadow-sm transition hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+    : "inline-flex !min-h-0 h-10 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-[11px] font-semibold leading-none shadow-sm transition hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50";
 
   return (
     <div
-      className={`mx-auto flex w-full max-w-[184px] shrink-0 flex-col items-center rounded-2xl border bg-white p-3.5 shadow-md shadow-slate-900/5 ring-1 transition ${
+      className={`mx-auto flex w-full shrink-0 flex-col items-center rounded-2xl border bg-white shadow-md shadow-slate-900/5 ring-1 transition ${
+        dense ? "max-w-[112px] p-2" : "max-w-[184px] p-3.5"
+      } ${
         invalid ? "border-rose-300 ring-rose-100/90" : "border-slate-200/90 ring-slate-100/90"
       } ${className}`}
     >
       <div className="flex w-full items-center justify-between gap-2">
-        <p className="min-w-0 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+        <p className={`min-w-0 font-bold uppercase tracking-[0.14em] text-slate-500 ${dense ? "text-[8px] leading-tight" : "text-[10px]"}`}>
           {label}
           {required ? <span className="ml-1 text-rose-500">*</span> : null}
         </p>
         {hasFile ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-bold uppercase text-emerald-800">
-            <CheckCircle2 className="h-3 w-3" />
-            Ready
+          <span className={`inline-flex items-center gap-0.5 rounded-full border border-emerald-200 bg-emerald-50 font-bold uppercase text-emerald-800 ${dense ? "px-1.5 py-0 text-[8px]" : "px-2 py-0.5 text-[9px]"}`}>
+            <CheckCircle2 className={dense ? "h-2.5 w-2.5" : "h-3 w-3"} />
+            {dense ? "OK" : "Ready"}
           </span>
         ) : null}
       </div>
 
       <div
-        className="relative mt-3 w-full"
+        className={`relative w-full ${dense ? "mt-1.5" : "mt-3"}`}
         onDragOver={(event) => {
           event.preventDefault();
           if (!disabled) setIsDragging(true);
@@ -273,7 +289,7 @@ export function DocumentPhotoTile({
                 onError={() => setPreviewLoadFailed(true)}
               />
             ) : (
-              <UserRound className="h-10 w-10 text-slate-300/90" strokeWidth={1.5} />
+              <UserRound className={`text-slate-300/90 ${dense ? "h-6 w-6" : "h-10 w-10"}`} strokeWidth={1.5} />
             )}
           </div>
         </div>
@@ -290,24 +306,28 @@ export function DocumentPhotoTile({
         ) : null}
       </div>
 
-      <div className="mt-3 grid w-full grid-cols-2 gap-2 max-[360px]:grid-cols-1">
+      <div className={`grid w-full ${dense ? "mt-1.5 grid-cols-2 gap-1" : "mt-3 grid-cols-2 gap-2 max-[360px]:grid-cols-1"}`}>
         <button
           type="button"
           onClick={openCamera}
           disabled={disabled}
+          aria-label={`Camera — ${label}`}
+          title="Camera"
           className={`${actionBtn} border-blue-300/90 bg-blue-50 text-blue-800 hover:border-blue-400 hover:bg-blue-100`}
         >
           <Camera className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          <span>Camera</span>
+          {!dense ? <span>Camera</span> : null}
         </button>
         <button
           type="button"
           onClick={() => !disabled && uploadRef.current?.click()}
           disabled={disabled}
+          aria-label={`Upload — ${label}`}
+          title="Upload"
           className={`${actionBtn} border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50`}
         >
           <Upload className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          <span>Upload</span>
+          {!dense ? <span>Upload</span> : null}
         </button>
       </div>
 
@@ -344,7 +364,9 @@ export function DocumentPhotoTile({
       />
 
       <p
-        className={`mt-2.5 w-full px-0.5 text-center text-[10px] font-medium leading-snug ${
+        className={`w-full px-0.5 text-center font-medium leading-snug ${
+          dense ? "mt-1 text-[8px]" : "mt-2.5 text-[10px]"
+        } ${
           fileName ? "text-emerald-800" : invalid ? "text-rose-600" : "text-slate-400"
         }`}
         title={fileName || undefined}

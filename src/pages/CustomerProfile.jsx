@@ -21,9 +21,59 @@ import AdminLayout from "../components/dashboard/AdminLayout";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import { buildInstallmentSchedule, safeDate } from "../utils/customerProfileSchedule";
 import { downloadCustomerProfilePdf } from "../utils/customerProfilePdf";
+import { isImageAttachment, isPdfAttachment, openCustomerDocument } from "../utils/customerDocumentAttachments";
 
 function formatCurrency(value) {
   return `Rs ${Number(value || 0).toLocaleString("en-IN")}`;
+}
+
+function DocumentAttachmentCard({ label, name, url }) {
+  const hasFile = Boolean(name);
+  const canOpen = Boolean(url);
+
+  if (!hasFile) {
+    return (
+      <li className="flex flex-col rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+        <span className="text-xs font-semibold text-slate-700">{label}</span>
+        <span className="mt-1 text-sm text-slate-500">Not attached</span>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex flex-col rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+      <span className="text-xs font-semibold text-slate-700">{label}</span>
+      {canOpen && isImageAttachment(name, url) ? (
+        <button
+          type="button"
+          onClick={() => openCustomerDocument(url)}
+          className="mt-2 w-fit rounded-lg border border-slate-200 bg-white p-0.5 transition hover:border-blue-200 hover:shadow-sm"
+          title={`Open ${name}`}
+        >
+          <img src={url} alt={name} className="h-24 w-24 rounded-lg object-cover" />
+        </button>
+      ) : null}
+      {canOpen ? (
+        <button
+          type="button"
+          onClick={() => openCustomerDocument(url)}
+          className="mt-2 text-left text-sm font-semibold text-blue-700 hover:underline"
+          title="Open in new tab"
+        >
+          {name}
+        </button>
+      ) : (
+        <span className="mt-1 text-sm text-slate-600">{name}</span>
+      )}
+      {canOpen ? (
+        <span className="mt-1 text-[11px] text-slate-500">
+          {isPdfAttachment(name, url) ? "Click to open PDF in a new tab" : "Click to open in a new tab"}
+        </span>
+      ) : (
+        <span className="mt-1 text-[11px] text-slate-400">File content not stored for this record</span>
+      )}
+    </li>
+  );
 }
 
 function formatDateTime(value) {
@@ -382,12 +432,12 @@ function CustomerProfileContent() {
   }
 
   const docItems = [
-    { key: "id", label: "ID proof", name: customer?.idDocumentName },
-    { key: "addr", label: "Address proof", name: customer?.addressProofName },
-    { key: "loan", label: "Loan agreement", name: customer?.loanAgreementName },
+    { key: "id", label: "ID proof", name: customer?.idDocumentName, url: customer?.idDocumentDataUrl },
+    { key: "addr", label: "Address proof", name: customer?.addressProofName, url: customer?.addressProofDataUrl },
+    { key: "loan", label: "Loan agreement", name: customer?.loanAgreementName, url: customer?.loanAgreementDataUrl },
     { key: "photo", label: "Customer photo", name: customer?.customerPhotoName, url: customer?.customerPhotoDataUrl },
     { key: "coph", label: "Co-applicant photo", name: customer?.coApplicantPhotoName, url: customer?.coApplicantPhotoDataUrl },
-    { key: "coid", label: "Co-applicant ID", name: customer?.coApplicantIdProofName },
+    { key: "coid", label: "Co-applicant ID", name: customer?.coApplicantIdProofName, url: customer?.coApplicantIdProofDataUrl },
   ];
 
   return (
@@ -714,19 +764,7 @@ function CustomerProfileContent() {
               </h2>
               <ul className="mt-3 grid gap-3 sm:grid-cols-2">
                 {docItems.map((d) => (
-                  <li key={d.key} className="flex flex-col rounded-xl border border-slate-100 bg-slate-50/60 p-3">
-                    <span className="text-xs font-semibold text-slate-700">{d.label}</span>
-                    {d.url ? (
-                      <>
-                        <img src={d.url} alt="" className="mt-2 h-24 w-24 rounded-lg border object-cover" />
-                        <a href={d.url} download={d.name || "photo"} className="mt-2 text-xs font-semibold text-blue-700 hover:underline">
-                          Download
-                        </a>
-                      </>
-                    ) : (
-                      <span className="mt-1 text-sm text-slate-600">{d.name || "Not attached"}</span>
-                    )}
-                  </li>
+                  <DocumentAttachmentCard key={d.key} label={d.label} name={d.name} url={d.url} />
                 ))}
               </ul>
             </section>

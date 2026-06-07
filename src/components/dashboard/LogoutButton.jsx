@@ -1,9 +1,11 @@
 import { signOut } from "firebase/auth";
 import { LogOut } from "lucide-react";
 import { auth } from "../../firebase/config";
+import { clearAuthSession } from "../../utils/authSession";
 
 export default function LogoutButton() {
   const handleLogout = async () => {
+    clearAuthSession();
     await signOut(auth);
     window.location.href = "/login";
   };

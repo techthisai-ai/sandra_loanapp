@@ -5,6 +5,24 @@ import { auth, db } from "../firebase/config";
 import { loadCurrentProfile, seedDefaultAccounts } from "../services/userAuth";
 import AuthContext from "./authContext";
 
+const AUTH_INIT_TIMEOUT_MS = 12_000;
+
+async function withTimeout(promise, timeoutMs, label) {
+  let timeoutId;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`${label} timed out.`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -26,21 +44,20 @@ export function AuthProvider({ children }) {
       setUser(firebaseUser);
 
       if (!firebaseUser) {
-        try {
-          await seedDefaultAccounts();
-        } catch (bootstrapError) {
-          console.warn("[bootstrap] Default admin setup:", bootstrapError);
-        }
         setProfile(null);
         setLoading(false);
+        void seedDefaultAccounts().catch((bootstrapError) => {
+          console.warn("[bootstrap] Default admin setup:", bootstrapError);
+        });
         return;
       }
 
       try {
         // Ensure Firestore requests include a fresh ID token (avoids permission-denied right after sign-in or tab restore).
-        await firebaseUser.getIdToken(true);
-        await refreshProfile(firebaseUser);
-      } catch {
+        await withTimeout(firebaseUser.getIdToken(true), AUTH_INIT_TIMEOUT_MS, "Auth session");
+        await withTimeout(refreshProfile(firebaseUser), AUTH_INIT_TIMEOUT_MS, "Profile load");
+      } catch (initError) {
+        console.warn("[auth] session init:", initError?.message || initError);
         setProfile(null);
       } finally {
         setLoading(false);

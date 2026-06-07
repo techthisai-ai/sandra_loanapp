@@ -3,14 +3,15 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 
-/** Firebase project: cafe-c396e — enable Auth, Firestore, and Hosting in the Firebase Console. */
+/** Firebase project: sandraloanapp-85985 — enable Auth, Firestore, and Hosting in the Firebase Console. */
 export const firebaseConfig = {
-  apiKey: "AIzaSyAMQ9SGIh1AkzDs98LlWQ89IA4oaqyqF5M",
-  authDomain: "cafe-c396e.firebaseapp.com",
-  projectId: "cafe-c396e",
-  storageBucket: "cafe-c396e.firebasestorage.app",
-  messagingSenderId: "234698735926",
-  appId: "1:234698735926:web:01a2a0c27f79c873f93397",
+  apiKey: "AIzaSyDwQJ8-9Ttp3xJ9Tr7Yruj0iVFfFP99ymE",
+  authDomain: "sandraloanapp-85985.firebaseapp.com",
+  projectId: "sandraloanapp-85985",
+  storageBucket: "sandraloanapp-85985.firebasestorage.app",
+  messagingSenderId: "930341187943",
+  appId: "1:930341187943:web:0efc3126570f197e57ffc2",
+  measurementId: "G-BDXCN9KNP9",
 };
 
 const app = initializeApp(firebaseConfig);

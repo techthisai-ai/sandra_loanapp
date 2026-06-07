@@ -97,30 +97,31 @@ export function safeValidateIdentityNumber(identityType, identityNumber) {
   }
 }
 
-/** Customer ID format: CUST- + 2-digit year + 3-digit running number (e.g. CUST-26001). */
-export const CUSTOMER_ID_PATTERN = /^CUST-\d{5}$/;
-export const CUSTOMER_ID_FORMAT_MESSAGE = "Customer ID must be in the format CUST-26001";
+/** Customer ID format: CX + 4-digit running number (e.g. CX0001). */
+export const CUSTOMER_ID_PATTERN = /^CX\d{4}$/;
+export const LEGACY_CUSTOMER_ID_PATTERN = /^CUST-/;
+export const CUSTOMER_ID_FORMAT_MESSAGE = "Customer ID must be in the format CX0001";
 
 export function normalizeCustomerId(value) {
   return normalizeText(value).toUpperCase();
 }
 
 /**
- * Live input formatter: forces the mandatory "CUST-" prefix and limits the
- * numeric part to exactly 5 digits (2-digit year + 3-digit sequence).
+ * Live input formatter: forces the "CX" prefix and limits the numeric part to 4 digits.
  */
 export function formatCustomerIdInput(value) {
   const upper = String(value || "").toUpperCase();
-  const withoutPrefix = upper.replace(/^C?U?S?T?-?/, "");
-  const digits = withoutPrefix.replace(/\D/g, "").slice(0, 5);
-  return digits ? `CUST-${digits}` : "";
+  const withoutPrefix = upper.replace(/^C?X?/, "");
+  const digits = withoutPrefix.replace(/\D/g, "").slice(0, 4);
+  return digits ? `CX${digits.padStart(4, "0")}` : "";
 }
 
-export function validateCustomerId(value) {
+export function validateCustomerId(value, { allowLegacy = false } = {}) {
   const id = normalizeCustomerId(value);
   if (!id) return "Customer ID is required.";
-  if (!CUSTOMER_ID_PATTERN.test(id)) return CUSTOMER_ID_FORMAT_MESSAGE;
-  return "";
+  if (CUSTOMER_ID_PATTERN.test(id)) return "";
+  if (allowLegacy && LEGACY_CUSTOMER_ID_PATTERN.test(id)) return "";
+  return CUSTOMER_ID_FORMAT_MESSAGE;
 }
 
 export function hasDuplicatePhone(customers, phoneNumber, customerId) {

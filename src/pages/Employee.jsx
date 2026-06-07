@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MapPin, Pencil, Plus, Search, ToggleLeft, ToggleRight, UserRound } from "lucide-react";
+import { Eye, MapPin, Pencil, Plus, Search } from "lucide-react";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import EmployeeFormModal, { EMPTY_EMPLOYEE_FORM } from "../components/employee/EmployeeFormModal.jsx";
 import AssignCentersModal from "../components/employee/AssignCentersModal.jsx";
@@ -11,7 +11,6 @@ import {
   listEmployees,
   updateEmployeeAdmin,
   updateEmployeeCenters,
-  updateEmployeeStatus,
 } from "../services/userAuth";
 import { buildCenterAssignmentOptions } from "../utils/employeeScope.js";
 import {
@@ -20,37 +19,70 @@ import {
   getEmployeeAssignedCenters,
   normalizeUsername,
 } from "../utils/employeeManagement.js";
-import { formatCurrency } from "../utils/employeeCollectionDetails.js";
-
 const EMPLOYEE_TABLE_COLUMNS = [
-  { key: "employeeName", label: "EMPNAME", width: "10rem" },
-  { key: "employeeId", label: "EMPID", width: "6.5rem" },
-  { key: "mobileNumber", label: "MOBILENO", width: "7rem" },
-  { key: "username", label: "USERNAME", width: "7rem" },
-  { key: "assignedCentersLabel", label: "CENTERS", width: "11rem" },
-  { key: "status", label: "STATUS", width: "5.5rem" },
-  { key: "actions", label: "ACTIONS", width: "9rem", align: "right" },
+  { key: "index", label: "#", width: "3rem" },
+  { key: "employee", label: "Employee", width: "11rem" },
+  { key: "employeeId", label: "Emp ID", width: "6.5rem" },
+  { key: "mobileNumber", label: "Mobile No", width: "7rem" },
+  { key: "username", label: "Username", width: "7rem" },
+  { key: "centers", label: "Centers", width: "10rem" },
+  { key: "status", label: "Status", width: "6rem" },
+  { key: "actions", label: "Actions", width: "9rem", align: "right" },
 ];
 
-function SummaryCard({ label, value }) {
+function formatRupee(value) {
+  return `₹${Number(value || 0).toLocaleString("en-IN")}`;
+}
+
+function EmployeeAvatar({ name }) {
+  const initials = (name || "?")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("")
+    .slice(0, 2);
+
   return (
-    <div className="app-panel-muted rounded-2xl px-4 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold tabular-nums text-slate-950">{value}</p>
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-xs font-bold text-white shadow-sm">
+      {initials}
+    </div>
+  );
+}
+
+function SummaryCard({ label, value, footer, accent }) {
+  const accentClass =
+    accent === "green"
+      ? "border-l-emerald-500"
+      : accent === "purple"
+        ? "border-l-violet-500"
+        : accent === "amber"
+          ? "border-l-amber-500"
+          : "border-l-blue-500";
+
+  return (
+    <div className={`rounded-2xl border border-slate-200/90 border-l-4 bg-white px-4 py-3 shadow-sm ${accentClass}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-950">{value}</p>
+      <p className="mt-1 text-[11px] text-slate-400">{footer}</p>
     </div>
   );
 }
 
 function CenterCell({ centers = [] }) {
   if (!centers.length) {
-    return <span className="text-xs font-medium text-slate-400">Not assigned</span>;
+    return (
+      <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
+        Not assigned
+      </span>
+    );
   }
   return (
     <div className="flex flex-wrap gap-1" title={centers.join(", ")}>
       {centers.map((center) => (
         <span
           key={center}
-          className="inline-flex max-w-[140px] items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700"
+          className="inline-flex max-w-[120px] items-center rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700"
         >
           <span className="truncate">{center}</span>
         </span>
@@ -63,12 +95,13 @@ function StatusBadge({ status }) {
   const active = status !== "inactive";
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
         active
           ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
           : "border border-rose-200 bg-rose-50 text-rose-800"
       }`}
     >
+      <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-rose-500"}`} />
       {active ? "Active" : "Inactive"}
     </span>
   );
@@ -258,66 +291,67 @@ export default function EmployeePage() {
     }
   };
 
-  const handleToggleStatus = async (row) => {
-    const nextStatus = row.status === "inactive" ? "active" : "inactive";
-    setStatusMessage("");
-    setFormError("");
-    try {
-      await updateEmployeeStatus(row.id, nextStatus);
-      await reloadEmployees();
-      setStatusMessage(`Employee marked as ${nextStatus}.`);
-    } catch (toggleError) {
-      setFormError(toggleError.message || "Unable to change status.");
-    }
-  };
-
   const loading = employeesLoading;
 
   return (
-    <AdminLayout title="Employee" description="Employee creation and centre assignment">
+    <AdminLayout
+      title="Employee"
+      description="Employee creation and centre assignment"
+      action={
+        <button
+          type="button"
+          onClick={() => {
+            setFormError("");
+            setFormModal({ mode: "add", row: null });
+          }}
+          className="app-button-primary inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
+        >
+          <Plus className="h-4 w-4" />
+          Add Employee
+        </button>
+      }
+    >
       <div className="flex h-[calc(100vh-5.5rem)] min-w-0 flex-col gap-4 overflow-hidden">
-        <section className="app-panel flex min-h-0 flex-1 flex-col p-5 md:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="app-icon-shell flex h-11 w-11 items-center justify-center rounded-2xl border border-white/70">
-                <UserRound className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold tracking-tight text-slate-950">Employee register</h3>
-                <p className="text-sm text-slate-600">Create employees and assign centres</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setFormError("");
-                setFormModal({ mode: "add", row: null });
-              }}
-              className="inline-flex items-center gap-2 self-start rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 sm:self-center"
-            >
-              <Plus className="h-4 w-4" />
-              Add Employee
-            </button>
-          </div>
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-sm md:p-5">
+          {statusMessage ? <div className="app-alert-success mb-4">{statusMessage}</div> : null}
+          {formError && !formModal ? <div className="app-alert-error mb-4">{formError}</div> : null}
 
-          {statusMessage ? <div className="app-alert-success mt-4">{statusMessage}</div> : null}
-          {formError && !formModal ? <div className="app-alert-error mt-4">{formError}</div> : null}
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard label="Total employees" value={String(stats.totalEmployees)} />
-            <SummaryCard label="Active employees" value={String(stats.activeEmployees)} />
-            <SummaryCard label="Total assigned customers" value={String(stats.totalAssignedCustomers)} />
-            <SummaryCard label="Total collections" value={formatCurrency(stats.totalCollections)} />
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              label="Total Employees"
+              value={String(stats.totalEmployees)}
+              footer="All registered employees"
+              accent="blue"
+            />
+            <SummaryCard
+              label="Active Employees"
+              value={String(stats.activeEmployees)}
+              footer="Currently active"
+              accent="green"
+            />
+            <SummaryCard
+              label="Assigned Customers"
+              value={String(stats.totalAssignedCustomers)}
+              footer="Customers assigned"
+              accent="purple"
+            />
+            <SummaryCard
+              label="Total Collections"
+              value={formatRupee(stats.totalCollections)}
+              footer="Total amount collected"
+              accent="amber"
+            />
           </div>
 
           <div className="mt-4 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search employee name or ID..."
-                className="app-input bg-slate-50 pl-11 pr-4"
+                className="app-input bg-slate-50"
+                style={{ paddingLeft: "3rem", paddingRight: "1rem" }}
               />
             </div>
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="app-select">
@@ -361,28 +395,35 @@ export default function EmployeePage() {
                       </td>
                     </tr>
                   ) : (
-                    filteredEmployees.map((row) => (
+                    filteredEmployees.map((row, index) => (
                       <tr key={row.id} className="hover:bg-slate-50/80">
-                        <td className="px-3 py-2.5 font-medium text-slate-950">
-                          <span className="block truncate" title={row.employeeName}>
-                            {row.employeeName}
-                          </span>
+                        <td className="px-3 py-3 text-center text-xs font-semibold text-slate-400">{index + 1}</td>
+                        <td className="px-3 py-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <EmployeeAvatar name={row.employeeName} />
+                            <div className="min-w-0">
+                              <span className="block truncate text-sm font-semibold text-slate-900" title={row.employeeName}>
+                                {row.employeeName}
+                              </span>
+                              <span className="block text-[11px] text-slate-500">Employee</span>
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-3 py-2.5 font-medium text-slate-900">{row.employeeId}</td>
-                        <td className="px-3 py-2.5 text-slate-700">{row.mobileNumber}</td>
-                        <td className="px-3 py-2.5 text-slate-700">
+                        <td className="px-3 py-3 text-sm font-semibold text-blue-600">{row.employeeId}</td>
+                        <td className="px-3 py-3 text-sm text-slate-700">{row.mobileNumber}</td>
+                        <td className="px-3 py-3 text-sm text-slate-700">
                           <span className="block truncate" title={row.username}>
                             {row.username}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-slate-700">
+                        <td className="px-3 py-3">
                           <CenterCell centers={row.assignedCenters} />
                         </td>
-                        <td className="px-3 py-2.5">
+                        <td className="px-3 py-3">
                           <StatusBadge status={row.status} />
                         </td>
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center justify-end gap-2">
+                        <td className="px-3 py-3">
+                          <div className="flex items-center justify-end gap-1.5">
                             <button
                               type="button"
                               onClick={() => {
@@ -391,9 +432,9 @@ export default function EmployeePage() {
                               }}
                               title="Edit employee"
                               aria-label="Edit employee"
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100"
                             >
-                              <Pencil className="h-4 w-4" />
+                              <Pencil className="h-3.5 w-3.5" />
                             </button>
                             <button
                               type="button"
@@ -403,26 +444,21 @@ export default function EmployeePage() {
                               }}
                               title="Assign centers"
                               aria-label="Assign centers"
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100"
                             >
-                              <MapPin className="h-4 w-4" />
+                              <MapPin className="h-3.5 w-3.5" />
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleToggleStatus(row)}
-                              title={row.status === "inactive" ? "Activate employee" : "Deactivate employee"}
-                              aria-label={row.status === "inactive" ? "Activate employee" : "Deactivate employee"}
-                              className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border transition ${
-                                row.status === "inactive"
-                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                                  : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
-                              }`}
+                              onClick={() => {
+                                setFormError("");
+                                setFormModal({ mode: "edit", row });
+                              }}
+                              title="View employee"
+                              aria-label="View employee"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 transition hover:bg-amber-100"
                             >
-                              {row.status === "inactive" ? (
-                                <ToggleRight className="h-4 w-4" />
-                              ) : (
-                                <ToggleLeft className="h-4 w-4" />
-                              )}
+                              <Eye className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         </td>
@@ -431,6 +467,12 @@ export default function EmployeePage() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            <div className="shrink-0 border-t border-slate-100 px-4 py-2.5 text-center text-[11px] text-slate-400">
+              {filteredEmployees.length === 0
+                ? "Showing 0 employees"
+                : `Showing 1 to ${filteredEmployees.length} of ${filteredEmployees.length} employee${filteredEmployees.length === 1 ? "" : "s"}`}
             </div>
           </div>
         </section>

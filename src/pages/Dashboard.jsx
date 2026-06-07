@@ -1028,85 +1028,119 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
-            <label className="block text-[11px] font-medium text-slate-600">
-              Type
-              <select
-                value={txFilterType}
-                onChange={(e) => setTxFilterType(e.target.value)}
-                className="app-input mt-1 h-9 w-full text-sm"
-              >
-                <option value="all">All types</option>
-                <option value={WALLET_LEDGER_TYPES.INVESTOR_DEPOSIT}>Investor deposit</option>
-                <option value={WALLET_LEDGER_TYPES.LOAN_DISBURSEMENT}>Loan disbursement</option>
-                <option value={WALLET_LEDGER_TYPES.EMI_COLLECTION}>EMI collection</option>
-                <option value={WALLET_LEDGER_TYPES.OFFICE_INCOME}>Office income</option>
-                <option value={WALLET_LEDGER_TYPES.EXPENSE}>Office expense</option>
-                <option value={WALLET_LEDGER_TYPES.SALARY_PAYMENT}>Salary payment</option>
-                <option value={WALLET_LEDGER_TYPES.MANUAL}>Manual adjustment</option>
-              </select>
-            </label>
-            <label className="block text-[11px] font-medium text-slate-600">
-              From date
-              <input
-                type="date"
-                value={txDateFrom}
-                onChange={(e) => setTxDateFrom(e.target.value)}
-                className="app-input mt-1 h-9 w-full text-sm"
-              />
-            </label>
-            <label className="block text-[11px] font-medium text-slate-600">
-              To date
-              <input
-                type="date"
-                value={txDateTo}
-                onChange={(e) => setTxDateTo(e.target.value)}
-                className="app-input mt-1 h-9 w-full text-sm"
-              />
-            </label>
-            <label className="block text-[11px] font-medium text-slate-600">
-              Person / investor / customer
-              <input
-                type="search"
-                value={txPersonFilter}
-                onChange={(e) => setTxPersonFilter(e.target.value)}
-                placeholder="Name contains…"
-                className="app-input mt-1 h-9 w-full text-sm"
-              />
-            </label>
-            <label className="block text-[11px] font-medium text-slate-600">
-              Min amount (Rs)
-              <input
-                type="text"
-                inputMode="numeric"
-                value={txAmountMin}
-                onChange={(e) => setTxAmountMin(e.target.value.replace(/[^\d]/g, ""))}
-                className="app-input mt-1 h-9 w-full text-sm"
-              />
-            </label>
-            <label className="block text-[11px] font-medium text-slate-600">
-              Max amount (Rs)
-              <input
-                type="text"
-                inputMode="numeric"
-                value={txAmountMax}
-                onChange={(e) => setTxAmountMax(e.target.value.replace(/[^\d]/g, ""))}
-                className="app-input mt-1 h-9 w-full text-sm"
-              />
-            </label>
-            <label className="block text-[11px] font-medium text-slate-600">
-              Search remarks / ref
-              <input
-                type="search"
-                value={txSearch}
-                onChange={(e) => setTxSearch(e.target.value)}
-                placeholder="Global text…"
-                className="app-input mt-1 h-9 w-full text-sm"
-              />
-            </label>
+          <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+            {[
+              {
+                key: "type",
+                label: "Type",
+                control: (
+                  <select
+                    value={txFilterType}
+                    onChange={(e) => setTxFilterType(e.target.value)}
+                    className="wallet-filter-control"
+                  >
+                    <option value="all">All types</option>
+                    <option value={WALLET_LEDGER_TYPES.INVESTOR_DEPOSIT}>Investor deposit</option>
+                    <option value={WALLET_LEDGER_TYPES.LOAN_DISBURSEMENT}>Loan disbursement</option>
+                    <option value={WALLET_LEDGER_TYPES.EMI_COLLECTION}>EMI collection</option>
+                    <option value={WALLET_LEDGER_TYPES.OFFICE_INCOME}>Office income</option>
+                    <option value={WALLET_LEDGER_TYPES.EXPENSE}>Office expense</option>
+                    <option value={WALLET_LEDGER_TYPES.SALARY_PAYMENT}>Salary payment</option>
+                    <option value={WALLET_LEDGER_TYPES.MANUAL}>Manual adjustment</option>
+                  </select>
+                ),
+              },
+              {
+                key: "from",
+                label: "From date",
+                control: (
+                  <input
+                    type="date"
+                    value={txDateFrom}
+                    onChange={(e) => setTxDateFrom(e.target.value)}
+                    className="wallet-filter-control"
+                  />
+                ),
+              },
+              {
+                key: "to",
+                label: "To date",
+                control: (
+                  <input
+                    type="date"
+                    value={txDateTo}
+                    onChange={(e) => setTxDateTo(e.target.value)}
+                    className="wallet-filter-control"
+                  />
+                ),
+              },
+              {
+                key: "person",
+                label: "Person",
+                labelTitle: "Person / investor / customer",
+                control: (
+                  <input
+                    type="search"
+                    value={txPersonFilter}
+                    onChange={(e) => setTxPersonFilter(e.target.value)}
+                    placeholder="Name contains…"
+                    className="wallet-filter-control"
+                  />
+                ),
+              },
+              {
+                key: "min",
+                label: "Min (Rs)",
+                labelTitle: "Min amount (Rs)",
+                control: (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={txAmountMin}
+                    onChange={(e) => setTxAmountMin(e.target.value.replace(/[^\d]/g, ""))}
+                    className="wallet-filter-control"
+                  />
+                ),
+              },
+              {
+                key: "max",
+                label: "Max (Rs)",
+                labelTitle: "Max amount (Rs)",
+                control: (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={txAmountMax}
+                    onChange={(e) => setTxAmountMax(e.target.value.replace(/[^\d]/g, ""))}
+                    className="wallet-filter-control"
+                  />
+                ),
+              },
+              {
+                key: "search",
+                label: "Remarks / ref",
+                labelTitle: "Search remarks / ref",
+                control: (
+                  <input
+                    type="search"
+                    value={txSearch}
+                    onChange={(e) => setTxSearch(e.target.value)}
+                    placeholder="Global text…"
+                    className="wallet-filter-control"
+                  />
+                ),
+              },
+            ].map((field) => (
+              <label key={field.key} className="wallet-filter-field">
+                <span className="wallet-filter-label" title={field.labelTitle || field.label}>
+                  {field.label}
+                </span>
+                {field.control}
+              </label>
+            ))}
           </div>
 
-          <div className="relative mt-3 overflow-x-auto rounded-2xl border border-slate-200/70 bg-white/95 shadow-inner backdrop-blur-sm">
+          <div className="relative mt-5 overflow-x-auto rounded-2xl border border-slate-200/70 bg-white/95 shadow-inner backdrop-blur-sm">
             <table className="min-w-[960px] w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="sticky top-0 z-[1] border-b border-slate-200/80 bg-slate-50/95 text-[11px] font-semibold uppercase tracking-wide text-slate-600 backdrop-blur-sm">
