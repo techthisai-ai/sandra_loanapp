@@ -1,5 +1,11 @@
+import { Capacitor } from "@capacitor/core";
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import {
+  browserLocalPersistence,
+  getAuth,
+  indexedDBLocalPersistence,
+  initializeAuth,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 
@@ -15,7 +21,26 @@ export const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+
+function createFirebaseAuth() {
+  if (!Capacitor.isNativePlatform()) {
+    return getAuth(app);
+  }
+
+  try {
+    return initializeAuth(app, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+    });
+  } catch (error) {
+    const message = String(error?.message || error || "");
+    if (message.includes("already exists")) {
+      return getAuth(app);
+    }
+    throw error;
+  }
+}
+
+export const auth = createFirebaseAuth();
 export const db = getFirestore(app);
 
 function initAnalytics() {

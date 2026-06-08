@@ -141,7 +141,7 @@ export default function EmployeeCustomerDetail() {
             className="app-panel-muted inline-flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-medium text-slate-700 transition active:scale-[0.99] sm:px-4 sm:py-3"
           >
             <ArrowLeft className="h-4 w-4 shrink-0" />
-            Back to My Customers
+            Back to Customers
           </button>
           {customer && summary && !summary.isCurrentTenureCollected && !summary.hasPendingApproval ? (
             <button

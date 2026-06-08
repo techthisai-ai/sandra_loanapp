@@ -3,9 +3,11 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../firebase/config";
 import { loadCurrentProfile, seedDefaultAccounts } from "../services/userAuth";
+import { isNativeApp } from "../utils/authSession";
 import AuthContext from "./authContext";
 
 const AUTH_INIT_TIMEOUT_MS = 25_000;
+const LOGIN_PROFILE_LOCK_MS = 120_000;
 
 async function withTimeout(promise, timeoutMs, label) {
   let timeoutId;
@@ -28,6 +30,15 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const profileUidRef = useRef(null);
+  const loginProfileLockRef = useRef(null);
+  const authInitGenerationRef = useRef(0);
+
+  const getLockedLoginProfile = (uid) => {
+    const lock = loginProfileLockRef.current;
+    if (!lock || lock.uid !== uid) return null;
+    if (Date.now() - lock.at > LOGIN_PROFILE_LOCK_MS) return null;
+    return lock.profile;
+  };
 
   const refreshProfile = async (targetUser = auth.currentUser) => {
     if (!targetUser) {
@@ -44,11 +55,25 @@ export function AuthProvider({ children }) {
         return currentProfile;
       }
 
+      const lockedProfile = getLockedLoginProfile(targetUser.uid);
+      if (lockedProfile) {
+        setProfile(lockedProfile);
+        profileUidRef.current = targetUser.uid;
+        return lockedProfile;
+      }
+
       if (profileUidRef.current !== targetUser.uid) {
         setProfile(null);
       }
       return null;
     } catch (profileError) {
+      const lockedProfile = getLockedLoginProfile(targetUser.uid);
+      if (lockedProfile) {
+        setProfile(lockedProfile);
+        profileUidRef.current = targetUser.uid;
+        return lockedProfile;
+      }
+
       if (profileUidRef.current !== targetUser.uid) {
         setProfile(null);
       }
@@ -58,37 +83,47 @@ export function AuthProvider({ children }) {
 
   const setProfileFromLogin = (nextProfile, uid) => {
     if (!nextProfile || !uid) return;
+    loginProfileLockRef.current = { uid, profile: nextProfile, at: Date.now() };
     setProfile(nextProfile);
     profileUidRef.current = uid;
   };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const initGeneration = ++authInitGenerationRef.current;
       setUser(firebaseUser);
 
       if (!firebaseUser) {
+        loginProfileLockRef.current = null;
         setProfile(null);
         profileUidRef.current = null;
         setLoading(false);
-        void seedDefaultAccounts().catch((bootstrapError) => {
-          console.warn("[bootstrap] Default admin setup:", bootstrapError);
-        });
+        if (!isNativeApp()) {
+          void seedDefaultAccounts().catch((bootstrapError) => {
+            console.warn("[bootstrap] Default admin setup:", bootstrapError);
+          });
+        }
         return;
       }
 
       try {
         await withTimeout(firebaseUser.getIdToken(), AUTH_INIT_TIMEOUT_MS, "Auth session");
+        if (initGeneration !== authInitGenerationRef.current) return;
         await withTimeout(refreshProfile(firebaseUser), AUTH_INIT_TIMEOUT_MS, "Profile load");
       } catch (initError) {
         console.warn("[auth] session init:", initError?.message || initError);
         setProfile((previous) => {
+          const lockedProfile = getLockedLoginProfile(firebaseUser.uid);
+          if (lockedProfile) return lockedProfile;
           if (previous && profileUidRef.current === firebaseUser.uid) {
             return previous;
           }
           return null;
         });
       } finally {
-        setLoading(false);
+        if (initGeneration === authInitGenerationRef.current) {
+          setLoading(false);
+        }
       }
     });
 

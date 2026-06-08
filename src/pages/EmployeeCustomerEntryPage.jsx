@@ -13,15 +13,6 @@ import {
   isRootDayLabel,
 } from "../utils/employeeScope";
 
-function EntryListField({ label, value, valueClassName = "text-slate-950" }) {
-  return (
-    <div className="min-w-0">
-      <p className="employee-field-label">{label}</p>
-      <p className={`employee-field-value truncate ${valueClassName}`}>{value || "—"}</p>
-    </div>
-  );
-}
-
 function getEmployeeMainCenterOptions(assignedCenters, allCenters) {
   const mains = new Set();
   assignedCenters.forEach((label) => {
@@ -146,28 +137,37 @@ export default function EmployeeCustomerEntryPage() {
         </p>
       ) : null}
 
-      <ul className="flex flex-col gap-1.5">
-        {filtered.map((customer) => {
-          const customerEntries = entriesByCustomerId.get(customer.customerId) || [];
-          const summary = buildEmployeeCustomerSummary(customer, customerEntries, allCenters);
-          const collected = summary.isCurrentTenureCollected;
-          const awaitingApproval = summary.hasPendingApproval;
-          return (
-            <li key={customer.customerId}>
-              <div className="employee-list-card app-panel-muted items-center">
-                <div className="employee-entry-grid min-w-0">
-                  <EntryListField
-                    label="Name"
-                    value={customer.customerName || "Unnamed"}
-                    valueClassName={collected ? "text-emerald-700" : "text-slate-950"}
-                  />
-                  <EntryListField label="Phone" value={customer.mobileNumber} valueClassName="tabular-nums text-slate-800" />
-                  <EntryListField
-                    label="Due"
-                    value={summary.currentDueAmount}
-                    valueClassName="tabular-nums text-slate-950"
-                  />
-                  <div className="min-w-0 shrink-0 self-end pb-0.5">
+      <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95 shadow-sm">
+        <div className="employee-customers-header employee-entry-list-grid">
+          <span className="whitespace-nowrap">Name</span>
+          <span className="whitespace-nowrap">Phone</span>
+          <span className="whitespace-nowrap">Due</span>
+          <span className="employee-entry-action-spacer whitespace-nowrap text-right">Action</span>
+        </div>
+
+        <ul className="divide-y divide-slate-100">
+          {filtered.map((customer) => {
+            const customerEntries = entriesByCustomerId.get(customer.customerId) || [];
+            const summary = buildEmployeeCustomerSummary(customer, customerEntries, allCenters);
+            const collected = summary.isCurrentTenureCollected;
+            const awaitingApproval = summary.hasPendingApproval;
+            return (
+              <li key={customer.customerId}>
+                <div className="employee-customers-row employee-entry-list-grid app-panel-muted">
+                  <p
+                    className={`employee-field-value min-w-0 truncate whitespace-nowrap ${
+                      collected ? "text-emerald-700" : "text-slate-950"
+                    }`}
+                  >
+                    {customer.customerName || "Unnamed"}
+                  </p>
+                  <p className="employee-field-value min-w-0 truncate whitespace-nowrap tabular-nums text-slate-800">
+                    {customer.mobileNumber || "—"}
+                  </p>
+                  <p className="employee-field-value min-w-0 truncate whitespace-nowrap tabular-nums text-slate-950">
+                    {summary.currentDueAmount || "—"}
+                  </p>
+                  <div className="flex min-w-0 justify-end">
                     {collected ? (
                       <span className="inline-flex h-7 items-center justify-center rounded-full bg-emerald-100 px-2.5 text-[10px] font-semibold leading-none text-emerald-800 sm:px-3 sm:text-[11px]">
                         Collected
@@ -187,11 +187,11 @@ export default function EmployeeCustomerEntryPage() {
                     )}
                   </div>
                 </div>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
       {!loading && filtered.length === 0 ? (
         <p className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-6 text-center text-sm text-slate-600">

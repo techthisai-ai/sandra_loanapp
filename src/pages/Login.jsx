@@ -6,11 +6,15 @@ import BrandLogo from "../components/BrandLogo";
 import { auth } from "../firebase/config";
 import { loginWithRoleTimed } from "../services/userAuth";
 import useAuth from "../hooks/useAuth";
-import { clearAuthSession, isAuthSessionActive, markAuthSessionActive } from "../utils/authSession";
+import {
+  clearAuthSession,
+  ensureAuthSessionForUser,
+  markAuthSessionActive,
+} from "../utils/authSession";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { profile, user, loading, setProfileFromLogin } = useAuth();
+  const { profile, user, loading, refreshProfile, setProfileFromLogin } = useAuth();
   const identifierRef = useRef(null);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -18,13 +22,33 @@ export default function Login() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [retryingProfile, setRetryingProfile] = useState(false);
 
   const brokenSession = Boolean(!loading && user && !profile);
 
   useEffect(() => {
-    if (loading || !user || !profile || !isAuthSessionActive()) return;
+    if (loading || !user || !profile) return;
+    if (!ensureAuthSessionForUser(user, profile)) return;
     navigate(profile.role === "admin" ? "/dashboard" : "/employee", { replace: true });
   }, [loading, navigate, profile, user]);
+
+  const handleRetryProfile = async () => {
+    if (!user) return;
+    setRetryingProfile(true);
+    setError("");
+    try {
+      const restoredProfile = await refreshProfile(user);
+      if (restoredProfile && ensureAuthSessionForUser(user, restoredProfile)) {
+        navigate(restoredProfile.role === "admin" ? "/dashboard" : "/employee", { replace: true });
+      } else if (!restoredProfile) {
+        setError("Profile still could not be loaded. Check your connection and try again.");
+      }
+    } catch (retryError) {
+      setError(retryError.message || "Could not reload your profile.");
+    } finally {
+      setRetryingProfile(false);
+    }
+  };
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -114,15 +138,25 @@ export default function Login() {
             <p className="mb-2">
               Your session could not load a profile. Sign out and try again with your admin email or employee username.
             </p>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              disabled={signingOut}
-              className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-medium text-amber-950 hover:bg-amber-50 disabled:opacity-60"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              {signingOut ? "Signing out…" : "Sign out"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleRetryProfile}
+                disabled={retryingProfile || signingOut}
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-medium text-amber-950 hover:bg-amber-50 disabled:opacity-60"
+              >
+                {retryingProfile ? "Retrying…" : "Retry"}
+              </button>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                disabled={signingOut || retryingProfile}
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-medium text-amber-950 hover:bg-amber-50 disabled:opacity-60"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                {signingOut ? "Signing out…" : "Sign out"}
+              </button>
+            </div>
           </div>
         ) : null}
 

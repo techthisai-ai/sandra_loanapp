@@ -26,6 +26,7 @@ const PRINT_COLUMNS = [
   { key: "pendingAmountDisplay", label: "Pending Amount", align: "right" },
   { key: "balanceAmount", label: "Balance Tenure", align: "right" },
   { key: "paid", label: "Paid", align: "right" },
+  { key: "entry", label: "Entry", align: "right" },
 ];
 
 function escapeHtml(value) {
@@ -57,9 +58,17 @@ function resolvePaidForPrint(row, paidState = { drafts: {}, committed: {} }) {
   const entryKey = makePaidEntryKey(row.customerId, row.installmentNumber);
   const committedAmount = sanitizePaidAmount(paidState.committed?.[entryKey]?.amount);
   if (committedAmount) return formatCurrency(Number(committedAmount));
-  const draftAmount = sanitizePaidAmount(paidState.drafts?.[entryKey]);
-  if (draftAmount) return formatCurrency(Number(draftAmount));
+  if (row.isCurrentTenurePaid && Number(row.currentTenurePaidAmount || 0) > 0) {
+    return formatCurrency(Number(row.currentTenurePaidAmount));
+  }
   return "—";
+}
+
+function resolveEntryForPrint(row, paidState = { drafts: {}, committed: {} }) {
+  if (row.installmentNumber == null) return "—";
+  const entryKey = makePaidEntryKey(row.customerId, row.installmentNumber);
+  const draftAmount = sanitizePaidAmount(paidState.drafts?.[entryKey]);
+  return draftAmount ? formatCurrency(Number(draftAmount)) : "—";
 }
 
 function mapRowForPrint(row, paidState) {
@@ -75,6 +84,7 @@ function mapRowForPrint(row, paidState) {
     pendingAmountDisplay: row.pendingAmountDisplay || "—",
     balanceAmount: row.balanceAmount || "—",
     paid: resolvePaidForPrint(row, paidState),
+    entry: resolveEntryForPrint(row, paidState),
   };
 }
 

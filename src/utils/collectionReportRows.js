@@ -8,8 +8,10 @@ import {
 import { normalizeCollectionFrequency } from "./loanTimelineDates.js";
 import { buildCustomerDetailRow, formatCurrency } from "./employeeCollectionDetails.js";
 import {
+  getCommittedPaidAmount,
   getCommittedPaymentsForCustomer,
   isPaidFieldCommittedForInstallment,
+  makePaidEntryKey,
 } from "./collectionReportPaidStorage.js";
 
 /** Paid when approved collections or a committed manual entry covers the full installment due. */
@@ -216,9 +218,27 @@ export function computeReportTenureBreakdown(schedule, frequency) {
   };
 }
 
-function formatCurrentDueAmount(currentDue) {
+function formatCurrentDueAmount(currentDue, { isPaid = false } = {}) {
   if (!currentDue) return "—";
-  return formatCurrency(currentDue.pendingAmount || currentDue.dueAmount);
+  if (isPaid || isInstallmentPaidForReport(currentDue)) return formatCurrency(0);
+  const outstanding = Math.max(Number(currentDue.pendingAmount ?? currentDue.dueAmount ?? 0), 0);
+  return formatCurrency(outstanding);
+}
+
+export function resolveReportPaidColumnAmount(row, paidState = { drafts: {}, committed: {} }) {
+  if (!row?.customerId || row.installmentNumber == null) return 0;
+  const entryKey = makePaidEntryKey(row.customerId, row.installmentNumber);
+  const committed = Number(getCommittedPaidAmount(entryKey, paidState) || 0);
+  if (committed > 0) return committed;
+  if (row.isCurrentTenurePaid && Number(row.currentTenurePaidAmount || 0) > 0) {
+    return Number(row.currentTenurePaidAmount);
+  }
+  return 0;
+}
+
+export function formatReportPaidColumnDisplay(row, paidState) {
+  const amount = resolveReportPaidColumnAmount(row, paidState);
+  return amount > 0 ? formatCurrency(amount) : "";
 }
 
 function summaryRow(base, calendarCurrent, rowKind) {
@@ -253,12 +273,17 @@ export function buildCollectionReportRowsForCustomer(
   const totalCollected = effectiveSchedule.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0);
   const remainingBalance = Math.max(Number(customer.totalPayable || 0) - totalCollected, 0);
 
+  const tenurePayment = resolveCurrentTenurePayment(customer, customerEntries, calendarCurrent);
+  const isCurrentTenurePaid = tenurePayment.isPaid;
+  const currentTenurePaidAmount = tenurePayment.paidAmount;
+
   const base = {
     ...detail,
     ...tenure,
     ...baseMeta,
-    currentDueAmount: formatCurrentDueAmount(calendarCurrent),
+    currentDueAmount: formatCurrentDueAmount(calendarCurrent, { isPaid: isCurrentTenurePaid }),
     paid: "",
+    entry: "",
     loanAmountDisplay: formatCurrency(detail.loanAmount),
     balanceAmountDisplay: formatCurrency(remainingBalance),
     balanceAmount: formatCurrency(remainingBalance),
@@ -269,9 +294,6 @@ export function buildCollectionReportRowsForCustomer(
   const isFullyPaid = remainingBalance <= 0;
   const currentInstallmentNumber = calendarCurrent?.installmentNumber ?? null;
   const currentDueAmount = Number(calendarCurrent?.dueAmount || 0);
-  const tenurePayment = resolveCurrentTenurePayment(customer, customerEntries, calendarCurrent);
-  const isCurrentTenurePaid = tenurePayment.isPaid;
-  const currentTenurePaidAmount = tenurePayment.paidAmount;
   const paidFieldCommitted = isPaidFieldCommittedForInstallment(
     customer.customerId,
     currentInstallmentNumber,
@@ -300,10 +322,18 @@ export function buildCollectionReportRowsForCustomer(
     isFullyPaid,
     isCurrentTenurePaid,
     currentTenurePaidAmount,
-    paidDisplay:
-      isCurrentTenurePaid && currentTenurePaidAmount > 0
-        ? formatCurrency(currentTenurePaidAmount)
-        : "",
+    currentDueAmount:
+      clearedTenure.currentDueAmount ??
+      (isCurrentTenurePaid ? formatCurrency(0) : base.currentDueAmount),
+    paidDisplay: formatReportPaidColumnDisplay(
+      {
+        customerId: customer.customerId,
+        installmentNumber: currentInstallmentNumber,
+        isCurrentTenurePaid,
+        currentTenurePaidAmount,
+      },
+      paidState
+    ),
   };
 
   if (paymentStatusFilter === "Paid") {

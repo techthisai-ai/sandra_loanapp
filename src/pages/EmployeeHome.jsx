@@ -7,7 +7,7 @@ import useAuth from "../hooks/useAuth";
 import { employeeMatchesCollector } from "../utils/employeeManagement";
 
 function formatCurrency(value) {
-  return `Rs ${Number(value || 0).toLocaleString("en-IN")}`;
+  return `₹${Number(value || 0).toLocaleString("en-IN")}`;
 }
 
 function startOfDay(date) {

@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import {
   arrayUnion,
@@ -999,6 +1000,9 @@ function markDemoCustomerReseededThisSession() {
  * Runs at most once per browser tab session to reduce Firebase "too many attempts" rate limits.
  */
 export async function seedDefaultAccounts() {
+  if (Capacitor.isNativePlatform()) {
+    return;
+  }
   if (auth.currentUser) {
     return;
   }

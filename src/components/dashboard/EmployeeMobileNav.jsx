@@ -29,14 +29,14 @@ export default function EmployeeMobileNav() {
       <NavLink to="/employee/customers" className={() => navClass(customersActive)}>
         <UsersRound className="employee-tab-icon h-5 w-5 shrink-0 sm:h-[22px] sm:w-[22px]" />
         <span className="employee-tab-label max-w-full truncate text-[10px] font-semibold uppercase tracking-[0.08em] sm:text-[11px] md:text-xs">
-          My Customers
+          Customer
         </span>
       </NavLink>
 
       <NavLink to="/employee/collection" className={({ isActive }) => navClass(isActive)}>
         <IndianRupee className="employee-tab-icon h-5 w-5 shrink-0 sm:h-[22px] sm:w-[22px]" />
         <span className="employee-tab-label max-w-full truncate text-[10px] font-semibold uppercase tracking-[0.08em] sm:text-[11px] md:text-xs">
-          My Collections
+          Collection
         </span>
       </NavLink>
 

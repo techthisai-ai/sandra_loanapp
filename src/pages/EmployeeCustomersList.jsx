@@ -19,42 +19,30 @@ function defaultDayLabel(selectedDay) {
   return EMPLOYEE_ROOT_DAYS[0].label;
 }
 
-function CustomerListField({ label, value, valueClassName = "text-slate-950" }) {
-  return (
-    <div className="min-w-0">
-      <p className="employee-field-label">{label}</p>
-      <p className={`employee-field-value truncate ${valueClassName}`}>{value || "—"}</p>
-    </div>
-  );
-}
+function CustomerStatusValue({ emoji, label, collected, awaitingApproval }) {
+  let statusEmoji = emoji || "";
+  let statusLabel = label || "—";
+  let tone = "text-emerald-700";
 
-function CustomerStatusField({ emoji, label, collected, awaitingApproval }) {
   if (collected) {
-    return (
-      <div className="min-w-0 shrink-0">
-        <p className="employee-field-label">Status</p>
-        <p className="employee-field-value text-emerald-700">Collected</p>
-      </div>
-    );
+    statusEmoji = "🟢";
+    statusLabel = "Collected";
+  } else if (awaitingApproval) {
+    statusEmoji = "🟡";
+    statusLabel = "Pending";
+    tone = "text-amber-700";
+  } else if (label === "Overdue") {
+    tone = "text-rose-700";
+  } else if (label === "Due Today") {
+    tone = "text-amber-700";
   }
 
-  if (awaitingApproval) {
-    return (
-      <div className="min-w-0 shrink-0">
-        <p className="employee-field-label">Status</p>
-        <p className="employee-field-value text-amber-700">Pending</p>
-      </div>
-    );
-  }
-
-  const tone =
-    label === "Overdue" ? "text-rose-700" : label === "Due Today" ? "text-amber-700" : "text-emerald-700";
   return (
-    <div className="min-w-0 shrink-0">
-      <p className="employee-field-label">Status</p>
-      <p className={`employee-field-value truncate leading-tight ${tone}`}>
-        {emoji} {label}
-      </p>
+    <div className={`employee-status-cell min-w-0 ${tone}`}>
+      <span className="employee-status-emoji" aria-hidden="true">
+        {statusEmoji}
+      </span>
+      <span className="employee-field-value truncate whitespace-nowrap">{statusLabel}</span>
     </div>
   );
 }
@@ -158,50 +146,48 @@ export default function EmployeeCustomersList() {
         </p>
       ) : null}
 
-      <ul className="flex flex-col gap-1.5">
-        {filtered.map((row) => (
-          <li key={row.customerId}>
-            <div className="employee-list-card app-panel-muted">
+      <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95 shadow-sm">
+        <div className="employee-customers-header employee-customers-grid">
+          <span className="whitespace-nowrap">Name</span>
+          <span className="whitespace-nowrap">Current due</span>
+          <span className="whitespace-nowrap">Pend tenure</span>
+          <span className="whitespace-nowrap">Status</span>
+          <span className="employee-customers-chevron-spacer" aria-hidden="true" />
+        </div>
+
+        <ul className="divide-y divide-slate-100">
+          {filtered.map((row) => (
+            <li key={row.customerId}>
               <button
                 type="button"
                 onClick={() => openCustomerDetail(row)}
-                className="employee-list-grid-4 min-w-0 transition active:scale-[0.99]"
+                className="employee-customers-row employee-customers-grid app-panel-muted w-full text-left transition active:scale-[0.995]"
               >
-                <CustomerListField
-                  label="Name"
-                  value={row.customerName || "Unnamed"}
-                  valueClassName={row.isCurrentTenureCollected ? "text-emerald-700" : "text-slate-950"}
+                <p
+                  className={`employee-field-value min-w-0 truncate whitespace-nowrap ${
+                    row.isCurrentTenureCollected ? "text-emerald-700" : "text-slate-950"
+                  }`}
+                >
+                  {row.customerName || "Unnamed"}
+                </p>
+                <p className="employee-field-value min-w-0 truncate whitespace-nowrap tabular-nums text-slate-950">
+                  {row.currentDueAmount || "—"}
+                </p>
+                <p className="employee-field-value min-w-0 truncate whitespace-nowrap text-slate-800">
+                  {row.pendingTenuresLabel || "—"}
+                </p>
+                <CustomerStatusValue
+                  emoji={row.dueStatusEmoji}
+                  label={row.dueStatusLabel}
+                  collected={row.isCurrentTenureCollected}
+                  awaitingApproval={row.hasPendingApproval}
                 />
-                <CustomerListField
-                  label="Due"
-                  value={row.currentDueAmount}
-                  valueClassName="tabular-nums text-slate-950"
-                />
-                <CustomerListField
-                  label="Pend tenure"
-                  value={row.pendingTenuresLabel}
-                  valueClassName="text-slate-800"
-                />
-                <CustomerListField label="Tenure" value={row.currentTenure} valueClassName="text-slate-700" />
+                <ChevronRight className="h-5 w-5 shrink-0 justify-self-end text-slate-400" aria-hidden="true" />
               </button>
-              <CustomerStatusField
-                emoji={row.dueStatusEmoji}
-                label={row.dueStatusLabel}
-                collected={row.isCurrentTenureCollected}
-                awaitingApproval={row.hasPendingApproval}
-              />
-              <button
-                type="button"
-                onClick={() => openCustomerDetail(row)}
-                className="inline-flex shrink-0 items-center justify-center text-slate-400 transition active:scale-[0.98]"
-                aria-label={`View ${row.customerName || "customer"} details`}
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       {!loading && filtered.length === 0 ? (
         <p className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-6 text-center text-sm text-slate-600">

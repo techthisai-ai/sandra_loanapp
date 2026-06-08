@@ -34,7 +34,10 @@ import {
   collectionReportCellTextClass,
   getCollectionReportAlert,
 } from "../../utils/collectionAlerts";
-import { buildCollectionReportRowsForCustomer } from "../../utils/collectionReportRows";
+import {
+  buildCollectionReportRowsForCustomer,
+  resolveReportPaidColumnAmount,
+} from "../../utils/collectionReportRows";
 import {
   findEmployeeForCollectorName,
   formatCurrency,
@@ -51,7 +54,8 @@ const REPORT_COLUMNS = [
   { key: "pendingTenuresLabel", label: "PENDING", width: "6rem", align: "center", truncate: true },
   { key: "pendingAmountDisplay", label: "PENDING AMOUNT", width: "9rem", align: "right", clickable: true },
   { key: "balanceAmount", label: "BALANCE TENURE", width: "8rem", align: "right" },
-  { key: "paid", label: "PAID", width: "9rem", align: "left", input: true },
+  { key: "paid", label: "PAID", width: "8rem", align: "right" },
+  { key: "entry", label: "ENTRY", width: "8rem", align: "left", input: true },
 ];
 
 const REPORT_TABLE_MIN_WIDTH_REM = REPORT_COLUMNS.reduce(
@@ -94,8 +98,6 @@ import {
 import { reportDateStamp } from "../../utils/reportFilenames";
 import {
   commitPaidDraftEntry,
-  getCommittedPaidAmount,
-  getTodayPaidDisplayForCustomer,
   loadCollectionReportPaidState,
   makePaidEntryKey,
   saveCollectionReportPaidState,
@@ -122,21 +124,25 @@ function ReportSummaryCard({ label, value, icon: Icon, accent = "blue" }) {
           : "bg-blue-50 text-blue-600";
 
   return (
-    <div className="rounded-2xl border border-slate-200/90 bg-white px-4 py-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <p className="min-w-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconShellClass}`}>
-          <Icon className="h-5 w-5" />
+    <div className="rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase leading-tight tracking-[0.14em] text-slate-500">
+            {label}
+          </p>
+          <p className="mt-0.5 text-lg font-semibold tabular-nums leading-tight tracking-tight text-slate-950 sm:text-xl">
+            {value}
+          </p>
+        </div>
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconShellClass}`}>
+          <Icon className="h-4 w-4" />
         </div>
       </div>
-      <p className="mt-2 flex min-h-[2.5rem] items-center justify-center text-2xl font-semibold tabular-nums tracking-tight text-slate-950">
-        {value}
-      </p>
     </div>
   );
 }
 
-function downloadReportRowsCsv(rows, stamp = reportDateStamp()) {
+function downloadReportRowsCsv(rows, paidState, stamp = reportDateStamp()) {
   const headers = REPORT_COLUMNS.map((column) => column.label);
   const escape = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
   const lines = [
@@ -144,7 +150,17 @@ function downloadReportRowsCsv(rows, stamp = reportDateStamp()) {
     ...rows.map((row, index) =>
       REPORT_COLUMNS.map((column) => {
         if (column.key === "serial") return escape(index + 1);
-        if (column.key === "paid") return escape(row.paidDisplay || row.paid || "");
+        if (column.key === "paid") {
+          const amount = resolveReportPaidColumnAmount(row, paidState);
+          return escape(amount > 0 ? formatCurrency(amount) : "");
+        }
+        if (column.key === "entry") {
+          const entryKey =
+            row.installmentNumber != null
+              ? makePaidEntryKey(row.customerId, row.installmentNumber)
+              : "";
+          return escape(entryKey ? paidState.drafts[entryKey] ?? "" : "");
+        }
         return escape(row[column.key] ?? "");
       }).join(",")
     ),
@@ -585,7 +601,7 @@ export default function CollectionReportPanel() {
 
   return (
     <section className="app-panel min-w-0 p-5 md:p-6">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <ReportSummaryCard
           label="Assigned customers"
           value={String(stats.assignedCustomers)}
@@ -593,7 +609,7 @@ export default function CollectionReportPanel() {
           accent="blue"
         />
         <ReportSummaryCard
-          label="Total collected amount"
+          label="Total collected"
           value={formatCurrency(stats.totalCollected)}
           icon={FileSpreadsheet}
           accent="green"
@@ -763,7 +779,7 @@ export default function CollectionReportPanel() {
           <button
             type="button"
             disabled={!reportRows.length}
-            onClick={() => downloadReportRowsCsv(reportRows)}
+            onClick={() => downloadReportRowsCsv(reportRows, paidState)}
             className="collection-neutral-btn inline-flex h-[42px] items-center gap-2 rounded-2xl px-4 text-sm font-medium"
           >
             <Download className="h-4 w-4 text-emerald-600" />
@@ -849,72 +865,58 @@ export default function CollectionReportPanel() {
                           </td>
                         );
                       }
+                      if (column.key === "paid") {
+                        const paidAmount = resolveReportPaidColumnAmount(row, paidState);
+                        return (
+                          <td
+                            key={column.key}
+                            className={reportTableBodyClass(column.align, "tabular-nums text-slate-700")}
+                          >
+                            {paidAmount > 0 ? (
+                              <span className="text-sm font-semibold text-emerald-700">
+                                {formatCurrency(paidAmount)}
+                              </span>
+                            ) : (
+                              <span className="text-slate-500">—</span>
+                            )}
+                          </td>
+                        );
+                      }
                       if (column.input) {
                         const entryKey =
                           row.installmentNumber != null
                             ? makePaidEntryKey(row.customerId, row.installmentNumber)
                             : "";
-                        const todayPaid = getTodayPaidDisplayForCustomer(
-                          row.customerId,
-                          paidState,
-                          new Date(),
-                          row.installmentNumber
-                        );
-                        const committedAmount = entryKey ? getCommittedPaidAmount(entryKey, paidState) : "";
                         const draftValue = entryKey ? (paidState.drafts[entryKey] ?? "") : "";
-                        const approvedPaidAmount =
-                          row.isCurrentTenurePaid && Number(row.currentTenurePaidAmount || 0) > 0
-                            ? String(row.currentTenurePaidAmount)
-                            : "";
-                        const greenAmount = committedAmount || todayPaid?.amount || approvedPaidAmount;
-                        const showGreenPaid = draftValue === "" && Boolean(greenAmount);
-                        const showEditableInput =
-                          row.showPaidInput &&
-                          entryKey &&
-                          (draftValue !== "" || !showGreenPaid);
 
                         if (row.showPaidInput === false) {
-                          const paidValue = row.paidDisplay || row.paid || "—";
                           return (
                             <td key={column.key} className={reportTableBodyClass(column.align, "tabular-nums text-slate-700")}>
-                              <span>{paidValue}</span>
+                              <span className="text-slate-500">—</span>
                             </td>
                           );
                         }
 
-                        const paidAlertClass =
+                        const entryAlertClass =
                           rowAlert.scope === "fullRow" ? collectionReportCellTextClass(rowAlert, column.key) : "";
 
                         return (
                           <td key={column.key} className={reportTableBodyClass(column.align)}>
-                            {showGreenPaid ? (
-                              <span
-                                className="text-sm font-semibold tabular-nums text-emerald-700"
-                                title={`Paid ${formatCurrency(Number(greenAmount))}`}
-                              >
-                                {formatCurrency(Number(greenAmount))}
-                              </span>
-                            ) : null}
-                            {showEditableInput ? (
-                              <input
-                                ref={(element) => {
-                                  if (element) paidInputRefs.current[entryKey] = element;
-                                  else delete paidInputRefs.current[entryKey];
-                                }}
-                                type="text"
-                                inputMode="decimal"
-                                value={draftValue}
-                                onChange={(event) => updatePaidAmountEntry(entryKey, event.target.value)}
-                                onKeyDown={(event) => handlePaidKeyDown(event, entryKey, index)}
-                                onBlur={() => commitPaidAmountEntry(entryKey)}
-                                className={`app-input w-full min-w-0 max-w-full py-1.5 text-sm tabular-nums ${paidAlertClass}`}
-                                placeholder="Amount"
-                                aria-label={`Paid amount for ${row.customerName} ${row.currentTenure || ""}`}
-                              />
-                            ) : null}
-                            {!showGreenPaid && !showEditableInput ? (
-                              <span className="text-slate-500">—</span>
-                            ) : null}
+                            <input
+                              ref={(element) => {
+                                if (element) paidInputRefs.current[entryKey] = element;
+                                else delete paidInputRefs.current[entryKey];
+                              }}
+                              type="text"
+                              inputMode="decimal"
+                              value={draftValue}
+                              onChange={(event) => updatePaidAmountEntry(entryKey, event.target.value)}
+                              onKeyDown={(event) => handlePaidKeyDown(event, entryKey, index)}
+                              onBlur={() => commitPaidAmountEntry(entryKey)}
+                              className={`app-input w-full min-w-0 max-w-full py-1.5 text-sm tabular-nums ${entryAlertClass}`}
+                              placeholder="Amount"
+                              aria-label={`Entry amount for ${row.customerName} ${row.currentTenure || ""}`}
+                            />
                           </td>
                         );
                       }
