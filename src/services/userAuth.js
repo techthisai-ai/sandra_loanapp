@@ -1257,6 +1257,7 @@ export async function createManagedEmployee({
     uid: authResult.localId,
     email: normalizedEmail,
     username: normalizedUsername,
+    loginPassword,
     role: "employee",
     displayName: normalizeText(displayName),
     secondName: normalizeText(secondName),
@@ -1481,6 +1482,8 @@ export async function updateEmployeeAdmin(employeeDocId, payload) {
       throw new Error("Password must be at least 6 characters.");
     }
 
+    normalizedPayload.loginPassword = nextPassword;
+
     const mergedProfile = {
       ...current,
       ...normalizedPayload,
@@ -1497,12 +1500,18 @@ export async function updateEmployeeAdmin(employeeDocId, payload) {
       employeeDocId,
     });
   } else if (usernameChanged) {
-    await updateDoc(userRef, normalizedPayload);
+    await updateDoc(userRef, {
+      ...normalizedPayload,
+      loginPassword: current.loginPassword || "",
+    });
     if (usernameForLogin && current.uid) {
       await setEmployeeLoginMapping(usernameForLogin, emailForAuth, current.uid);
     }
   } else {
-    await updateDoc(userRef, normalizedPayload);
+    await updateDoc(userRef, {
+      ...normalizedPayload,
+      loginPassword: current.loginPassword || "",
+    });
   }
   await createAuditLog({
     action: "update_employee",
@@ -1759,6 +1768,23 @@ export async function updateUserRole(userId, role) {
   });
   const updatedSnap = await getDoc(userRef);
   return updatedSnap.exists() ? updatedSnap.data() : null;
+}
+
+export async function getEmployeeProfile(employeeDocId) {
+  if (!employeeDocId) return null;
+  const userRef = doc(db, USERS_COLLECTION, employeeDocId);
+  const snapshot = await getDoc(userRef);
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data();
+  const assignedCenters = finalizeAssignedCenters(
+    Array.isArray(data.assignedCenters) ? data.assignedCenters : data.location ? [data.location] : []
+  );
+  return {
+    id: snapshot.id,
+    ...data,
+    assignedCenters,
+    location: assignedCenters[0] || data.location || "",
+  };
 }
 
 export async function listEmployees() {

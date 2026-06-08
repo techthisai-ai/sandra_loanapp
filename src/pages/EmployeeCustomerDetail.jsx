@@ -10,10 +10,13 @@ import {
   MapPin,
   Phone,
   UsersRound,
+  Wallet,
 } from "lucide-react";
+import EmployeeCustomerEntryModal from "../components/employee/EmployeeCustomerEntryModal";
+import useAuth from "../hooks/useAuth";
 import useEmployeeCenterScope from "../hooks/useEmployeeCenterScope";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
-import { listCustomerAmountEntries, listCustomers } from "../services/userAuth";
+import { createCustomerAmountEntry, listCustomerAmountEntries, listCustomers } from "../services/userAuth";
 import { buildEmployeeCustomerSummary } from "../utils/employeeCustomerSummary";
 
 function formatCurrency(value) {
@@ -49,10 +52,8 @@ function DetailStatTile({ icon: Icon, label, value, wide = false }) {
     <div className={`app-panel-muted rounded-2xl p-3 sm:rounded-[22px] sm:p-3.5 ${wide ? "col-span-2" : ""}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500 sm:text-[10px] sm:tracking-[0.2em]">
-            {label}
-          </p>
-          <p className="mt-1 break-words text-sm font-semibold leading-snug text-slate-950 sm:text-base">
+          <p className="employee-field-label tracking-[0.18em]">{label}</p>
+          <p className="employee-field-value mt-1 break-words leading-snug">
             {value || "—"}
           </p>
         </div>
@@ -69,6 +70,7 @@ export default function EmployeeCustomerDetail() {
   const location = useLocation();
   const navigate = useNavigate();
   const fromList = Boolean(location.state?.fromList);
+  const { profile } = useAuth();
   const { entries: syncedEntries } = useLoanDataSync();
   const { allCenters } = useEmployeeCenterScope();
 
@@ -76,6 +78,7 @@ export default function EmployeeCustomerDetail() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(!location.state?.customer);
   const [error, setError] = useState("");
+  const [collectModalOpen, setCollectModalOpen] = useState(false);
 
   const effectiveEntries = useMemo(() => {
     if (!customer?.customerId) return [];
@@ -128,19 +131,29 @@ export default function EmployeeCustomerDetail() {
     load();
   }, [customer, customerId]);
 
-  const pageWidthClass = fromList ? "max-w-lg" : "max-w-2xl";
-
   return (
-    <div className={`mx-auto flex w-full ${pageWidthClass} flex-col gap-3 pb-6 text-slate-900`}>
+    <div className="employee-page flex flex-col gap-3 pb-6 text-slate-900">
       {fromList ? (
-        <button
-          type="button"
-          onClick={() => navigate("/employee/customers")}
-          className="app-panel-muted inline-flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-medium text-slate-700 transition active:scale-[0.99] sm:px-4 sm:py-3"
-        >
-          <ArrowLeft className="h-4 w-4 shrink-0" />
-          Back to My Customers
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => navigate("/employee/customers")}
+            className="app-panel-muted inline-flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-medium text-slate-700 transition active:scale-[0.99] sm:px-4 sm:py-3"
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" />
+            Back to My Customers
+          </button>
+          {customer && summary && !summary.isCurrentTenureCollected ? (
+            <button
+              type="button"
+              onClick={() => setCollectModalOpen(true)}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.99]"
+            >
+              <Wallet className="h-4 w-4 shrink-0" />
+              Collect now
+            </button>
+          ) : null}
+        </>
       ) : null}
 
       {!fromList ? (
@@ -223,6 +236,31 @@ export default function EmployeeCustomerDetail() {
             Back to {day} customers
           </button>
         </>
+      ) : null}
+
+      {collectModalOpen && customer ? (
+        <EmployeeCustomerEntryModal
+          customer={customer}
+          defaultCollectorName={profile?.displayName || ""}
+          pendingAmount={summary?.currentDueAmountNumber ?? 0}
+          pendingLabel={summary?.currentDueAmount ?? "—"}
+          onClose={() => setCollectModalOpen(false)}
+          onSave={async ({ amount, note, paymentMethod, collectionStatus, collectionDate, collectorName }) => {
+            await createCustomerAmountEntry({
+              customerId: customer.customerId,
+              customerName: customer.customerName,
+              amount,
+              note,
+              createdBy: profile?.uid || "employee",
+              paymentMethod,
+              collectionStatus,
+              collectionDate,
+              collectorName,
+            });
+            const customerEntries = await listCustomerAmountEntries(customer.customerId);
+            setEntries(customerEntries);
+          }}
+        />
       ) : null}
     </div>
   );

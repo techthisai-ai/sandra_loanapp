@@ -52,6 +52,7 @@ export function buildEmployeeCustomerSummary(customer, customerEntries = [], all
     centerLabel,
     placeLabel: getEmployeeCustomerPlaceLabel(customer, allCenters),
     currentDueAmount: listDisplay.dueAmountDisplay,
+    currentDueAmountNumber: listDisplay.dueAmountNumber,
     pendingTenuresLabel: detail.pendingTenuresLabel || "—",
     loanDate: detail.loanDate || "—",
     currentDueDate: listDisplay.dueDateDisplay,

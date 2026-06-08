@@ -63,16 +63,14 @@ export default function EmployeeCenters() {
   }, [allCenters, assignedCenters, customers, hasAssignedCenter, visibleDays]);
 
   return (
-    <div className="mx-auto w-full max-w-lg pb-1">
+    <div className="employee-page">
       <header className="app-panel mb-2.5 flex items-center gap-3 rounded-2xl px-3 py-2.5 sm:mb-3 sm:gap-3.5 sm:px-4 sm:py-3">
         <div className="app-icon-shell flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/70 sm:h-10 sm:w-10">
           <UsersRound className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="app-eyebrow text-[9px] font-semibold uppercase tracking-[0.2em] sm:text-[10px] sm:tracking-[0.22em]">
-            Centres
-          </p>
-          <h1 className="text-base font-semibold leading-tight tracking-tight text-slate-950 sm:text-lg">Pick a day</h1>
+          <p className="app-eyebrow employee-page-eyebrow">Centres</p>
+          <h1 className="employee-page-title">Pick a day</h1>
         </div>
       </header>
 
@@ -122,11 +120,11 @@ export default function EmployeeCenters() {
                   <CalendarDays className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
                 </div>
                 <div className="min-w-0 px-0.5">
-                  <p className="text-[11px] font-semibold leading-snug text-slate-950 sm:text-xs">{day.short}</p>
-                  <p className="mt-0.5 line-clamp-2 text-[9px] leading-tight text-slate-600 sm:text-[10px]">
+                  <p className="text-sm font-semibold leading-snug text-slate-950 sm:text-base">{day.short}</p>
+                  <p className="mt-0.5 line-clamp-2 text-xs leading-tight text-slate-600 sm:text-sm">
                     {day.label.replace(" Centre", "")}
                   </p>
-                  <p className="mt-0.5 text-[9px] font-medium text-slate-500 sm:text-[10px]">
+                  <p className="mt-0.5 text-xs font-medium text-slate-500 sm:text-sm">
                     {count > 0 ? `${count} cust.` : "None"}
                   </p>
                 </div>

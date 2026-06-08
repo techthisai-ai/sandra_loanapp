@@ -1569,45 +1569,43 @@ export default function Reports() {
                       Custom
                     </button>
                   </div>
-                  <div
-                    className={`grid w-full gap-3 rounded-[24px] border border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(244,248,255,0.94))] p-4 shadow-[0_18px_34px_-28px_rgba(15,23,42,0.18)] backdrop-blur-sm transition-all duration-300 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] sm:items-end ${
-                      rangePreset === "custom" ? "opacity-100 ring-1 ring-blue-200/70" : "opacity-95"
-                    }`}
-                  >
-                    <label className="block min-w-0 space-y-1">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">From date</span>
-                      <input
-                        type="date"
-                        value={customFromDraft}
-                        onChange={(e) => setCustomFromDraft(e.target.value)}
-                        className="app-input h-11 w-full min-w-0 rounded-2xl border-slate-200 bg-slate-50/90 text-sm font-medium text-slate-900 shadow-inner transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                      />
-                    </label>
-                    <label className="block min-w-0 space-y-1">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">To date</span>
-                      <input
-                        type="date"
-                        value={customToDraft}
-                        onChange={(e) => setCustomToDraft(e.target.value)}
-                        className="app-input h-11 w-full min-w-0 rounded-2xl border-slate-200 bg-slate-50/90 text-sm font-medium text-slate-900 shadow-inner transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={applyCustomRange}
-                      className="app-button-primary inline-flex h-11 items-center justify-center gap-2 self-end rounded-2xl px-[1.125rem] text-sm font-semibold shadow-sm transition hover:shadow-md active:scale-[0.98]"
-                    >
-                      Apply
-                    </button>
-                    <button
-                      type="button"
-                      onClick={resetReportRange}
-                      className="inline-flex h-11 items-center justify-center gap-2 self-end rounded-2xl border border-slate-200 bg-white px-[1.125rem] text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
-                    >
-                      <RotateCcw className="h-4 w-4" aria-hidden />
-                      Reset
-                    </button>
-                  </div>
+                  {rangePreset === "custom" ? (
+                    <div className="grid w-full gap-3 rounded-[24px] border border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(244,248,255,0.94))] p-4 shadow-[0_18px_34px_-28px_rgba(15,23,42,0.18)] ring-1 ring-blue-200/70 backdrop-blur-sm transition-all duration-300 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] sm:items-end">
+                      <label className="block min-w-0 space-y-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">From date</span>
+                        <input
+                          type="date"
+                          value={customFromDraft}
+                          onChange={(e) => setCustomFromDraft(e.target.value)}
+                          className="app-input h-11 w-full min-w-0 rounded-2xl border-slate-200 bg-slate-50/90 text-sm font-medium text-slate-900 shadow-inner transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="block min-w-0 space-y-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">To date</span>
+                        <input
+                          type="date"
+                          value={customToDraft}
+                          onChange={(e) => setCustomToDraft(e.target.value)}
+                          className="app-input h-11 w-full min-w-0 rounded-2xl border-slate-200 bg-slate-50/90 text-sm font-medium text-slate-900 shadow-inner transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={applyCustomRange}
+                        className="app-button-primary inline-flex h-11 items-center justify-center gap-2 self-end rounded-2xl px-[1.125rem] text-sm font-semibold shadow-sm transition hover:shadow-md active:scale-[0.98]"
+                      >
+                        Apply
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetReportRange}
+                        className="inline-flex h-11 items-center justify-center gap-2 self-end rounded-2xl border border-slate-200 bg-white px-[1.125rem] text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
+                      >
+                        <RotateCcw className="h-4 w-4" aria-hidden />
+                        Reset
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
               <div className="grid min-w-0 gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
@@ -1666,19 +1664,19 @@ export default function Reports() {
                 </div>
               </div>
 
-              <div className="grid gap-3 rounded-[24px] border border-slate-200/80 bg-slate-50/65 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] xl:grid-cols-[auto_minmax(280px,1fr)_minmax(180px,220px)_minmax(200px,240px)] xl:items-center">
-                <div className="app-segmented grid w-full grid-cols-2 gap-1 sm:grid-cols-4 xl:w-auto">
+              <div className="flex flex-wrap items-center gap-2 rounded-[24px] border border-slate-200/80 bg-slate-50/65 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
+                <div className="app-segmented inline-flex shrink-0 items-center gap-0.5 p-0.5">
                   {[
                     { key: "all", label: "All" },
-                    { key: "pending", label: "Pending" },
-                    { key: "due", label: "Due today" },
-                    { key: "overdue", label: "Overdue" },
+                    { key: "pending", label: "Pend" },
+                    { key: "due", label: "Due" },
+                    { key: "overdue", label: "Over" },
                   ].map((item) => (
                     <button
                       key={item.key}
                       type="button"
                       onClick={() => setDetailFilter(item.key)}
-                      className={`rounded-2xl px-4 py-2.5 text-sm font-medium transition ${
+                      className={`inline-flex h-8 items-center justify-center whitespace-nowrap rounded-xl px-2.5 text-xs font-semibold leading-none transition sm:px-3 sm:text-[13px] ${
                         detailFilter === item.key
                           ? "bg-blue-600 text-white shadow-sm"
                           : "text-slate-600 hover:bg-slate-50"
@@ -1689,13 +1687,13 @@ export default function Reports() {
                   ))}
                 </div>
 
-                <div className="relative min-w-0">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <div className="relative min-w-0 flex-1 basis-[180px]">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
                     value={detailSearch}
                     onChange={(e) => setDetailSearch(e.target.value)}
                     placeholder="Search customer or phone"
-                    className="app-input h-11 w-full rounded-2xl bg-white pl-11 pr-4 shadow-inner"
+                    className="app-input reports-detail-toolbar-field reports-detail-toolbar-search w-full rounded-xl bg-white pr-3 text-sm shadow-inner"
                   />
                 </div>
 
@@ -1705,7 +1703,7 @@ export default function Reports() {
                     setCenterFilter(e.target.value);
                     setSubCenterFilter("All");
                   }}
-                  className="app-select h-11 w-full rounded-2xl bg-white shadow-inner"
+                  className="app-select reports-detail-toolbar-field min-w-0 flex-1 basis-[140px] rounded-xl bg-white text-sm shadow-inner sm:max-w-[180px] sm:flex-none"
                 >
                   <option value="All">All centers</option>
                   {dayCenters.map((label) => (
@@ -1718,7 +1716,7 @@ export default function Reports() {
                 <select
                   value={subCenterFilter}
                   onChange={(e) => setSubCenterFilter(e.target.value)}
-                  className="app-select h-11 w-full rounded-2xl bg-white shadow-inner"
+                  className="app-select reports-detail-toolbar-field min-w-0 flex-1 basis-[140px] rounded-xl bg-white text-sm shadow-inner sm:max-w-[200px] sm:flex-none"
                   disabled={centerFilter === "All"}
                 >
                   <option value="All">{centerFilter === "All" ? "Select center first" : "All sub-centers"}</option>

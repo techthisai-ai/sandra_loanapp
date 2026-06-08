@@ -10,6 +10,7 @@ import {
   Trash2,
   UsersRound,
 } from "lucide-react";
+import CenterEmployeeTabs from "../components/center/CenterEmployeeTabs";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import {
   ADDITIONAL_CENTER_COLORS,
@@ -360,6 +361,7 @@ export default function Center() {
 
   return (
     <AdminLayout title="Center" description="Manage sub-centers and customer assignment">
+      <CenterEmployeeTabs />
       <div className="flex h-[calc(100vh-5.5rem)] w-full min-w-0 max-w-full flex-col overflow-hidden lg:max-w-[min(1440px,100%)]">
         {actionError ? <p className="mb-2 shrink-0 app-alert-error">{actionError}</p> : null}
 
@@ -465,8 +467,9 @@ export default function Center() {
             </div>
           </section>
 
-          <div className="flex min-h-0 min-w-0 flex-col gap-3">
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <div className="flex min-h-0 min-w-0 flex-col">
+            <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-sm">
+            <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() =>
@@ -495,7 +498,6 @@ export default function Center() {
               </button>
             </div>
 
-            <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-sm">
             {showAllSubCenters ? (
               <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
                 <button

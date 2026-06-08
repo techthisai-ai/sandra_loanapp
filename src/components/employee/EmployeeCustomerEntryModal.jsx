@@ -10,16 +10,37 @@ function formatTime(date) {
   return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-export default function EmployeeCustomerEntryModal({ customer, defaultCollectorName = "", onClose, onSave }) {
+function formatPendingAmount(value) {
+  const amount = Math.max(Number(value || 0), 0);
+  return amount > 0 ? `₹${amount.toLocaleString("en-IN")}` : "—";
+}
+
+export default function EmployeeCustomerEntryModal({
+  customer,
+  defaultCollectorName = "",
+  pendingAmount = 0,
+  pendingLabel = "—",
+  onClose,
+  onSave,
+}) {
   const now = useMemo(() => new Date(), []);
+  const collectionDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [collectionStatus, setCollectionStatus] = useState("Collected");
-  const [collectionDate, setCollectionDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [collectorName, setCollectorName] = useState(defaultCollectorName);
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const pendingDisplay = useMemo(() => {
+    const due = Number(pendingAmount || 0);
+    const collected = Number(amount || 0);
+    if (amount && due > 0) {
+      return formatPendingAmount(due - collected);
+    }
+    return pendingLabel || formatPendingAmount(due);
+  }, [amount, pendingAmount, pendingLabel]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -97,6 +118,14 @@ export default function EmployeeCustomerEntryModal({ customer, defaultCollectorN
                 placeholder="Enter amount"
               />
             </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Pending</span>
+              <input
+                value={pendingDisplay}
+                readOnly
+                className="w-full rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-900 outline-none"
+              />
+            </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">Payment method</span>
@@ -124,15 +153,6 @@ export default function EmployeeCustomerEntryModal({ customer, defaultCollectorN
                 </select>
               </label>
             </div>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">Collection date</span>
-              <input
-                type="date"
-                value={collectionDate}
-                onChange={(event) => setCollectionDate(event.target.value)}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-300 focus:bg-white"
-              />
-            </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-slate-700">Collector name</span>
               <input

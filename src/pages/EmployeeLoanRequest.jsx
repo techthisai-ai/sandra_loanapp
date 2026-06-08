@@ -73,7 +73,7 @@ export default function EmployeeLoanRequest() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-lg pb-2">
+    <div className="employee-page pb-2">
       <header className="app-panel mb-3 flex items-center gap-3 rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3">
         <Link
           to="/employee"
@@ -83,8 +83,8 @@ export default function EmployeeLoanRequest() {
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="min-w-0 flex-1">
-          <p className="app-eyebrow text-[9px] font-semibold uppercase tracking-[0.2em] sm:text-[10px]">Loan request</p>
-          <h1 className="text-base font-semibold leading-tight text-slate-950 sm:text-lg">New loan request</h1>
+          <p className="app-eyebrow employee-page-eyebrow">Loan request</p>
+          <h1 className="employee-page-title">New loan request</h1>
         </div>
         <div className="app-icon-shell flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/70">
           <FilePlus2 className="h-4 w-4" />
@@ -99,7 +99,7 @@ export default function EmployeeLoanRequest() {
 
       <form onSubmit={handleSubmit} className="app-panel space-y-4 rounded-2xl p-4 sm:rounded-[22px] sm:p-5">
         <div>
-          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <label className="employee-field-label mb-1 block tracking-[0.14em]">
             Customer
           </label>
           <select
@@ -135,7 +135,7 @@ export default function EmployeeLoanRequest() {
         ) : null}
 
         <div>
-          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <label className="employee-field-label mb-1 block tracking-[0.14em]">
             Loan amount
           </label>
           <input
@@ -151,7 +151,7 @@ export default function EmployeeLoanRequest() {
         </div>
 
         <div>
-          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <label className="employee-field-label mb-1 block tracking-[0.14em]">
             Collection type
           </label>
           <select
@@ -169,7 +169,7 @@ export default function EmployeeLoanRequest() {
         </div>
 
         <div>
-          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <label className="employee-field-label mb-1 block tracking-[0.14em]">
             Tenure
           </label>
           <input
@@ -192,7 +192,7 @@ export default function EmployeeLoanRequest() {
         </div>
 
         <div>
-          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <label className="employee-field-label mb-1 block tracking-[0.14em]">
             Remarks
           </label>
           <textarea

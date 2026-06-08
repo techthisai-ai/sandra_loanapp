@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, ClipboardPen } from "lucide-react";
 import EmployeeCustomerEntryModal from "../components/employee/EmployeeCustomerEntryModal";
 import useAuth from "../hooks/useAuth";
 import useEmployeeCenterScope from "../hooks/useEmployeeCenterScope";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import { createCustomerAmountEntry } from "../services/userAuth";
 import { NO_SUB_CENTER_LABEL, resolveCustomerCenterDisplay } from "../utils/centerDisplay";
+import { buildEmployeeCustomerSummary } from "../utils/employeeCustomerSummary";
 import {
   employeeHasWholeDayAssignment,
   findCenterByLabel,
@@ -13,8 +13,13 @@ import {
   isRootDayLabel,
 } from "../utils/employeeScope";
 
-function defaultDayLabel(selectedDay) {
-  return selectedDay || "—";
+function EntryListField({ label, value, valueClassName = "text-slate-950" }) {
+  return (
+    <div className="min-w-0">
+      <p className="employee-field-label">{label}</p>
+      <p className={`employee-field-value truncate ${valueClassName}`}>{value || "—"}</p>
+    </div>
+  );
 }
 
 function getEmployeeMainCenterOptions(assignedCenters, allCenters) {
@@ -46,7 +51,7 @@ function getEmployeeSubCenterOptions(mainCenterFilter, assignedCenters, allCente
 
 export default function EmployeeCustomerEntryPage() {
   const { profile } = useAuth();
-  const { customers, loading } = useLoanDataSync();
+  const { customers, entries, loading } = useLoanDataSync();
   const { assignedCenters, allCenters, hasAssignedCenter, scopeCustomers } =
     useEmployeeCenterScope();
   const [mainCenterFilter, setMainCenterFilter] = useState("All");
@@ -69,11 +74,28 @@ export default function EmployeeCustomerEntryPage() {
     }
   }, [subCenterFilter, subCenterOptions]);
 
+  const entriesByCustomerId = useMemo(() => {
+    const map = new Map();
+    entries.forEach((entry) => {
+      const customerId = entry.customerId;
+      if (!customerId) return;
+      if (!map.has(customerId)) map.set(customerId, []);
+      map.get(customerId).push(entry);
+    });
+    return map;
+  }, [entries]);
+
   const readyCustomers = useMemo(() => {
     return scopeCustomers(customers).sort((left, right) =>
       String(left.customerName || "").localeCompare(String(right.customerName || ""), undefined, { sensitivity: "base" })
     );
   }, [customers, scopeCustomers]);
+
+  const entryCustomerSummary = useMemo(() => {
+    if (!entryCustomer) return null;
+    const customerEntries = entriesByCustomerId.get(entryCustomer.customerId) || [];
+    return buildEmployeeCustomerSummary(entryCustomer, customerEntries, allCenters);
+  }, [allCenters, entriesByCustomerId, entryCustomer]);
 
   const filtered = useMemo(() => {
     return readyCustomers.filter((customer) => {
@@ -85,20 +107,10 @@ export default function EmployeeCustomerEntryPage() {
   }, [allCenters, mainCenterFilter, readyCustomers, subCenterFilter]);
 
   return (
-    <div className="mx-auto w-full max-w-lg pb-1">
-      <header className="app-panel mb-2.5 flex items-center gap-3 rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3">
-        <div className="app-icon-shell flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/70 sm:h-10 sm:w-10">
-          <ClipboardPen className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="app-eyebrow text-[9px] font-semibold uppercase tracking-[0.2em] sm:text-[10px]">Entry</p>
-          <h1 className="text-base font-semibold leading-tight text-slate-950 sm:text-lg">Customer Entry</h1>
-        </div>
-      </header>
-
+    <div className="employee-page">
       <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="space-y-1">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Main Center</span>
+          <span className="employee-field-label">Main Center</span>
           <select
             value={mainCenterFilter}
             onChange={(event) => setMainCenterFilter(event.target.value)}
@@ -112,7 +124,7 @@ export default function EmployeeCustomerEntryPage() {
           </select>
         </label>
         <label className="space-y-1">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Sub Center</span>
+          <span className="employee-field-label">Sub Center</span>
           <select
             value={subCenterFilter}
             onChange={(event) => setSubCenterFilter(event.target.value)}
@@ -136,22 +148,39 @@ export default function EmployeeCustomerEntryPage() {
 
       <ul className="flex flex-col gap-1.5">
         {filtered.map((customer) => {
-          const day = defaultDayLabel(customer.selectedDay);
+          const customerEntries = entriesByCustomerId.get(customer.customerId) || [];
+          const summary = buildEmployeeCustomerSummary(customer, customerEntries, allCenters);
+          const collected = summary.isCurrentTenureCollected;
           return (
             <li key={customer.customerId}>
-              <button
-                type="button"
-                onClick={() => setEntryCustomer(customer)}
-                className="app-panel-muted flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition active:scale-[0.99] sm:px-3.5 sm:py-3"
-              >
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate text-sm font-semibold text-slate-950">{customer.customerName || "Unnamed"}</span>
-                  <span className="truncate text-[11px] text-slate-600">
-                    {customer.mobileNumber || "—"} · {day.replace(" Centre", "")}
-                  </span>
+              <div className="employee-list-card app-panel-muted items-center">
+                <div className="employee-entry-grid min-w-0">
+                  <EntryListField
+                    label="Name"
+                    value={customer.customerName || "Unnamed"}
+                    valueClassName={collected ? "text-emerald-700" : "text-slate-950"}
+                  />
+                  <EntryListField label="Phone" value={customer.mobileNumber} valueClassName="tabular-nums text-slate-800" />
+                  <EntryListField
+                    label="Due"
+                    value={summary.currentDueAmount}
+                    valueClassName="tabular-nums text-slate-950"
+                  />
+                  <div className="min-w-0 shrink-0 self-end pb-0.5">
+                    {!collected ? (
+                      <button
+                        type="button"
+                        onClick={() => setEntryCustomer(customer)}
+                        className="inline-flex h-7 items-center justify-center rounded-full bg-blue-600 px-2.5 text-[10px] font-semibold leading-none text-white transition hover:bg-blue-700 active:scale-[0.98] sm:px-3 sm:text-[11px]"
+                      >
+                        Collect now
+                      </button>
+                    ) : (
+                      <span className="inline-block h-6 sm:h-7" aria-hidden />
+                    )}
+                  </div>
                 </div>
-                <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
-              </button>
+              </div>
             </li>
           );
         })}
@@ -167,6 +196,8 @@ export default function EmployeeCustomerEntryPage() {
         <EmployeeCustomerEntryModal
           customer={entryCustomer}
           defaultCollectorName={profile?.displayName || ""}
+          pendingAmount={entryCustomerSummary?.currentDueAmountNumber ?? 0}
+          pendingLabel={entryCustomerSummary?.currentDueAmount ?? "—"}
           onClose={() => setEntryCustomer(null)}
           onSave={async ({ amount, note, paymentMethod, collectionStatus, collectionDate, collectorName }) => {
             await createCustomerAmountEntry({

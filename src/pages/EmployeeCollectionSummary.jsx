@@ -46,36 +46,36 @@ export default function EmployeeCollectionSummary() {
   }, [customers, entries, profile, scopeCustomers]);
 
   return (
-    <div className="mx-auto w-full max-w-lg pb-1">
+    <div className="employee-page">
       <header className="app-panel mb-2.5 flex items-center gap-3 rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3">
         <div className="app-icon-shell flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/70 sm:h-10 sm:w-10">
           <ReceiptText className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="app-eyebrow text-[9px] font-semibold uppercase tracking-[0.2em] sm:text-[10px]">Collection</p>
-          <h1 className="text-base font-semibold leading-tight text-slate-950 sm:text-lg">Activity & entries</h1>
+          <p className="app-eyebrow employee-page-eyebrow">Collection</p>
+          <h1 className="employee-page-title">Activity & entries</h1>
         </div>
       </header>
 
       <div className="mb-3 grid grid-cols-3 gap-2">
         <div className="app-panel-muted rounded-xl px-2 py-2 text-center sm:rounded-2xl sm:px-3 sm:py-2.5">
-          <Wallet className="mx-auto mb-1 h-4 w-4 text-slate-600" />
-          <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Today</p>
-          <p className="text-sm font-semibold text-slate-950">{loading ? "…" : formatCurrency(stats.todayAmount)}</p>
+          <Wallet className="mx-auto mb-1 h-4 w-4 text-slate-600 sm:h-5 sm:w-5" />
+          <p className="employee-field-label">Today</p>
+          <p className="mt-1 text-sm font-semibold text-slate-950 sm:text-base">{loading ? "…" : formatCurrency(stats.todayAmount)}</p>
         </div>
         <div className="app-panel-muted rounded-xl px-2 py-2 text-center sm:rounded-2xl sm:px-3 sm:py-2.5">
-          <Clock3 className="mx-auto mb-1 h-4 w-4 text-amber-600" />
-          <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Pending</p>
-          <p className="text-sm font-semibold text-amber-800">{loading ? "…" : stats.pendingCount}</p>
+          <Clock3 className="mx-auto mb-1 h-4 w-4 text-amber-600 sm:h-5 sm:w-5" />
+          <p className="employee-field-label">Pending</p>
+          <p className="mt-1 text-sm font-semibold text-amber-800 sm:text-base">{loading ? "…" : stats.pendingCount}</p>
         </div>
         <div className="app-panel-muted rounded-xl px-2 py-2 text-center sm:rounded-2xl sm:px-3 sm:py-2.5">
-          <CheckCircle2 className="mx-auto mb-1 h-4 w-4 text-emerald-600" />
-          <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Moves today</p>
-          <p className="text-sm font-semibold text-slate-950">{loading ? "…" : stats.todayCount}</p>
+          <CheckCircle2 className="mx-auto mb-1 h-4 w-4 text-emerald-600 sm:h-5 sm:w-5" />
+          <p className="employee-field-label">Moves today</p>
+          <p className="mt-1 text-sm font-semibold text-slate-950 sm:text-base">{loading ? "…" : stats.todayCount}</p>
         </div>
       </div>
 
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recent entries (your centres)</p>
+      <p className="employee-field-label mb-2">Recent entries (your centres)</p>
       <ul className="flex flex-col gap-1.5">
         {loading ? (
           <li className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-600">Loading…</li>
@@ -92,16 +92,16 @@ export default function EmployeeCollectionSummary() {
                 className="app-panel-muted flex flex-col gap-1 rounded-2xl px-3 py-2.5 sm:px-3.5"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <span className="min-w-0 truncate text-sm font-semibold text-slate-950">{e.customerName || e.customerId}</span>
+                  <span className="min-w-0 truncate text-sm font-semibold text-slate-950 sm:text-base">{e.customerName || e.customerId}</span>
                   <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold uppercase ${
                       approved ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"
                     }`}
                   >
                     {approved ? "OK" : "Pending"}
                   </span>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-600">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-600 sm:text-sm">
                   <span className="font-semibold text-slate-800">{formatCurrency(e.amount)}</span>
                   <span>·</span>
                   <span>{e.collectionStatus || "—"}</span>

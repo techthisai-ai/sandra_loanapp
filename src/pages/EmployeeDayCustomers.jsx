@@ -374,15 +374,15 @@ export default function EmployeeDayCustomers() {
   }, [collectorFilter, customerFilter, dateFilter, statusFilter, taskRows]);
 
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-col gap-4 pb-6 text-slate-900 sm:max-w-2xl md:max-w-4xl lg:max-w-7xl">
+    <div className="employee-page flex flex-col gap-4 pb-6 text-slate-900">
         <header className="app-panel flex items-start justify-between gap-4 rounded-2xl px-3 py-3 sm:rounded-3xl sm:p-5">
           <div className="flex items-start gap-3 sm:gap-4">
             <div className="app-icon-shell flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl sm:h-12 sm:w-12 sm:rounded-3xl">
               <UsersRound className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
             <div className="min-w-0">
-              <p className="app-eyebrow text-[9px] font-semibold uppercase tracking-[0.2em] sm:text-[10px]">{displayLabel}</p>
-              <h1 className="mt-1 text-base font-semibold tracking-tight text-slate-950 sm:mt-2 sm:text-xl">
+              <p className="app-eyebrow employee-page-eyebrow">{displayLabel}</p>
+              <h1 className="employee-page-title mt-1 sm:mt-2">
                 {isSubCenter ? "Collection tasks" : "Centers"}
               </h1>
               <p className="mt-0.5 text-[11px] text-slate-500 sm:mt-1 sm:text-sm">

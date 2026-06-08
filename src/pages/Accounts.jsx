@@ -2161,6 +2161,50 @@ export default function Accounts() {
           {exportError ? (
             <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-800">{exportError}</div>
           ) : null}
+          {tab === "overview" ? (
+            <div className="mt-4 grid min-w-0 gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
+              <PremiumKpiCard
+                icon={Wallet}
+                label="Wallet balance"
+                amount={Math.round(liveWalletBalance)}
+                sub={`Deposits ${formatCurrency(Math.round(investorDepositsTotal))} · Opening ${formatCurrency(Math.round(cashOpening))}`}
+                accent="emerald"
+                amountTone={liveWalletBalance < 0 ? "negative" : liveWalletBalance === 0 ? "warning" : "positive"}
+                healthLine={walletHealthLine}
+                trendUp={liveWalletBalance > 0}
+              />
+              <PremiumKpiCard
+                icon={Landmark}
+                label="Loan given"
+                amount={Math.round(loanFinanceMetrics.totalPrincipalDisbursed)}
+                sub={`${loanFinanceMetrics.activeLoanCount} booked loan${loanFinanceMetrics.activeLoanCount === 1 ? "" : "s"} (approved)`}
+                accent="rose"
+                amountTone="neutral"
+                healthLine="Deployed principal · approved book"
+                trendUp={loanFinanceMetrics.totalPrincipalDisbursed > 0 ? true : undefined}
+              />
+              <PremiumKpiCard
+                icon={TrendingUp}
+                label="Today income"
+                amount={Math.round(overviewMetrics.todayIncome)}
+                sub={`Range ${formatCurrency(Math.round(overviewMetrics.periodIncome))} · ${officeAppliedBounds.label}`}
+                accent="emerald"
+                amountTone="positive"
+                healthLine="Completed office income for today"
+                trendUp={overviewMetrics.todayIncome > 0}
+              />
+              <PremiumKpiCard
+                icon={TrendingDown}
+                label="Today expense"
+                amount={Math.round(overviewMetrics.todayExpense)}
+                sub={`Range ${formatCurrency(Math.round(overviewMetrics.periodExpenseTotal))} · books & payroll`}
+                accent="rose"
+                amountTone="negative"
+                healthLine="Office expenses and paid salary for today"
+                trendUp={false}
+              />
+            </div>
+          ) : null}
         </section>
 
         <section className="rounded-[22px] border border-slate-100/90 bg-gradient-to-br from-white via-slate-50/40 to-white px-4 py-4 shadow-[0_2px_14px_rgba(15,23,42,0.04)]">
@@ -2238,58 +2282,6 @@ export default function Accounts() {
             </span>
           </div>
         </section>
-
-        {tab === "overview" ? (
-          <>
-            <section className="relative overflow-hidden rounded-[22px] border border-white/60 bg-gradient-to-br from-slate-50/95 via-white to-blue-50/35 px-3.5 pb-3.5 pt-3 shadow-[0_10px_36px_-22px_rgba(15,23,42,0.16)] ring-1 ring-slate-200/40 backdrop-blur-md sm:px-4 sm:pb-4 sm:pt-3.5">
-              <p className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.2em] text-blue-600/90">
-                Accounts overview
-              </p>
-              <div className="grid min-w-0 gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
-                <PremiumKpiCard
-                  icon={Wallet}
-                  label="Wallet balance"
-                  amount={Math.round(liveWalletBalance)}
-                  sub={`Deposits ${formatCurrency(Math.round(investorDepositsTotal))} · Opening ${formatCurrency(Math.round(cashOpening))}`}
-                  accent="emerald"
-                  amountTone={liveWalletBalance < 0 ? "negative" : liveWalletBalance === 0 ? "warning" : "positive"}
-                  healthLine={walletHealthLine}
-                  trendUp={liveWalletBalance > 0}
-                />
-                <PremiumKpiCard
-                  icon={Landmark}
-                  label="Loan given"
-                  amount={Math.round(loanFinanceMetrics.totalPrincipalDisbursed)}
-                  sub={`${loanFinanceMetrics.activeLoanCount} booked loan${loanFinanceMetrics.activeLoanCount === 1 ? "" : "s"} (approved)`}
-                  accent="rose"
-                  amountTone="neutral"
-                  healthLine="Deployed principal · approved book"
-                  trendUp={loanFinanceMetrics.totalPrincipalDisbursed > 0 ? true : undefined}
-                />
-                <PremiumKpiCard
-                  icon={TrendingUp}
-                  label="Today income"
-                  amount={Math.round(overviewMetrics.todayIncome)}
-                  sub={`Range ${formatCurrency(Math.round(overviewMetrics.periodIncome))} · ${officeAppliedBounds.label}`}
-                  accent="emerald"
-                  amountTone="positive"
-                  healthLine="Completed office income for today"
-                  trendUp={overviewMetrics.todayIncome > 0}
-                />
-                <PremiumKpiCard
-                  icon={TrendingDown}
-                  label="Today expense"
-                  amount={Math.round(overviewMetrics.todayExpense)}
-                  sub={`Range ${formatCurrency(Math.round(overviewMetrics.periodExpenseTotal))} · books & payroll`}
-                  accent="rose"
-                  amountTone="negative"
-                  healthLine="Office expenses and paid salary for today"
-                  trendUp={false}
-                />
-              </div>
-            </section>
-          </>
-        ) : null}
 
         {tab === "transactions" ? (
           <>

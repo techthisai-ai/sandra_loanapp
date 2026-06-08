@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { Eye, EyeOff, X } from "lucide-react";
 import { getNextEmployeeId } from "../../services/userAuth";
 import { normalizePhoneNumber, normalizeText } from "../../utils/customerValidation";
 import {
@@ -21,13 +21,14 @@ export const EMPTY_EMPLOYEE_FORM = {
   status: "active",
 };
 
-function cloneInitialValues(values = EMPTY_EMPLOYEE_FORM) {
+function cloneInitialValues(values = EMPTY_EMPLOYEE_FORM, mode = "add") {
+  const storedPassword = mode === "edit" ? String(values.password || "") : "";
   return {
     ...EMPTY_EMPLOYEE_FORM,
     ...values,
     assignedCenters: [...(values.assignedCenters || [])],
-    password: "",
-    confirmPassword: "",
+    password: storedPassword,
+    confirmPassword: storedPassword,
   };
 }
 
@@ -56,8 +57,9 @@ function validateForm(values, mode) {
   if (mode === "add") {
     if (!values.password || values.password.length < 6) return "Password must be at least 6 characters.";
     if (values.password !== values.confirmPassword) return "Password and confirm password must match.";
-  } else if (values.password && values.password !== values.confirmPassword) {
-    return "Password and confirm password must match.";
+  } else if (values.password) {
+    if (values.password.length < 6) return "Password must be at least 6 characters.";
+    if (values.password !== values.confirmPassword) return "Password and confirm password must match.";
   }
   return "";
 }
@@ -71,11 +73,21 @@ export default function EmployeeFormModal({
   onClose,
   onSubmit,
 }) {
-  const [form, setForm] = useState(() => cloneInitialValues(initialValues));
+  const [form, setForm] = useState(() => cloneInitialValues(initialValues, mode));
   const [localError, setLocalError] = useState("");
   const [employeeIdLoading, setEmployeeIdLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const isEdit = mode === "edit";
+
+  useEffect(() => {
+    if (!open) return;
+    setForm(cloneInitialValues(initialValues, mode));
+    setLocalError("");
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+  }, [open, mode, initialValues.employeeId, initialValues.username, initialValues.password]);
 
   useEffect(() => {
     if (!open || isEdit) return;
@@ -247,29 +259,48 @@ export default function EmployeeFormModal({
               </select>
             </label>
             <label className="flex flex-col gap-1 sm:col-span-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Password {isEdit ? "(leave blank to keep current)" : ""}
-              </span>
-              <input
-                type="password"
-                value={form.password}
-                onChange={updateField("password")}
-                className="app-input"
-                placeholder={isEdit ? "New password (optional)" : "Create password"}
-                autoComplete="new-password"
-                required={!isEdit}
-              />
+              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Password</span>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={form.password}
+                  onChange={updateField("password")}
+                  className="app-input !pr-11"
+                  placeholder={isEdit ? (form.password ? "" : "No password saved yet") : "Create password"}
+                  autoComplete={isEdit ? "off" : "new-password"}
+                  required={!isEdit}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-500 transition hover:text-slate-700"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </label>
             <label className="flex flex-col gap-1 sm:col-span-2">
               <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Confirm password</span>
-              <input
-                type="password"
-                value={form.confirmPassword}
-                onChange={updateField("confirmPassword")}
-                className="app-input"
-                autoComplete="new-password"
-                required={!isEdit || Boolean(form.password)}
-              />
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={form.confirmPassword}
+                  onChange={updateField("confirmPassword")}
+                  className="app-input !pr-11"
+                  placeholder="Confirm password"
+                  autoComplete={isEdit ? "off" : "new-password"}
+                  required={!isEdit || Boolean(form.password)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((current) => !current)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-500 transition hover:text-slate-700"
+                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </label>
           </div>
 

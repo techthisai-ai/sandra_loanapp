@@ -40,13 +40,13 @@ function StatTile({ icon: Icon, label, value, tone = "text-slate-950" }) {
   return (
     <div className="app-panel-muted rounded-2xl p-3 sm:rounded-[22px] sm:p-3.5">
       <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500 sm:text-[10px] sm:tracking-[0.2em]">{label}</p>
+        <p className="employee-field-label min-w-0 tracking-[0.18em]">{label}</p>
         <div className="app-icon-shell flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/70 sm:h-10 sm:w-10">
           <Icon className="h-4 w-4 text-slate-700 sm:h-[18px] sm:w-[18px]" />
         </div>
       </div>
       <p
-        className={`mt-2 flex min-h-[2rem] items-center justify-center text-center text-lg font-semibold leading-tight sm:min-h-[2.25rem] sm:text-xl ${tone}`}
+        className={`mt-2 flex min-h-[2rem] items-center justify-center text-center text-xl font-semibold leading-tight sm:min-h-[2.5rem] sm:text-2xl md:text-3xl ${tone}`}
       >
         {value}
       </p>
@@ -132,18 +132,18 @@ export default function EmployeeHome() {
   }, [customers, entries, profile, scopeCustomers]);
 
   return (
-    <div className="mx-auto w-full max-w-lg pb-1">
+    <div className="employee-page">
       <header className="app-panel mb-2.5 flex items-center gap-2.5 rounded-2xl px-3 py-2.5 sm:mb-3 sm:gap-3 sm:px-4 sm:py-3">
         <div className="app-icon-shell flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/70 sm:h-10 sm:w-10">
           <Wallet className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="app-eyebrow text-[9px] font-semibold uppercase tracking-[0.2em] sm:text-[10px]">Home</p>
-          <h1 className="text-base font-semibold leading-tight text-slate-950 sm:text-lg">Today at a glance</h1>
+          <p className="app-eyebrow employee-page-eyebrow">Home</p>
+          <h1 className="employee-page-title">Today at a glance</h1>
         </div>
         <Link
           to="/employee/loan-request"
-          className="app-button-primary inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[11px] font-semibold sm:gap-2 sm:rounded-2xl sm:px-3.5 sm:py-2.5 sm:text-xs"
+          className="app-button-primary inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold sm:gap-2 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
         >
           <FilePlus2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           <span className="whitespace-nowrap">New loan request</span>
@@ -208,11 +208,11 @@ export default function EmployeeHome() {
               <li key={row.key} className="flex items-start justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-slate-950">{row.name}</p>
-                  <p className="mt-0.5 text-[11px] text-slate-600">{row.whenLabel}</p>
+                  <p className="mt-0.5 text-xs text-slate-600 sm:text-sm">{row.whenLabel}</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-semibold text-emerald-800">{formatCurrency(row.amount)}</p>
-                  <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">{row.status}</p>
+                  <p className="employee-field-label mt-0.5">{row.status}</p>
                 </div>
               </li>
             ))}

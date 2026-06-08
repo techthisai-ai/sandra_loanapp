@@ -5,7 +5,7 @@ import EmployeeMobileNav from "./EmployeeMobileNav";
 
 export default function EmployeeAppLayout() {
   return (
-    <div className="app-shell flex min-h-[100dvh] flex-col overflow-x-hidden text-slate-900">
+    <div className="employee-app app-shell flex min-h-[100dvh] flex-col overflow-x-hidden text-slate-900">
       <header className="sticky top-0 z-30 flex shrink-0 items-center gap-3 border-b border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-surface)_88%,transparent)] px-3 py-2.5 backdrop-blur-md supports-[padding:max(0px)]:pt-[max(10px,env(safe-area-inset-top))] sm:px-4 sm:py-3">
         <NavLink
           to="/employee"
@@ -13,16 +13,16 @@ export default function EmployeeAppLayout() {
         >
           <BrandLogo variant="sm" className="shrink-0" />
           <div className="min-w-0">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500 sm:text-[10px] sm:tracking-[0.22em]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 sm:text-[11px]">
               Ruthra
             </p>
-            <p className="truncate text-[11px] font-semibold text-slate-800 sm:text-xs">Collector</p>
+            <p className="truncate text-xs font-semibold text-slate-800 sm:text-sm">Collector</p>
           </div>
         </NavLink>
         <EmployeeHeaderProfileMenu />
       </header>
 
-      <div className="employee-main-pad mx-auto flex w-full min-w-0 max-w-full flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 pt-3 sm:px-5 sm:pt-4 md:px-6 lg:max-w-6xl xl:max-w-7xl">
+      <div className="employee-main-pad mx-auto flex w-full min-w-0 max-w-full flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 pt-3 sm:px-4 sm:pt-4">
         <Outlet />
       </div>
 

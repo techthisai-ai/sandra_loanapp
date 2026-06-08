@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import BrandLogo from "../BrandLogo";
 import {
   LayoutDashboard,
@@ -7,7 +7,6 @@ import {
   ClipboardList,
   BarChart3,
   UsersRound,
-  UserCog,
   FileText,
   Sparkles,
   SlidersHorizontal,
@@ -18,8 +17,7 @@ import {
 const navigationItems = [
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard, end: true },
   { label: "Customer", to: "/dashboard/customer", icon: UsersRound, end: true },
-  { label: "Employee", to: "/dashboard/employees", icon: UserCog, end: true },
-  { label: "Center", to: "/dashboard/center", icon: Sparkles, end: true },
+  { label: "Center", to: "/dashboard/center", icon: Sparkles, end: true, alsoActiveOn: ["/dashboard/employees"] },
   { label: "Loan", to: "/dashboard/loan-apply", icon: FileText },
   { label: "Collection", to: "/dashboard/collection", icon: ClipboardList },
   { label: "Accounts", to: "/dashboard/accounts", icon: Landmark },
@@ -27,29 +25,35 @@ const navigationItems = [
   { label: "Setting", to: "/settings", icon: SlidersHorizontal },
 ];
 
-const NavItems = ({ onSelect }) => (
-  <nav className="flex flex-col gap-2">
-    {navigationItems.map((item) => {
-      const Icon = item.icon;
-      return (
-        <NavLink
-          key={item.label}
-          to={item.to}
-          end={item.end}
-          onClick={onSelect}
-          className={({ isActive }) =>
-            `sidebar-nav-link group ${isActive ? "sidebar-nav-link--active" : ""}`
-          }
-        >
-          <span className="sidebar-nav-icon">
-            <Icon className="h-4 w-4 shrink-0 text-slate-700" />
-          </span>
-          <span className="truncate">{item.label}</span>
-        </NavLink>
-      );
-    })}
-  </nav>
-);
+const NavItems = ({ onSelect }) => {
+  const location = useLocation();
+
+  return (
+    <nav className="flex flex-col gap-2">
+      {navigationItems.map((item) => {
+        const Icon = item.icon;
+        const alsoActive = item.alsoActiveOn?.some((path) => location.pathname.startsWith(path));
+
+        return (
+          <NavLink
+            key={item.label}
+            to={item.to}
+            end={item.end}
+            onClick={onSelect}
+            className={({ isActive }) =>
+              `sidebar-nav-link group ${isActive || alsoActive ? "sidebar-nav-link--active" : ""}`
+            }
+          >
+            <span className="sidebar-nav-icon">
+              <Icon className="h-4 w-4 shrink-0 text-slate-700" />
+            </span>
+            <span className="truncate">{item.label}</span>
+          </NavLink>
+        );
+      })}
+    </nav>
+  );
+};
 
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
@@ -57,7 +61,7 @@ export default function Sidebar() {
   return (
     <>
       {/* Mobile toggle button */}
-      <div className="md:hidden fixed right-0 top-0 z-50 p-3">
+      <div className="md:hidden fixed left-0 top-0 z-50 p-3 supports-[padding:max(0px)]:left-[max(0px,env(safe-area-inset-left))] supports-[padding:max(0px)]:top-[max(0px,env(safe-area-inset-top))]">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -77,7 +81,7 @@ export default function Sidebar() {
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-[2px] md:hidden"
           />
-          <div className="md:hidden fixed inset-y-0 right-0 z-50 w-[82vw] max-w-[320px] app-panel border-l border-slate-200 p-4 shadow-xl overflow-y-auto">
+          <div className="sidebar-mobile-drawer md:hidden fixed inset-y-0 left-0 z-50 w-[82vw] max-w-[320px] border-r border-slate-200 bg-white p-4 shadow-xl overflow-y-auto supports-[padding:max(0px)]:left-[max(0px,env(safe-area-inset-left))]">
             <div className="mb-4 border-b border-slate-200 pb-4">
               <BrandLogo variant="sidebar" className="mx-auto max-w-full object-contain object-center" />
               <p className="mt-2 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-700">

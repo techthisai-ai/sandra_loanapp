@@ -294,6 +294,7 @@ export function getCurrentTenureListDisplay(customer, customerEntries) {
   const dueAmount = currentItem ? Math.max(Number(currentItem.pendingAmount ?? currentItem.dueAmount ?? 0), 0) : 0;
 
   return {
+    dueAmountNumber: dueAmount,
     dueAmountDisplay: dueAmount > 0 ? `₹${dueAmount.toLocaleString("en-IN")}` : "—",
     dueDateDisplay: currentItem?.dueDate ? formatDate(currentItem.dueDate) : "—",
     tenureDisplay:

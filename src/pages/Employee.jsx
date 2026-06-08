@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MapPin, Pencil, Plus, Search, UserCheck, UserX } from "lucide-react";
+import CenterEmployeeTabs from "../components/center/CenterEmployeeTabs";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import EmployeeFormModal, { EMPTY_EMPLOYEE_FORM } from "../components/employee/EmployeeFormModal.jsx";
 import AssignCentersModal from "../components/employee/AssignCentersModal.jsx";
@@ -8,6 +9,7 @@ import { loadLoanCenters } from "../constants/dayCenters";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import {
   createManagedEmployee,
+  getEmployeeProfile,
   listEmployees,
   updateEmployeeAdmin,
   updateEmployeeCenters,
@@ -109,16 +111,48 @@ function StatusBadge({ status }) {
   );
 }
 
-function rowToFormValues(row) {
+function buildEditFormRow(source, fallback = {}) {
+  const storedPassword = String(source.loginPassword || source.password || "");
   return {
-    employeeId: row.employeeId || "",
+    id: source.id || fallback.id || "",
+    employeeId: source.employeeId && source.employeeId !== "--" ? source.employeeId : fallback.employeeId || "",
+    employeeName: source.displayName || source.employeeName || fallback.employeeName || "",
+    employeeSecondName: source.secondName || source.employeeSecondName || fallback.employeeSecondName || "",
+    aadhaarNumber: source.aadhaarNumber || fallback.aadhaarNumber || "",
+    mobileNumber:
+      source.phone && source.phone !== "--"
+        ? source.phone
+        : source.mobileNumber && source.mobileNumber !== "--"
+          ? source.mobileNumber
+          : fallback.mobileNumber || "",
+    username:
+      source.username && source.username !== "--"
+        ? source.username
+        : fallback.username && fallback.username !== "--"
+          ? fallback.username
+          : "",
+    loginPassword: storedPassword,
+    assignedCenters: source.assignedCenters || fallback.assignedCenters || [],
+    status:
+      (source.employeeStatus || source.status) === "inactive"
+        ? "inactive"
+        : fallback.status === "inactive"
+          ? "inactive"
+          : "active",
+  };
+}
+
+function rowToFormValues(row) {
+  const storedPassword = row.loginPassword || "";
+  return {
+    employeeId: row.employeeId && row.employeeId !== "--" ? row.employeeId : "",
     employeeName: row.employeeName || "",
     employeeSecondName: row.employeeSecondName || "",
     aadhaarNumber: row.aadhaarNumber || "",
-    mobileNumber: row.mobileNumber || "",
-    username: row.username || "",
-    password: "",
-    confirmPassword: "",
+    mobileNumber: row.mobileNumber && row.mobileNumber !== "--" ? row.mobileNumber : "",
+    username: row.username && row.username !== "--" ? row.username : "",
+    password: storedPassword,
+    confirmPassword: storedPassword,
     assignedCenters: row.assignedCenters || [],
     status: row.status === "inactive" ? "inactive" : "active",
   };
@@ -135,6 +169,7 @@ export default function EmployeePage() {
   const [formError, setFormError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [assignModal, setAssignModal] = useState(null);
+  const [editLoadingId, setEditLoadingId] = useState("");
   const [assignSaving, setAssignSaving] = useState(false);
   const [assignError, setAssignError] = useState("");
   const [statusTogglingId, setStatusTogglingId] = useState("");
@@ -187,6 +222,7 @@ export default function EmployeePage() {
           employeeSecondName: employee.secondName || "",
           mobileNumber: employee.phone || "--",
           username: employee.username || employee.email?.split("@")[0] || "--",
+          loginPassword: employee.loginPassword || "",
           aadhaarNumber: employee.aadhaarNumber || "",
           assignedCenters,
           assignedCentersLabel: formatAssignedCentersLabel(employee),
@@ -230,12 +266,30 @@ export default function EmployeePage() {
     });
   }, [employeeRows, search, statusFilter]);
 
+  const openEditEmployee = async (row) => {
+    setFormError("");
+    setEditLoadingId(row.id);
+    try {
+      const profile = await getEmployeeProfile(row.id);
+      const editRow = buildEditFormRow(profile || {}, row);
+      setFormModal({ mode: "edit", row: editRow });
+    } catch (loadError) {
+      setFormError(loadError.message || "Unable to load employee details.");
+      setFormModal({ mode: "edit", row: buildEditFormRow(row, row) });
+    } finally {
+      setEditLoadingId("");
+    }
+  };
+
   const handleSave = async (values) => {
     setFormSaving(true);
     setFormError("");
     setStatusMessage("");
     try {
       if (formModal?.mode === "edit") {
+        const storedPassword = formModal.row.loginPassword || "";
+        const passwordChanged =
+          Boolean(values.password) && values.password !== storedPassword;
         await updateEmployeeAdmin(formModal.row.id, {
           employeeId: values.employeeId,
           username: values.username,
@@ -244,7 +298,7 @@ export default function EmployeePage() {
           phone: values.mobileNumber,
           aadhaarNumber: values.aadhaarNumber,
           employeeStatus: values.status,
-          password: values.password || "",
+          password: passwordChanged ? values.password : "",
         });
         setStatusMessage("Employee updated successfully.");
       } else {
@@ -326,25 +380,24 @@ export default function EmployeePage() {
   const loading = employeesLoading;
 
   return (
-    <AdminLayout
-      title="Employee"
-      description="Employee creation and centre assignment"
-      action={
-        <button
-          type="button"
-          onClick={() => {
-            setFormError("");
-            setFormModal({ mode: "add", row: null });
-          }}
-          className="app-button-primary inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
-        >
-          <Plus className="h-4 w-4" />
-          Add Employee
-        </button>
-      }
-    >
+    <AdminLayout title="Employee" description="Employee creation and centre assignment">
+      <CenterEmployeeTabs />
       <div className="flex h-[calc(100vh-5.5rem)] min-w-0 flex-col gap-4 overflow-hidden">
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-sm md:p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setFormError("");
+                setFormModal({ mode: "add", row: null });
+              }}
+              className="app-button-primary inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
+            >
+              <Plus className="h-4 w-4" />
+              Add Employee
+            </button>
+          </div>
+
           {statusMessage ? <div className="app-alert-success mb-4">{statusMessage}</div> : null}
           {formError && !formModal ? <div className="app-alert-error mb-4">{formError}</div> : null}
 
@@ -445,13 +498,11 @@ export default function EmployeePage() {
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               type="button"
-                              onClick={() => {
-                                setFormError("");
-                                setFormModal({ mode: "edit", row });
-                              }}
+                              onClick={() => openEditEmployee(row)}
+                              disabled={editLoadingId === row.id}
                               title="Edit employee"
                               aria-label="Edit employee"
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
