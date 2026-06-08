@@ -811,8 +811,14 @@ export default function CollectionReportPanel() {
                   return (
                   <tr key={row.rowKey || row.customerId} className="hover:bg-slate-50/80">
                     {REPORT_COLUMNS.map((column) => {
-                      const alertTextClass = collectionReportCellTextClass(rowAlert, column.key);
-                      const alertCellBgClass = collectionReportCellBgClass(rowAlert, column.key);
+                      const alertTextClass =
+                        rowAlert.scope === "fullRow"
+                          ? collectionReportCellTextClass(rowAlert, column.key)
+                          : "";
+                      const alertCellBgClass =
+                        column.key === "customerId"
+                          ? collectionReportCellBgClass(rowAlert, column.key)
+                          : "";
                       if (column.key === "serial") {
                         return (
                           <td key={column.key} className={reportTableBodyClass(column.align, "tabular-nums text-slate-700")}>
@@ -924,12 +930,18 @@ export default function CollectionReportPanel() {
                         : isName || column.key === "customerId"
                           ? "font-medium text-slate-950"
                           : "text-slate-700";
+                      const alertHoverClass =
+                        alertCellBgClass === "bg-rose-100"
+                          ? "hover:bg-rose-100"
+                          : alertCellBgClass === "bg-amber-100"
+                            ? "hover:bg-amber-100"
+                            : "";
                       return (
                         <td
                           key={column.key}
                           className={reportTableBodyClass(
                             column.align,
-                            `${isNumeric ? "tabular-nums" : ""} ${alertCellBgClass} ${baseTextClass}`.trim(),
+                            `${isNumeric ? "tabular-nums" : ""} ${alertCellBgClass} ${alertHoverClass} ${baseTextClass}`.trim(),
                             { truncate: column.truncate }
                           )}
                         >

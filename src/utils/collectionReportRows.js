@@ -143,6 +143,26 @@ export function formatCompactInstallmentNumbers(numbers, maxVisible = 4) {
 }
 
 /**
+ * Loan / interest is about to end: only the final installment remains unpaid and there are no arrears.
+ */
+export function computeLoanNearEndAlert(schedule) {
+  const total = schedule.length;
+  if (!total) return false;
+
+  const calendarCurrent = getCalendarCurrentTenureNumber(schedule);
+  const unpaidItems = schedule.filter((item) => !isInstallmentPaidForReport(item));
+  if (unpaidItems.length !== 1) return false;
+
+  const onlyUnpaid = unpaidItems[0];
+  if (onlyUnpaid.installmentNumber !== total) return false;
+
+  const hasArrears = schedule.some(
+    (item) => item.installmentNumber < calendarCurrent && !isInstallmentPaidForReport(item)
+  );
+  return !hasArrears;
+}
+
+/**
  * Collection report tenure breakdown (Daily / Weekly / Monthly).
  * Current tenure = latest calendar due period, regardless of earlier paid/unpaid status.
  * Pending = earlier unpaid installment numbers only; pending amount excludes current due.
@@ -175,7 +195,7 @@ export function computeReportTenureBreakdown(schedule, frequency) {
     .map((item) => item.installmentNumber);
 
   const unpaidInstallmentCount = schedule.filter((item) => !isInstallmentPaidForReport(item)).length;
-  const nearEndAlert = unpaidInstallmentCount === 1 && pendingTenures.length === 0;
+  const nearEndAlert = computeLoanNearEndAlert(schedule);
 
   return {
     currentTenure: calendarCurrent ? getInstallmentPeriodLabel(frequency, calendarCurrent) : "--",

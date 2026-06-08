@@ -83,16 +83,17 @@ export function getCollectionReportAlert(row) {
   return ALERT_NONE;
 }
 
-/** Full-row red text only — no row/cell background. */
+/** Full-row red text only — customer ID cell uses background alerts instead of red text. */
 export function collectionReportCellTextClass(alert, columnKey) {
   if (!alert || alert.scope !== "fullRow" || !alert.textClass) return "";
-  if (columnKey === "serial") return "";
+  if (columnKey === "serial" || columnKey === "customerId") return "";
   return alert.textClass;
 }
 
-/** Customer ID cell background only (red / yellow) — text stays normal. */
+/** Customer ID cell background only (red / yellow) — never applied to other columns. */
 export function collectionReportCellBgClass(alert, columnKey) {
-  if (!alert || alert.scope !== "customerIdCell" || columnKey !== "customerId") return "";
+  if (columnKey !== "customerId") return "";
+  if (!alert || alert.scope !== "customerIdCell") return "";
   return alert.cellBgClass || "";
 }
 
