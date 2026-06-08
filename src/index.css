@@ -169,6 +169,90 @@ main {
   align-items: stretch;
 }
 
+.loan-apply-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  color: rgb(100 116 139);
+  line-height: 1.25;
+}
+
+.loan-apply-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(30 64 175);
+  line-height: 1.25;
+}
+
+.loan-apply-field {
+  width: 100%;
+  min-width: 0;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: #fff;
+  padding: 0.5rem 0.625rem;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25rem;
+  color: rgb(15 23 42);
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.loan-apply-field::placeholder {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgb(148 163 184);
+}
+
+.loan-apply-field:focus {
+  border-color: rgb(191 219 254);
+  box-shadow: 0 0 0 1px rgb(219 234 254);
+}
+
+.loan-apply-field-invalid,
+.loan-apply-field.loan-apply-field-invalid,
+.app-input.app-field-invalid,
+.app-select.app-field-invalid,
+.app-textarea.app-field-invalid {
+  border-color: rgb(251 113 133) !important;
+  background-color: rgb(255 241 242 / 0.65) !important;
+  box-shadow: 0 0 0 1px rgb(254 205 211) !important;
+}
+
+.loan-apply-field-invalid:focus,
+.loan-apply-field.loan-apply-field-invalid:focus,
+.app-input.app-field-invalid:focus,
+.app-select.app-field-invalid:focus,
+.app-textarea.app-field-invalid:focus {
+  border-color: rgb(244 63 94) !important;
+  box-shadow: 0 0 0 2px rgb(254 205 211) !important;
+}
+
+.loan-apply-label-invalid {
+  color: rgb(190 18 60) !important;
+}
+
+textarea.loan-apply-field {
+  resize: vertical;
+  min-height: 4rem;
+}
+
+.loan-apply-hint {
+  font-size: 12px;
+  line-height: 1.25rem;
+}
+
+.loan-apply-value {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25rem;
+  color: rgb(15 23 42);
+}
+
 * {
   box-sizing: border-box;
 }

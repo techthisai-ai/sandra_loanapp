@@ -3,6 +3,7 @@ import { CheckCircle2, Loader2, Phone, ShieldAlert } from "lucide-react";
 import { createCustomer } from "../services/userAuth";
 import { fetchDemoCrifEligibility } from "../services/crifEligibilityDemo";
 import { DocumentCompactAttach, DocumentPhotoTile } from "./DocumentUploadControls";
+import { getDocumentDataUrlField } from "../utils/customerDocumentAttachments";
 import PhoneOtpVerificationModal from "./PhoneOtpVerificationModal";
 import {
   IDENTITY_TYPE_OPTIONS,
@@ -230,23 +231,22 @@ export default function CustomerCreateProfessionalForm({
   const pickNamedFile = (field, previewSetter, dataField = "") => (file) => {
     if (!file) return;
     const url = URL.createObjectURL(file);
+    const resolvedDataField = dataField || getDocumentDataUrlField(field);
     setAttachmentUrls((current) => {
       const previous = current[field];
       if (previous) URL.revokeObjectURL(previous);
       return { ...current, [field]: url };
     });
     setForm((current) => ({ ...current, [field]: file.name || "" }));
-    if (previewSetter) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = typeof reader.result === "string" ? reader.result : "";
-        previewSetter(dataUrl);
-        if (dataField) {
-          setForm((current) => ({ ...current, [dataField]: dataUrl }));
-        }
-      };
-      reader.readAsDataURL(file);
-    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (previewSetter) previewSetter(dataUrl);
+      if (resolvedDataField) {
+        setForm((current) => ({ ...current, [resolvedDataField]: dataUrl }));
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const clearAttachment = (field, previewSetter, dataField = "") => {

@@ -72,9 +72,9 @@ function InfoRow({ icon: Icon, label, value, compact = false, wide = false }) {
       <div className="flex min-w-0 items-center gap-1.5 rounded-lg border border-slate-200/80 bg-white px-2 py-1">
         <Icon className="h-3.5 w-3.5 shrink-0 text-blue-600" />
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+          <p className="loan-apply-label">{label}</p>
           <p
-            className={`text-xs font-medium text-slate-900 ${
+            className={`loan-apply-value ${
               wide ? "line-clamp-2 break-words leading-snug" : "truncate"
             }`}
           >
@@ -110,8 +110,8 @@ function LoanSummaryStatCard({ icon: Icon, label, value, highlight = false, tone
         className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 ${toneStyles[tone] || toneStyles.slate} ${className}`}
       >
         <div className="min-w-0">
-          <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-          <p className={`truncate text-xs tabular-nums ${highlight ? "font-bold text-slate-950" : "font-semibold text-slate-900"}`}>
+          <p className="loan-apply-label">{label}</p>
+          <p className={`loan-apply-value truncate tabular-nums ${highlight ? "font-bold text-slate-950" : ""}`}>
             {value}
           </p>
         </div>
@@ -160,8 +160,16 @@ function LoanSummaryStatsGrid({
   );
 }
 
-const loanFieldClass =
-  "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-blue-300 focus:bg-white";
+const loanSectionTitle = "loan-apply-section-title";
+const loanSectionLabel = "loan-apply-label";
+const loanPanelClass = "space-y-2 rounded-xl border border-slate-200/90 bg-white p-2.5";
+const loanFieldLabel = "loan-apply-label mb-1 block";
+const loanFieldClass = "loan-apply-field";
+const loanFieldInvalidClass = "loan-apply-field-invalid";
+
+function loanFieldClassName(invalid) {
+  return invalid ? `${loanFieldClass} ${loanFieldInvalidClass}` : loanFieldClass;
+}
 
 export default function LoanApply() {
   const { customerId } = useParams();
@@ -185,6 +193,7 @@ export default function LoanApply() {
   const [nomineePhotoDataUrl, setNomineePhotoDataUrl] = useState("");
   const [nomineePhotoPreview, setNomineePhotoPreview] = useState("");
   const [nomineeIdProofName, setNomineeIdProofName] = useState("");
+  const [nomineeIdProofDataUrl, setNomineeIdProofDataUrl] = useState("");
   const [nomineeAttachmentUrls, setNomineeAttachmentUrls] = useState({});
   const [nomineeNameError, setNomineeNameError] = useState("");
   const [nomineeContactRequiredError, setNomineeContactRequiredError] = useState("");
@@ -192,6 +201,10 @@ export default function LoanApply() {
   const [nomineeRelationError, setNomineeRelationError] = useState("");
   const [nomineeIdentityError, setNomineeIdentityError] = useState("");
   const [validationPulse, setValidationPulse] = useState(0);
+
+  const [loanAmountError, setLoanAmountError] = useState("");
+  const [loanWeeksError, setLoanWeeksError] = useState("");
+  const [disbursementDateError, setDisbursementDateError] = useState("");
 
   const [loanAmount, setLoanAmount] = useState("");
   const [loanWeeks, setLoanWeeks] = useState(20);
@@ -342,6 +355,7 @@ export default function LoanApply() {
     setNomineePhotoDataUrl(record.coApplicantPhotoDataUrl || "");
     setNomineePhotoPreview(record.coApplicantPhotoDataUrl || "");
     setNomineeIdProofName(record.coApplicantIdProofName || "");
+    setNomineeIdProofDataUrl(record.coApplicantIdProofDataUrl || "");
     setNomineeNameError("");
     setNomineeContactRequiredError("");
     setNomineePhoneError("");
@@ -407,24 +421,27 @@ export default function LoanApply() {
       return { ...current, [field]: url };
     });
     if (field === "nomineeIdProofName") setNomineeIdProofName(file.name || "");
-    if (field === "nomineePhotoName") {
-      setNomineePhotoName(file.name || "");
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = typeof reader.result === "string" ? reader.result : "";
-        previewSetter(dataUrl);
-        if (dataField) setNomineePhotoDataUrl(dataUrl);
-      };
-      reader.readAsDataURL(file);
-    }
+    if (field === "nomineePhotoName") setNomineePhotoName(file.name || "");
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (previewSetter) previewSetter(dataUrl);
+      if (field === "nomineePhotoName" && dataField) setNomineePhotoDataUrl(dataUrl);
+      if (field === "nomineeIdProofName") setNomineeIdProofDataUrl(dataUrl);
+    };
+    reader.readAsDataURL(file);
   };
 
   const clearNomineeFile = (field, previewSetter, dataField = "") => {
-    if (field === "nomineeIdProofName") setNomineeIdProofName("");
+    if (field === "nomineeIdProofName") {
+      setNomineeIdProofName("");
+      setNomineeIdProofDataUrl("");
+    }
     if (field === "nomineePhotoName") {
       setNomineePhotoName("");
       if (dataField) setNomineePhotoDataUrl("");
-      previewSetter("");
+      if (previewSetter) previewSetter("");
     }
     setNomineeAttachmentUrls((current) => {
       if (current[field]) URL.revokeObjectURL(current[field]);
@@ -573,7 +590,26 @@ export default function LoanApply() {
       setError("Please fix nominee validation errors");
       return;
     }
-    if (!loanAmount || !loanWeeks || !disbursementDate || !collectionFrequency) {
+
+    const nextLoanAmountError = loanAmount ? "" : "Loan amount is required";
+    const nextLoanWeeksError = loanWeeks ? "" : "Tenure is required";
+    const nextDisbursementDateError = disbursementDate ? "" : "First EMI date is required";
+
+    setLoanAmountError(nextLoanAmountError);
+    setLoanWeeksError(nextLoanWeeksError);
+    setDisbursementDateError(nextDisbursementDateError);
+
+    const firstLoanInvalidId = nextLoanAmountError
+      ? "loan-amount"
+      : nextLoanWeeksError
+        ? "loan-weeks"
+        : nextDisbursementDateError
+          ? "loan-first-emi"
+          : "";
+
+    if (firstLoanInvalidId) {
+      setValidationPulse(Date.now());
+      scrollToField(firstLoanInvalidId);
       setError("Please complete all required loan fields.");
       return;
     }
@@ -611,8 +647,11 @@ export default function LoanApply() {
         nomineeContact,
         additionalContact,
         idDocumentName: customer.idDocumentName,
+        idDocumentDataUrl: customer.idDocumentDataUrl || "",
         addressProofName: customer.addressProofName,
+        addressProofDataUrl: customer.addressProofDataUrl || "",
         loanAgreementName: customer.loanAgreementName,
+        loanAgreementDataUrl: customer.loanAgreementDataUrl || "",
         supportingDocumentNames: customer.supportingDocumentNames || [],
         coApplicantName: nomineeName.trim(),
         coApplicantContact: nomineeContact,
@@ -621,6 +660,7 @@ export default function LoanApply() {
         coApplicantIdentityType: nomineeIdentityType,
         coApplicantIdentityNumber: nomineeIdentityNumber,
         coApplicantIdProofName: nomineeIdProofName,
+        coApplicantIdProofDataUrl: nomineeIdProofDataUrl || customer.coApplicantIdProofDataUrl || "",
         coApplicantPhotoName: nomineePhotoName,
         coApplicantPhotoDataUrl: nomineePhotoDataUrl || "",
         customerPhotoName: customer.customerPhotoName || "",
@@ -762,7 +802,7 @@ export default function LoanApply() {
     >
       <div className="w-full min-w-0 max-w-[min(1460px,100%)]">
         <section className="dash-glass-panel rounded-2xl p-2.5 sm:p-3">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-600/90">Customer details</p>
+          <p className={`mb-2 ${loanSectionTitle}`}>Customer details</p>
           <div className="loan-apply-customer-strip">
             <InfoRow compact icon={UserRound} label="Name" value={customer?.customerName} />
             <InfoRow compact icon={Phone} label="Phone" value={customer?.mobileNumber} />
@@ -771,9 +811,7 @@ export default function LoanApply() {
             <InfoRow compact wide icon={MapPin} label="Address" value={customer?.address} />
           </div>
 
-          <div className="my-3 border-t border-slate-200/80" />
-
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-start">
+          <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-start">
             <LoanNomineeSection
               nominee={{
                 nomineeName,
@@ -805,18 +843,20 @@ export default function LoanApply() {
               attachmentUrls={nomineeAttachmentUrls}
             />
 
-            <div className="space-y-2.5">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-600/90">Loan details</p>
+            <div className={loanPanelClass}>
+              <p className={loanSectionTitle}>Loan details</p>
 
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200/90 bg-gradient-to-r from-slate-50 to-blue-50/40 px-2.5 py-1.5 text-xs">
-                <span className="font-semibold uppercase tracking-wide text-slate-500">Available wallet</span>
-                <span className={`font-mono text-xs font-bold tabular-nums ${walletBalance <= 0 ? "text-amber-700" : "text-emerald-700"}`}>
-                  {formatInr(walletBalance)}
-                </span>
-              </div>
+              <LoanSummaryStatCard
+                compact
+                icon={Wallet}
+                label="Available wallet"
+                value={formatInr(walletBalance)}
+                highlight
+                tone={walletBalance <= 0 ? "amber" : "emerald"}
+              />
 
               {insufficientWalletForSave ? (
-                <div className="flex items-start gap-2 rounded-xl border border-rose-200/80 bg-gradient-to-r from-rose-50 to-orange-50/90 px-2.5 py-2 text-[11px] text-rose-950">
+                <div className="loan-apply-hint flex items-start gap-2 rounded-lg border border-rose-200/80 bg-rose-50/60 px-2.5 py-2 text-rose-900">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-600" strokeWidth={2} />
                   <p className="leading-snug">
                     Need {formatInr(principalDelta)}; only {formatInr(walletBalance)} available.
@@ -825,42 +865,48 @@ export default function LoanApply() {
               ) : null}
 
               <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1.5">
-                  <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Loan ID</p>
-                  <p className="mt-0.5 break-all text-xs font-bold text-slate-900">{loanId}</p>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-                  <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Collection day</p>
-                  <p className="mt-0.5 truncate text-xs font-bold text-slate-900">{collectionDay}</p>
-                </div>
+                <LoanSummaryStatCard compact icon={FileText} label="Loan ID" value={loanId} highlight tone="blue" className="[&_p:last-child]:break-all [&_p:last-child]:whitespace-normal" />
+                <LoanSummaryStatCard compact icon={CalendarDays} label="Collection day" value={collectionDay} tone="slate" />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <label className="space-y-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Loan amount</span>
+                  <span className={`${loanFieldLabel}${loanAmountError ? " loan-apply-label-invalid" : ""}`}>Loan amount</span>
                   <input
+                    id="loan-amount"
                     value={loanAmount}
-                    onChange={(event) => setLoanAmount(event.target.value)}
+                    onChange={(event) => {
+                      setLoanAmount(event.target.value);
+                      if (loanAmountError) setLoanAmountError("");
+                    }}
                     inputMode="numeric"
-                    className={loanFieldClass}
-                    placeholder="Enter loan amount"
+                    className={loanFieldClassName(Boolean(loanAmountError))}
+                    placeholder="Enter amount"
+                    aria-invalid={loanAmountError ? "true" : undefined}
                   />
+                  {loanAmountError ? <p className="loan-apply-hint mt-1 text-rose-600">{loanAmountError}</p> : null}
                 </label>
                 <label className="space-y-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Tenure (weeks)</span>
+                  <span className={`${loanFieldLabel}${loanWeeksError ? " loan-apply-label-invalid" : ""}`}>Tenure (weeks)</span>
                   <input
+                    id="loan-weeks"
                     value={loanWeeks}
-                    onChange={(e) => setLoanWeeks(e.target.value.replace(/\D/g, ""))}
+                    onChange={(e) => {
+                      setLoanWeeks(e.target.value.replace(/\D/g, ""));
+                      if (loanWeeksError) setLoanWeeksError("");
+                    }}
                     inputMode="numeric"
-                    className={loanFieldClass}
+                    className={loanFieldClassName(Boolean(loanWeeksError))}
                     placeholder="Weeks"
+                    aria-invalid={loanWeeksError ? "true" : undefined}
                   />
+                  {loanWeeksError ? <p className="loan-apply-hint mt-1 text-rose-600">{loanWeeksError}</p> : null}
                 </label>
               </div>
 
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <label className="space-y-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Frequency</span>
+                  <span className={loanFieldLabel}>Frequency</span>
                   <select
                     value={collectionFrequency}
                     onChange={(event) => setCollectionFrequency(event.target.value)}
@@ -872,16 +918,22 @@ export default function LoanApply() {
                   </select>
                 </label>
                 <label className="space-y-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">First EMI</span>
+                  <span className={`${loanFieldLabel}${disbursementDateError ? " loan-apply-label-invalid" : ""}`}>First EMI</span>
                   <input
+                    id="loan-first-emi"
                     type="date"
                     value={disbursementDate}
-                    onChange={(event) => setDisbursementDate(event.target.value)}
-                    className={loanFieldClass}
+                    onChange={(event) => {
+                      setDisbursementDate(event.target.value);
+                      if (disbursementDateError) setDisbursementDateError("");
+                    }}
+                    className={loanFieldClassName(Boolean(disbursementDateError))}
+                    aria-invalid={disbursementDateError ? "true" : undefined}
                   />
+                  {disbursementDateError ? <p className="loan-apply-hint mt-1 text-rose-600">{disbursementDateError}</p> : null}
                 </label>
                 <label className="space-y-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">End EMI</span>
+                  <span className={loanFieldLabel}>End EMI</span>
                   <input
                     type="date"
                     value={resolvedDueDate}
@@ -891,10 +943,8 @@ export default function LoanApply() {
                 </label>
               </div>
 
-              <p className="text-[10px] text-slate-500">First EMI date calculates end EMI date and schedule.</p>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5">
-                <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.16em] text-blue-600/90">Loan summary preview</p>
+              <div className="border-t border-slate-100 pt-2">
+                <p className={`mb-2 ${loanSectionLabel}`}>Loan summary preview</p>
                 <LoanSummaryStatsGrid
                   compact
                   emiAmount={emiAmount}
@@ -906,32 +956,32 @@ export default function LoanApply() {
                 />
               </div>
 
-              {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p> : null}
-            </div>
-          </div>
+              {error ? <p className="loan-apply-hint rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-rose-700">{error}</p> : null}
 
-          <div className="mt-4 flex gap-3">
-            <button
-              type="button"
-              onClick={() => navigate("/dashboard/loan-apply")}
-              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <ArrowLeft className="h-4 w-4" /> Back
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={loading || insufficientWalletForSave}
-              title={
-                insufficientWalletForSave
-                  ? "Insufficient wallet balance — reduce principal increase or add capital"
-                  : undefined
-              }
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-55"
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              {loading ? "Saving..." : "Save loan"}
-            </button>
+              <div className="flex gap-2 border-t border-slate-100 pt-2">
+                <button
+                  type="button"
+                  onClick={() => navigate("/dashboard/loan-apply")}
+                  className="loan-apply-hint inline-flex !min-h-0 shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={loading || insufficientWalletForSave}
+                  title={
+                    insufficientWalletForSave
+                      ? "Insufficient wallet balance — reduce principal increase or add capital"
+                      : undefined
+                  }
+                  className="loan-apply-hint inline-flex !min-h-0 flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {loading ? "Saving..." : "Save loan"}
+                </button>
+              </div>
+            </div>
           </div>
         </section>
       </div>

@@ -51,7 +51,7 @@ export function DocumentCompactAttach({
   };
 
   const btn = dense
-    ? "inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border px-2 text-[10px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+    ? "inline-flex !min-h-0 h-8 w-full items-center justify-center gap-1 rounded-lg border px-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
     : "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-[11px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50";
 
   const resolvedEmptyHint = dense ? "Camera or Upload" : emptyHint;
@@ -62,14 +62,14 @@ export function DocumentCompactAttach({
         dense ? "p-2" : "p-3"
       } ${
         invalid
-          ? "border-rose-300 ring-rose-100/80"
+          ? "border-rose-400 bg-rose-50/40 ring-rose-100/80"
           : "border-slate-200/90 ring-slate-100/80 hover:border-blue-200/70"
       } ${
         disabled ? "pointer-events-none opacity-50" : ""
       }`}
     >
       <div className="flex items-center justify-between gap-2">
-        <p className={`font-bold uppercase tracking-[0.12em] text-slate-600 ${dense ? "text-[9px]" : "text-[10px]"}`}>
+        <p className={dense ? "loan-apply-label" : "text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600"}>
           {label}
           {required ? <span className="ml-1 text-rose-500">*</span> : null}
         </p>
@@ -106,7 +106,7 @@ export function DocumentCompactAttach({
         </p>
       </div>
       ) : (
-        <p className="mt-1.5 truncate text-[9px] text-slate-400" title={value || undefined}>
+        <p className="loan-apply-hint mt-1.5 truncate text-slate-400" title={value || undefined}>
           {hasFile ? value : helperText || "JPG, PNG, PDF"}
         </p>
       )}
@@ -164,9 +164,9 @@ export function DocumentCompactAttach({
       {hasFile ? (
         <div className={`mt-1.5 flex items-center gap-1 rounded-lg border border-emerald-100 bg-emerald-50/60 ${dense ? "px-2 py-1" : "px-2.5 py-2"}`}>
           <CheckCircle2 className={`shrink-0 text-emerald-600 ${dense ? "h-3 w-3" : "h-3.5 w-3.5"}`} />
-          <span className="min-w-0 flex-1 truncate text-[9px] font-medium text-emerald-900">{value}</span>
+          <span className={`min-w-0 flex-1 truncate text-emerald-900 ${dense ? "loan-apply-hint" : "text-[9px] font-medium"}`}>{value}</span>
           {url ? (
-            <a href={url} target="_blank" rel="noreferrer" className="shrink-0 text-[9px] font-semibold text-blue-600 hover:underline">
+            <a href={url} target="_blank" rel="noreferrer" className={`shrink-0 font-semibold text-blue-600 hover:underline ${dense ? "loan-apply-hint" : "text-[9px]"}`}>
               View
             </a>
           ) : null}
@@ -246,11 +246,11 @@ export function DocumentPhotoTile({
       className={`mx-auto flex w-full shrink-0 flex-col items-center rounded-2xl border bg-white shadow-md shadow-slate-900/5 ring-1 transition ${
         dense ? "max-w-[112px] p-2" : "max-w-[184px] p-3.5"
       } ${
-        invalid ? "border-rose-300 ring-rose-100/90" : "border-slate-200/90 ring-slate-100/90"
+        invalid ? "border-rose-400 bg-rose-50/40 ring-rose-100/90" : "border-slate-200/90 ring-slate-100/90"
       } ${className}`}
     >
       <div className="flex w-full items-center justify-between gap-2">
-        <p className={`min-w-0 font-bold uppercase tracking-[0.14em] text-slate-500 ${dense ? "text-[8px] leading-tight" : "text-[10px]"}`}>
+        <p className={dense ? "loan-apply-label min-w-0" : "min-w-0 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500"}>
           {label}
           {required ? <span className="ml-1 text-rose-500">*</span> : null}
         </p>
@@ -364,8 +364,8 @@ export function DocumentPhotoTile({
       />
 
       <p
-        className={`w-full px-0.5 text-center font-medium leading-snug ${
-          dense ? "mt-1 text-[8px]" : "mt-2.5 text-[10px]"
+        className={`w-full px-0.5 text-center leading-snug ${
+          dense ? "loan-apply-hint mt-1" : "mt-2.5 text-[10px] font-medium"
         } ${
           fileName ? "text-emerald-800" : invalid ? "text-rose-600" : "text-slate-400"
         }`}

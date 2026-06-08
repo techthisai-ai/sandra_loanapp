@@ -43,6 +43,7 @@ import {
 import { loadLoanCenters } from "../constants/dayCenters.js";
 import { generateLoanId, generateLoanRequestId } from "../utils/loanIds.js";
 import { normalizeCollectionFrequency } from "../utils/loanTimelineDates.js";
+import { preserveCustomerDocumentDataUrls } from "../utils/customerDocumentAttachments.js";
 import {
   employeeLoginEmail,
   normalizeUsername,
@@ -1224,6 +1225,7 @@ async function assertEmployeeEmailAvailable(email) {
 export async function createManagedEmployee({
   employeeId,
   displayName,
+  secondName = "",
   username,
   password,
   aadhaarNumber,
@@ -1257,6 +1259,7 @@ export async function createManagedEmployee({
     username: normalizedUsername,
     role: "employee",
     displayName: normalizeText(displayName),
+    secondName: normalizeText(secondName),
     phone: normalizePhoneNumber(phone),
     aadhaarNumber: String(aadhaarNumber || "").replace(/\D/g, ""),
     assignedCenters: centers,
@@ -1271,7 +1274,7 @@ export async function createManagedEmployee({
     action: "create_employee",
     entityType: "user",
     entityId: authResult.localId,
-    message: `${normalizeText(displayName) || normalizedUsername} (${normalizedEmployeeId}) was created${centers.length ? ` with centres ${centers.join(", ")}` : " without centres yet"}.`,
+    message: `${[normalizeText(displayName), normalizeText(secondName)].filter(Boolean).join(" ") || normalizedUsername} (${normalizedEmployeeId}) was created${centers.length ? ` with centres ${centers.join(", ")}` : " without centres yet"}.`,
     actorName: "Admin",
     actorRole: "admin",
   });
@@ -1449,6 +1452,10 @@ export async function updateEmployeeAdmin(employeeDocId, payload) {
 
   const normalizedPayload = {
     displayName: normalizeText(payload.displayName ?? current.displayName),
+    secondName:
+      payload.secondName !== undefined
+        ? normalizeText(payload.secondName)
+        : normalizeText(current.secondName || ""),
     phone,
     aadhaarNumber:
       payload.aadhaarNumber !== undefined
@@ -1917,6 +1924,7 @@ export async function upsertLoanApplication({
     const prior = customerSnap.data();
     if (prior.approvalStatus) record.approvalStatus = prior.approvalStatus;
     if (prior.loanApprovedAt != null) record.loanApprovedAt = prior.loanApprovedAt;
+    preserveCustomerDocumentDataUrls(record, prior);
   } else if (applicationSnap.exists()) {
     const priorApp = applicationSnap.data();
     if (priorApp.approvalStatus) record.approvalStatus = priorApp.approvalStatus;

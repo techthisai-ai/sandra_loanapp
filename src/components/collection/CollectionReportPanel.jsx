@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  CalendarDays,
+  Clock,
   Download,
   Eye,
   FileSpreadsheet,
@@ -102,7 +104,6 @@ import { normalizeCollectionFrequency } from "../../utils/loanTimelineDates";
 
 const FREQUENCY_OPTIONS = ["All", "Daily", "Weekly", "Monthly"];
 const PAYMENT_STATUS_OPTIONS = ["All", "Paid", "Unpaid"];
-const PAGE_SIZE = 12;
 
 function parseInputDate(value) {
   if (!value) return null;
@@ -110,13 +111,51 @@ function parseInputDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function SummaryCard({ label, value }) {
+function ReportSummaryCard({ label, value, icon: Icon, accent = "blue" }) {
+  const iconShellClass =
+    accent === "green"
+      ? "bg-emerald-50 text-emerald-600"
+      : accent === "orange"
+        ? "bg-amber-50 text-amber-600"
+        : accent === "purple"
+          ? "bg-violet-50 text-violet-600"
+          : "bg-blue-50 text-blue-600";
+
   return (
-    <div className="app-panel-muted rounded-2xl px-4 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold tabular-nums text-slate-950">{value}</p>
+    <div className="rounded-2xl border border-slate-200/90 bg-white px-4 py-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconShellClass}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+      <p className="mt-2 flex min-h-[2.5rem] items-center justify-center text-2xl font-semibold tabular-nums tracking-tight text-slate-950">
+        {value}
+      </p>
     </div>
   );
+}
+
+function downloadReportRowsCsv(rows, stamp = reportDateStamp()) {
+  const headers = REPORT_COLUMNS.map((column) => column.label);
+  const escape = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const lines = [
+    headers.map(escape).join(","),
+    ...rows.map((row, index) =>
+      REPORT_COLUMNS.map((column) => {
+        if (column.key === "serial") return escape(index + 1);
+        if (column.key === "paid") return escape(row.paidDisplay || row.paid || "");
+        return escape(row[column.key] ?? "");
+      }).join(",")
+    ),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `collection-report-${stamp}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function PendingAmountModal({ row, onClose }) {
@@ -217,7 +256,6 @@ export default function CollectionReportPanel() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
   const [printLoading, setPrintLoading] = useState(false);
   const [paidState, setPaidState] = useState(() => loadCollectionReportPaidState());
   const [pendingAmountRow, setPendingAmountRow] = useState(null);
@@ -432,22 +470,6 @@ export default function CollectionReportPanel() {
     };
   }, [entries, reportRows, selectedEmployee]);
 
-  const totalPages = Math.max(1, Math.ceil(reportRows.length / PAGE_SIZE));
-  const pagedRows = reportRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  useEffect(() => {
-    setPage(1);
-  }, [
-    employeeFilter,
-    centerFilter,
-    subCenterFilter,
-    frequencyFilter,
-    paymentStatusFilter,
-    dateFrom,
-    dateTo,
-    search,
-  ]);
-
   useEffect(() => {
     setSubCenterFilter("All");
   }, [centerFilter]);
@@ -482,7 +504,7 @@ export default function CollectionReportPanel() {
     if (event.key !== "Enter") return;
     event.preventDefault();
     commitPaidAmountEntry(entryKey);
-    const nextRow = pagedRows[rowIndex + 1];
+    const nextRow = reportRows[rowIndex + 1];
     if (nextRow?.installmentNumber) {
       const nextKey = makePaidEntryKey(nextRow.customerId, nextRow.installmentNumber);
       const nextInput = paidInputRefs.current[nextKey];
@@ -573,41 +595,51 @@ export default function CollectionReportPanel() {
 
   return (
     <section className="app-panel min-w-0 p-5 md:p-6">
-      <div className="flex items-center gap-3">
-        <div className="app-icon-shell flex h-11 w-11 items-center justify-center rounded-2xl border border-white/70">
-          <Eye className="h-5 w-5" />
-        </div>
-        <div>
-          <h3 className="text-xl font-semibold tracking-tight text-slate-950">Collection report</h3>
-          <p className="text-sm text-slate-600">
-            All customers with an active loan appear here. Set Payment to Unpaid or All to record collections.
-          </p>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <ReportSummaryCard
+          label="Assigned customers"
+          value={String(stats.assignedCustomers)}
+          icon={Eye}
+          accent="blue"
+        />
+        <ReportSummaryCard
+          label="Total collected amount"
+          value={formatCurrency(stats.totalCollected)}
+          icon={FileSpreadsheet}
+          accent="green"
+        />
+        <ReportSummaryCard
+          label="Pending collection"
+          value={formatCurrency(stats.pendingCollection)}
+          icon={Clock}
+          accent="orange"
+        />
+        <ReportSummaryCard
+          label="Today's collection"
+          value={formatCurrency(stats.todayCollection)}
+          icon={CalendarDays}
+          accent="purple"
+        />
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Assigned customers" value={String(stats.assignedCustomers)} />
-        <SummaryCard label="Total collected amount" value={formatCurrency(stats.totalCollected)} />
-        <SummaryCard label="Pending collection" value={formatCurrency(stats.pendingCollection)} />
-        <SummaryCard label="Today's collection" value={formatCurrency(stats.todayCollection)} />
-      </div>
-
-      <div className="mt-4 space-y-3">
-        <div className="grid gap-2 lg:grid-cols-[minmax(0,1.4fr)_repeat(4,minmax(0,1fr))] lg:items-end">
-          <div className="relative">
+      <div className="mt-4 space-y-3 rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-sm">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 xl:items-end">
+          <div className="min-w-0 sm:col-span-2 lg:col-span-3 xl:col-span-1">
             <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
               Search customer
             </label>
-            <Search className="absolute left-4 top-[calc(50%+0.55rem)] h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Name, ID, or phone..."
-              className="app-input bg-slate-50 pl-11 pr-4"
-            />
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Name, ID, or phone number..."
+                className="app-input w-full !pl-11 pr-4 bg-slate-50"
+              />
+            </div>
           </div>
           {!isEmployeeUser ? (
-            <div>
+            <div className="min-w-0">
               <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                 Employee
               </label>
@@ -621,7 +653,7 @@ export default function CollectionReportPanel() {
               </select>
             </div>
           ) : (
-            <div>
+            <div className="min-w-0">
               <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                 Employee
               </label>
@@ -630,7 +662,7 @@ export default function CollectionReportPanel() {
               </div>
             </div>
           )}
-          <div>
+          <div className="min-w-0">
             <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
               Main center
             </label>
@@ -646,7 +678,7 @@ export default function CollectionReportPanel() {
               ))}
             </select>
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
               Sub center
             </label>
@@ -668,7 +700,7 @@ export default function CollectionReportPanel() {
                 ))}
             </select>
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
               Collection type
             </label>
@@ -682,88 +714,72 @@ export default function CollectionReportPanel() {
           </div>
         </div>
 
-        <div className="overflow-x-auto pb-1">
-          <div className="flex min-w-max flex-nowrap items-end gap-2">
-            <div className="w-[6.75rem] shrink-0">
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Payment
-              </label>
-              <select
-                value={paymentStatusFilter}
-                onChange={(e) => setPaymentStatusFilter(e.target.value)}
-                className="app-select w-full"
-              >
-                {PAYMENT_STATUS_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option === "All" ? "All" : option}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="w-[11.5rem] shrink-0">
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Date from
-              </label>
-              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="app-input w-full" />
-            </div>
-            <div className="w-[11.5rem] shrink-0">
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Date to
-              </label>
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="app-input w-full" />
-            </div>
-            <button
-              type="button"
-              disabled={printLoading}
-              onClick={handlePrint}
-              title={printSelectionHint || "Print customer report grouped by sub-center"}
-              className="app-button-secondary inline-flex h-[42px] shrink-0 items-center gap-2 rounded-2xl px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 items-end">
+          <div className="min-w-0">
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Payment
+            </label>
+            <select
+              value={paymentStatusFilter}
+              onChange={(e) => setPaymentStatusFilter(e.target.value)}
+              className="app-select w-full"
             >
-              <Printer className="h-4 w-4" />
-              {printLoading ? "Printing…" : "Print"}
-            </button>
-            <button
-              type="button"
-              className="app-button-secondary inline-flex h-[42px] shrink-0 items-center gap-2 rounded-2xl px-4 text-sm font-medium"
-            >
-              <FileSpreadsheet className="h-4 w-4" />
-              Export Excel
-            </button>
-            <button
-              type="button"
-              className="app-button-secondary inline-flex h-[42px] shrink-0 items-center gap-2 rounded-2xl px-4 text-sm font-medium"
-            >
-              <FileText className="h-4 w-4" />
-              Export PDF
-            </button>
-            <button
-              type="button"
-              className="app-button-secondary inline-flex h-[42px] shrink-0 items-center gap-2 rounded-2xl px-4 text-sm font-medium"
-            >
-              <Download className="h-4 w-4" />
-              CSV
-            </button>
+              {PAYMENT_STATUS_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option === "All" ? "All" : option}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-0">
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Date from
+            </label>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="app-input w-full" />
+          </div>
+          <div className="min-w-0">
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Date to
+            </label>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="app-input w-full" />
           </div>
         </div>
 
-        <p className="text-xs text-slate-500">
-          Print requires a <span className="font-semibold text-slate-700">Main center</span> (not All). Employee is
-          optional for admin — use All employees or pick one. Report groups full customer details by sub-center.
-        </p>
-
-        {centerFilter !== "All" ? (
-          <p className="text-xs text-slate-500">
-            Showing customers for <span className="font-semibold text-slate-700">{centerFilter}</span>
-            {subCenterFilter !== "All" ? (
-              <>
-                {" "}
-                · Sub center: <span className="font-semibold text-slate-700">{subCenterFilter}</span>
-              </>
-            ) : (
-              <> · All assigned sub-centers under this center</>
-            )}
-          </p>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={printLoading}
+            onClick={handlePrint}
+            title={printSelectionHint || "Print customer report grouped by sub-center"}
+            className="app-button-secondary inline-flex h-[42px] items-center gap-2 rounded-2xl px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Printer className="h-4 w-4" />
+            {printLoading ? "Printing…" : "Print"}
+          </button>
+          <button
+            type="button"
+            className="app-button-secondary inline-flex h-[42px] items-center gap-2 rounded-2xl px-4 text-sm font-medium"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            Export Excel
+          </button>
+          <button
+            type="button"
+            className="app-button-secondary inline-flex h-[42px] items-center gap-2 rounded-2xl px-4 text-sm font-medium"
+          >
+            <FileText className="h-4 w-4" />
+            Export PDF
+          </button>
+          <button
+            type="button"
+            disabled={!reportRows.length}
+            onClick={() => downloadReportRowsCsv(reportRows)}
+            className="app-button-primary inline-flex h-[42px] items-center gap-2 rounded-2xl px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 min-w-0 max-w-full overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-sm [contain:inline-size]">
@@ -793,14 +809,14 @@ export default function CollectionReportPanel() {
                     Loading collection report…
                   </td>
                 </tr>
-              ) : pagedRows.length === 0 ? (
+              ) : reportRows.length === 0 ? (
                 <tr>
                   <td colSpan={REPORT_COLUMNS.length} className="px-4 py-10 text-center text-slate-500">
                     No records match the selected filters.
                   </td>
                 </tr>
               ) : (
-                pagedRows.map((row, index) => {
+                reportRows.map((row, index) => {
                   const rowAlert = getCollectionReportAlert(row);
                   return (
                   <tr key={row.rowKey || row.customerId} className="hover:bg-slate-50/80">
@@ -810,7 +826,7 @@ export default function CollectionReportPanel() {
                       if (column.key === "serial") {
                         return (
                           <td key={column.key} className={reportTableBodyClass(column.align, "tabular-nums text-slate-700")}>
-                            {(page - 1) * PAGE_SIZE + index + 1}
+                            {index + 1}
                           </td>
                         );
                       }
@@ -934,33 +950,11 @@ export default function CollectionReportPanel() {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <p className="text-sm text-slate-600">
-          Showing {(page - 1) * PAGE_SIZE + (pagedRows.length ? 1 : 0)}–{(page - 1) * PAGE_SIZE + pagedRows.length} of{" "}
-          {reportRows.length}
+      {reportRows.length > 0 ? (
+        <p className="mt-4 text-sm text-slate-600">
+          Showing 1 to {reportRows.length} of {reportRows.length}
         </p>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            className="app-button-secondary rounded-xl px-3 py-1.5 text-sm disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <span className="text-sm text-slate-600">
-            Page {page} / {totalPages}
-          </span>
-          <button
-            type="button"
-            disabled={page >= totalPages}
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-            className="app-button-secondary rounded-xl px-3 py-1.5 text-sm disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
-      </div>
+      ) : null}
       <PendingAmountModal row={pendingAmountRow} onClose={() => setPendingAmountRow(null)} />
     </section>
   );

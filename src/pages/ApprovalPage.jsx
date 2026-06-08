@@ -3,7 +3,6 @@ import {
   BarChart3,
   CheckCircle2,
   Clock3,
-  ClipboardList,
   Download,
   FileText,
   Search,
@@ -321,20 +320,7 @@ export function ApprovalRegisterPanel() {
 
   return (
     <section className="app-panel min-w-0 max-w-full p-5 md:p-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="app-icon-shell flex h-11 w-11 items-center justify-center rounded-2xl border border-white/70">
-                <ClipboardList className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-600">Approval module</p>
-                <h3 className="text-xl font-semibold tracking-tight text-slate-950">Collection approval register</h3>
-              </div>
-            </div>
-            <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800">Live sync</span>
-          </div>
-
-          <div className="app-sticky-bar mt-4">
+          <div className="app-sticky-bar">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-2.5">
                 <div className="app-segmented w-full sm:w-auto">
@@ -396,12 +382,12 @@ export function ApprovalRegisterPanel() {
 
           <div className="mt-4 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search customer, center, collector..."
-                className="app-input bg-slate-50 pl-11 pr-4"
+                className="app-input w-full !pl-11 pr-4 bg-slate-50"
               />
             </div>
             <div className="flex flex-wrap gap-2">

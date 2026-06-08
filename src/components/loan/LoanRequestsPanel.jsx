@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CheckCircle2, ClipboardList, Search, XCircle } from "lucide-react";
+import { CheckCircle2, Search, XCircle } from "lucide-react";
 import { useLoanDataSync } from "../../context/LoanDataSyncContext";
 import { approveLoanRequest, rejectLoanRequest } from "../../services/userAuth";
 
@@ -55,11 +55,6 @@ export default function LoanRequestsPanel() {
     });
   }, [loanRequests, search, statusFilter]);
 
-  const pendingCount = useMemo(
-    () => loanRequests.filter((row) => String(row.status || "").toLowerCase() === "pending").length,
-    [loanRequests]
-  );
-
   const handleApprove = async (requestId) => {
     setActionId(requestId);
     setActionError("");
@@ -91,30 +86,16 @@ export default function LoanRequestsPanel() {
 
   return (
     <section className="app-section-card p-4 md:p-5">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="app-icon-shell flex h-11 w-11 items-center justify-center rounded-2xl border border-white/70">
-            <ClipboardList className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-slate-950">Loan requests</h3>
-            <p className="text-sm text-slate-600">
-              Review employee-submitted loan requests. {pendingCount} pending approval.
-            </p>
-          </div>
-        </div>
-      </div>
-
       <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem]">
-        <label className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search customer, employee, or request ID"
-            className="app-input w-full pl-9"
+            className="app-input w-full !pl-11 pr-4"
           />
-        </label>
+        </div>
         <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="app-select w-full">
           {STATUS_OPTIONS.map((option) => (
             <option key={option} value={option}>

@@ -11,6 +11,7 @@ import {
 export const EMPTY_EMPLOYEE_FORM = {
   employeeId: "",
   employeeName: "",
+  employeeSecondName: "",
   aadhaarNumber: "",
   mobileNumber: "",
   username: "",
@@ -160,6 +161,15 @@ export default function EmployeeFormModal({
             <label className="flex flex-col gap-1">
               <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Employee name</span>
               <input value={form.employeeName} onChange={updateField("employeeName")} className="app-input" required />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Employee second name</span>
+              <input
+                value={form.employeeSecondName}
+                onChange={updateField("employeeSecondName")}
+                className="app-input"
+                placeholder="Optional"
+              />
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Employee ID</span>

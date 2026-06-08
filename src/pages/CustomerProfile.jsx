@@ -40,28 +40,37 @@ function DocumentAttachmentCard({ label, name, url }) {
     );
   }
 
+  const openInNewTab = (event) => {
+    event.preventDefault();
+    openCustomerDocument(url);
+  };
+
   return (
     <li className="flex flex-col rounded-xl border border-slate-100 bg-slate-50/60 p-3">
       <span className="text-xs font-semibold text-slate-700">{label}</span>
       {canOpen && isImageAttachment(name, url) ? (
-        <button
-          type="button"
-          onClick={() => openCustomerDocument(url)}
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={openInNewTab}
           className="mt-2 w-fit rounded-lg border border-slate-200 bg-white p-0.5 transition hover:border-blue-200 hover:shadow-sm"
-          title={`Open ${name}`}
+          title={`Open ${name} in a new tab`}
         >
           <img src={url} alt={name} className="h-24 w-24 rounded-lg object-cover" />
-        </button>
+        </a>
       ) : null}
       {canOpen ? (
-        <button
-          type="button"
-          onClick={() => openCustomerDocument(url)}
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={openInNewTab}
           className="mt-2 text-left text-sm font-semibold text-blue-700 hover:underline"
           title="Open in new tab"
         >
           {name}
-        </button>
+        </a>
       ) : (
         <span className="mt-1 text-sm text-slate-600">{name}</span>
       )}

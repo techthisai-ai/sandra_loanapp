@@ -483,25 +483,7 @@ export default function Collection() {
           <CollectionReportPanel />
         ) : (
           <section className="app-panel min-w-0 p-5 md:p-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="app-icon-shell flex h-11 w-11 items-center justify-center rounded-2xl border border-white/70">
-                  <ClipboardList className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold tracking-tight text-slate-950">Collection register</h3>
-                </div>
-              </div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200/80 bg-emerald-50/90 px-3 py-1.5 text-xs font-semibold text-emerald-900 shadow-sm">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                </span>
-                Live sync
-              </span>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <CollectionStats
                 icon={Wallet}
                 label="Total collected"
@@ -526,12 +508,12 @@ export default function Collection() {
 
             <div className="mt-4 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:items-center">
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search customer, center, collector..."
-                  className="app-input bg-slate-50 pl-11 pr-4"
+                  className="app-input w-full !pl-11 pr-4 bg-slate-50"
                 />
               </div>
 
@@ -606,11 +588,6 @@ export default function Collection() {
 
             {error ? <div className="app-alert-error mt-5">{error}</div> : null}
             {statusMessage ? <div className="app-alert-success mt-5">{statusMessage}</div> : null}
-
-            <p className="mt-4 text-sm text-slate-600">
-              Select pending rows with checkboxes, then approve or reject in bulk. Select-all applies only to visible
-              filtered rows.
-            </p>
 
             <div className="mt-4 min-w-0">
               <CollectionApprovalTable

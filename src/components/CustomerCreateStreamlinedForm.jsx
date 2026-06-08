@@ -456,6 +456,15 @@ export default function CustomerCreateStreamlinedForm({
       addressProofName: isEdit ? form.addressProofName || initialData?.addressProofName || "" : form.addressProofName || "",
       loanAgreementName: isEdit ? form.loanAgreementName || initialData?.loanAgreementName || "" : form.loanAgreementName || "",
       customerPhotoName: isEdit ? form.customerPhotoName || initialData?.customerPhotoName || "" : form.customerPhotoName || "",
+      idDocumentDataUrl: isEdit
+        ? form.idDocumentDataUrl || initialData?.idDocumentDataUrl || ""
+        : form.idDocumentDataUrl || "",
+      addressProofDataUrl: isEdit
+        ? form.addressProofDataUrl || initialData?.addressProofDataUrl || ""
+        : form.addressProofDataUrl || "",
+      loanAgreementDataUrl: isEdit
+        ? form.loanAgreementDataUrl || initialData?.loanAgreementDataUrl || ""
+        : form.loanAgreementDataUrl || "",
       customerPhotoDataUrl: isEdit
         ? form.customerPhotoDataUrl || initialData?.customerPhotoDataUrl || ""
         : form.customerPhotoDataUrl || "",

@@ -50,7 +50,7 @@ function EmployeeAvatar({ name }) {
   );
 }
 
-function SummaryCard({ label, value, footer, accent }) {
+function SummaryCard({ label, value, accent }) {
   const accentClass =
     accent === "green"
       ? "border-l-emerald-500"
@@ -61,10 +61,11 @@ function SummaryCard({ label, value, footer, accent }) {
           : "border-l-blue-500";
 
   return (
-    <div className={`rounded-2xl border border-slate-200/90 border-l-4 bg-white px-4 py-3 shadow-sm ${accentClass}`}>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-950">{value}</p>
-      <p className="mt-1 text-[11px] text-slate-400">{footer}</p>
+    <div
+      className={`flex min-h-[5.5rem] flex-col rounded-2xl border border-slate-200/90 border-l-4 bg-white px-4 py-3 shadow-sm ${accentClass}`}
+    >
+      <p className="text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="flex flex-1 items-center justify-center text-2xl font-bold tabular-nums text-slate-950">{value}</p>
     </div>
   );
 }
@@ -111,6 +112,7 @@ function rowToFormValues(row) {
   return {
     employeeId: row.employeeId || "",
     employeeName: row.employeeName || "",
+    employeeSecondName: row.employeeSecondName || "",
     aadhaarNumber: row.aadhaarNumber || "",
     mobileNumber: row.mobileNumber || "",
     username: row.username || "",
@@ -180,6 +182,7 @@ export default function EmployeePage() {
           id: employee.id,
           employeeId: employee.employeeId || "--",
           employeeName: employee.displayName || employee.username || "Employee",
+          employeeSecondName: employee.secondName || "",
           mobileNumber: employee.phone || "--",
           username: employee.username || employee.email?.split("@")[0] || "--",
           aadhaarNumber: employee.aadhaarNumber || "",
@@ -218,6 +221,7 @@ export default function EmployeePage() {
       const matchesSearch =
         !query ||
         row.employeeName.toLowerCase().includes(query) ||
+        row.employeeSecondName.toLowerCase().includes(query) ||
         row.employeeId.toLowerCase().includes(query) ||
         row.username.toLowerCase().includes(query);
       return matchesStatus && matchesSearch;
@@ -234,6 +238,7 @@ export default function EmployeePage() {
           employeeId: values.employeeId,
           username: values.username,
           displayName: values.employeeName,
+          secondName: values.employeeSecondName,
           phone: values.mobileNumber,
           aadhaarNumber: values.aadhaarNumber,
           employeeStatus: values.status,
@@ -243,6 +248,7 @@ export default function EmployeePage() {
       } else {
         await createManagedEmployee({
           displayName: values.employeeName,
+          secondName: values.employeeSecondName,
           username: values.username,
           password: values.password,
           aadhaarNumber: values.aadhaarNumber,
@@ -317,30 +323,10 @@ export default function EmployeePage() {
           {formError && !formModal ? <div className="app-alert-error mb-4">{formError}</div> : null}
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard
-              label="Total Employees"
-              value={String(stats.totalEmployees)}
-              footer="All registered employees"
-              accent="blue"
-            />
-            <SummaryCard
-              label="Active Employees"
-              value={String(stats.activeEmployees)}
-              footer="Currently active"
-              accent="green"
-            />
-            <SummaryCard
-              label="Assigned Customers"
-              value={String(stats.totalAssignedCustomers)}
-              footer="Customers assigned"
-              accent="purple"
-            />
-            <SummaryCard
-              label="Total Collections"
-              value={formatRupee(stats.totalCollections)}
-              footer="Total amount collected"
-              accent="amber"
-            />
+            <SummaryCard label="Total Employees" value={String(stats.totalEmployees)} accent="blue" />
+            <SummaryCard label="Active Employees" value={String(stats.activeEmployees)} accent="green" />
+            <SummaryCard label="Assigned Customers" value={String(stats.totalAssignedCustomers)} accent="purple" />
+            <SummaryCard label="Total Collections" value={formatRupee(stats.totalCollections)} accent="amber" />
           </div>
 
           <div className="mt-4 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
@@ -400,12 +386,19 @@ export default function EmployeePage() {
                         <td className="px-3 py-3 text-center text-xs font-semibold text-slate-400">{index + 1}</td>
                         <td className="px-3 py-3">
                           <div className="flex min-w-0 items-center gap-2">
-                            <EmployeeAvatar name={row.employeeName} />
+                            <EmployeeAvatar name={`${row.employeeName} ${row.employeeSecondName}`.trim()} />
                             <div className="min-w-0">
-                              <span className="block truncate text-sm font-semibold text-slate-900" title={row.employeeName}>
+                              <span
+                                className="block truncate text-sm font-semibold text-slate-900"
+                                title={`${row.employeeName}${row.employeeSecondName ? ` ${row.employeeSecondName}` : ""}`}
+                              >
                                 {row.employeeName}
                               </span>
-                              <span className="block text-[11px] text-slate-500">Employee</span>
+                              {row.employeeSecondName ? (
+                                <span className="block truncate text-[11px] text-slate-500" title={row.employeeSecondName}>
+                                  {row.employeeSecondName}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
                         </td>
