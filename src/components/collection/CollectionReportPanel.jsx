@@ -386,18 +386,8 @@ export default function CollectionReportPanel() {
         );
       })
       .flatMap((customer) => {
-        const customerEntries = (entriesByCustomerId.get(customer.customerId) || []).filter((entry) => {
-          if (selectedEmployee && !employeeMatchesCollector(selectedEmployee, entry)) return false;
-          const entryDate = parseInputDate(entry.collectionDate || entry.submittedAt);
-          if (fromDate && entryDate && entryDate < fromDate) return false;
-          if (toDate && entryDate) {
-            const end = new Date(toDate);
-            end.setHours(23, 59, 59, 999);
-            if (entryDate > end) return false;
-          }
-          return true;
-        });
-        const latestPaid = customerEntries
+        const allCustomerEntries = entriesByCustomerId.get(customer.customerId) || [];
+        const latestPaid = allCustomerEntries
           .filter((entry) => String(entry.approvalStatus || "").toLowerCase() === "approved")
           .sort((a, b) => String(b.collectionDate || "").localeCompare(String(a.collectionDate || "")))[0];
         const rowEmployee =
@@ -405,7 +395,7 @@ export default function CollectionReportPanel() {
         const { dayCenter, subCenter } = resolveCustomerCenterDisplay(customer, allCenters);
         return buildCollectionReportRowsForCustomer(
           enrichCustomerForCollection(customer),
-          customerEntries,
+          allCustomerEntries,
           {
             dayCenter,
             subCenter,
@@ -858,10 +848,19 @@ export default function CollectionReportPanel() {
                           row.installmentNumber != null
                             ? makePaidEntryKey(row.customerId, row.installmentNumber)
                             : "";
-                        const todayPaid = getTodayPaidDisplayForCustomer(row.customerId, paidState);
+                        const todayPaid = getTodayPaidDisplayForCustomer(
+                          row.customerId,
+                          paidState,
+                          new Date(),
+                          row.installmentNumber
+                        );
                         const committedAmount = entryKey ? getCommittedPaidAmount(entryKey, paidState) : "";
                         const draftValue = entryKey ? (paidState.drafts[entryKey] ?? "") : "";
-                        const greenAmount = todayPaid?.amount || committedAmount;
+                        const approvedPaidAmount =
+                          row.isCurrentTenurePaid && Number(row.currentTenurePaidAmount || 0) > 0
+                            ? String(row.currentTenurePaidAmount)
+                            : "";
+                        const greenAmount = committedAmount || todayPaid?.amount || approvedPaidAmount;
                         const showGreenPaid = draftValue === "" && Boolean(greenAmount);
                         const showEditableInput =
                           row.showPaidInput &&
@@ -885,7 +884,7 @@ export default function CollectionReportPanel() {
                             {showGreenPaid ? (
                               <span
                                 className="text-sm font-semibold tabular-nums text-emerald-700"
-                                title={`Paid today ${formatCurrency(Number(greenAmount))}`}
+                                title={`Paid ${formatCurrency(Number(greenAmount))}`}
                               >
                                 {formatCurrency(Number(greenAmount))}
                               </span>

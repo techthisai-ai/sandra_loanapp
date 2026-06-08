@@ -2,6 +2,7 @@ import {
   buildInstallmentSchedule,
   getInstallmentPeriodLabel,
   isInstallmentPaid,
+  safeDate,
   startOfDay,
 } from "./customerProfileSchedule.js";
 import { normalizeCollectionFrequency } from "./loanTimelineDates.js";
@@ -14,6 +15,57 @@ import {
 /** Paid when approved collections or a committed manual entry covers the full installment due. */
 export function isInstallmentPaidForReport(item) {
   return isInstallmentPaid(item);
+}
+
+function getApprovedPaymentsForInstallment(customer, customerEntries, installmentItem) {
+  if (!installmentItem) return [];
+
+  const schedule = buildInstallmentSchedule(customer, customerEntries);
+  const dueDay = startOfDay(installmentItem.dueDate);
+  const prevItem = schedule.find((item) => item.installmentNumber === installmentItem.installmentNumber - 1);
+  const windowStart = prevItem ? startOfDay(prevItem.dueDate) : dueDay;
+  const nextItem = schedule.find((item) => item.installmentNumber === installmentItem.installmentNumber + 1);
+  const windowEnd = nextItem ? startOfDay(nextItem.dueDate) : null;
+
+  return customerEntries.filter((entry) => {
+    if (String(entry.approvalStatus || "").toLowerCase() !== "approved") return false;
+    if (Number(entry.amount || 0) <= 0) return false;
+    const entryDay = safeDate(entry.collectionDate || entry.submittedAt);
+    if (!entryDay) return false;
+    const paidDay = startOfDay(entryDay);
+    if (paidDay < windowStart) return false;
+    if (windowEnd && paidDay >= windowEnd) return false;
+    return true;
+  });
+}
+
+/**
+ * Whether the current calendar tenure is fully paid (approved collections or manual Paid field).
+ * Payment date does not matter — yesterday, last week, and last month all count.
+ */
+export function resolveCurrentTenurePayment(customer, customerEntries, calendarCurrent) {
+  if (!calendarCurrent) {
+    return { isPaid: false, paidAmount: 0 };
+  }
+
+  const dueAmount = Number(calendarCurrent.dueAmount || 0);
+
+  if (isInstallmentPaidForReport(calendarCurrent)) {
+    return {
+      isPaid: true,
+      paidAmount: Number(calendarCurrent.paidAmount || 0),
+    };
+  }
+
+  const approvedEntries = getApprovedPaymentsForInstallment(customer, customerEntries, calendarCurrent);
+  const approvedAmount = approvedEntries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+
+  if (dueAmount > 0 && approvedAmount >= dueAmount) {
+    return { isPaid: true, paidAmount: approvedAmount };
+  }
+
+  const paidAmount = Math.max(Number(calendarCurrent.paidAmount || 0), approvedAmount);
+  return { isPaid: false, paidAmount };
 }
 
 export function buildScheduleWithManualPayments(customer, customerEntries, paidState) {
@@ -162,8 +214,8 @@ function summaryRow(base, calendarCurrent, rowKind) {
 /**
  * Build 0..N collection report rows for one customer based on payment filter.
  * - All: one summary row per customer (input for current calendar tenure)
- * - Paid: customers with an amount entered in the Paid field for current tenure
- * - Unpaid: customers with an empty Paid field for current tenure
+ * - Paid: admin-approved (or manual Paid field) for the current calendar tenure
+ * - Unpaid: current calendar tenure not yet fully paid
  */
 export function buildCollectionReportRowsForCustomer(
   customer,
@@ -194,22 +246,55 @@ export function buildCollectionReportRowsForCustomer(
     paidAmountTotal: totalCollected,
   };
 
+  const isFullyPaid = remainingBalance <= 0;
   const currentInstallmentNumber = calendarCurrent?.installmentNumber ?? null;
+  const currentDueAmount = Number(calendarCurrent?.dueAmount || 0);
+  const tenurePayment = resolveCurrentTenurePayment(customer, customerEntries, calendarCurrent);
+  const isCurrentTenurePaid = tenurePayment.isPaid;
+  const currentTenurePaidAmount = tenurePayment.paidAmount;
   const paidFieldCommitted = isPaidFieldCommittedForInstallment(
     customer.customerId,
     currentInstallmentNumber,
-    paidState
+    paidState,
+    currentDueAmount
   );
+  const isPaidForFilter = isFullyPaid || isCurrentTenurePaid || paidFieldCommitted;
+  const clearedTenure = isFullyPaid
+    ? {
+        pendingTenures: [],
+        pendingTenuresLabel: "—",
+        pendingTenuresFullLabel: "—",
+        pendingAmountRaw: 0,
+        pendingAmountDisplay: "—",
+        pendingBreakdown: [],
+        unpaidInstallmentCount: 0,
+        nearEndAlert: false,
+        longTermNoPayment: false,
+        currentDueAmount: "—",
+      }
+    : {};
+
+  const rowBase = {
+    ...base,
+    ...clearedTenure,
+    isFullyPaid,
+    isCurrentTenurePaid,
+    currentTenurePaidAmount,
+    paidDisplay:
+      isCurrentTenurePaid && currentTenurePaidAmount > 0
+        ? formatCurrency(currentTenurePaidAmount)
+        : "",
+  };
 
   if (paymentStatusFilter === "Paid") {
-    if (!calendarCurrent || !paidFieldCommitted) return [];
-    return [summaryRow(base, calendarCurrent, "paid")];
+    if (!calendarCurrent || !isPaidForFilter) return [];
+    return [summaryRow(rowBase, calendarCurrent, "paid")];
   }
 
   if (paymentStatusFilter === "Unpaid") {
-    if (!calendarCurrent || paidFieldCommitted) return [];
-    return [summaryRow(base, calendarCurrent, "unpaid")];
+    if (!calendarCurrent || isPaidForFilter) return [];
+    return [summaryRow(rowBase, calendarCurrent, "unpaid")];
   }
 
-  return [summaryRow(base, calendarCurrent, "all")];
+  return [summaryRow(rowBase, calendarCurrent, "all")];
 }

@@ -194,9 +194,7 @@ function CompactProgressCard({ collected, target }) {
       <div className="pointer-events-none absolute right-0 top-0 h-36 w-36 translate-x-1/4 -translate-y-1/3 rounded-full bg-blue-500/[0.07] blur-3xl" />
       <div className="relative flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <DashSectionLabel>Loan performance</DashSectionLabel>
-          <h3 className="mt-1 text-base font-bold tracking-tight text-slate-950">Recovery vs payable</h3>
-          <p className="mt-0.5 text-[11px] text-slate-500">Approved collections vs active book.</p>
+          <h3 className="text-base font-bold tracking-tight text-slate-950">Recovery vs payable</h3>
         </div>
         <div className="relative flex h-[52px] w-[52px] shrink-0 items-center justify-center">
           <svg className="absolute inset-0 -rotate-90" viewBox="0 0 36 36">
@@ -853,11 +851,7 @@ export default function Dashboard() {
             <div className="pointer-events-none absolute -right-12 top-0 h-44 w-44 rounded-full bg-blue-500/[0.07] blur-3xl" />
             <div className="relative flex min-w-0 flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 pr-2">
-                <DashSectionLabel>Wallet & liquidity</DashSectionLabel>
-                <h2 className="mt-1 text-lg font-bold tracking-tight text-slate-950">Capital flow</h2>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Payable {formatCurrency(metrics.totalPayable)} · {metrics.totalCustomers} customers
-                </p>
+                <h2 className="text-lg font-bold tracking-tight text-slate-950">Capital flow</h2>
               </div>
               <div className="flex shrink-0 items-center gap-1 rounded-full bg-sky-500/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wide text-sky-800 ring-1 ring-sky-200/50">
                 <Activity className="h-3.5 w-3.5" strokeWidth={2} />
@@ -986,11 +980,7 @@ export default function Dashboard() {
           <div className="pointer-events-none absolute -right-20 top-0 h-40 w-40 rounded-full bg-blue-500/[0.06] blur-3xl" />
           <div className="relative flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
-              <DashSectionLabel>Recent transactions</DashSectionLabel>
-              <h3 className="mt-1 text-lg font-bold tracking-tight text-slate-950">Wallet ledger</h3>
-              <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-slate-500">
-                Credits, debits, and balance after each entry — export for audit anytime.
-              </p>
+              <h3 className="text-lg font-bold tracking-tight text-slate-950">Wallet ledger</h3>
             </div>
             <div className="flex flex-wrap gap-1.5 sm:justify-end">
               <button

@@ -622,7 +622,7 @@ export default function CustomerCreateStreamlinedForm({
               onClear={() => clearAttachment("customerPhotoName", setApplicantPhotoPreview, "customerPhotoDataUrl")}
               required={strictOnboarding}
               invalid={isHighlighted("customerPhotoName")}
-              helperText={isHighlighted("customerPhotoName") ? "Applicant photo is required." : "Upload applicant image"}
+              helperText={isHighlighted("customerPhotoName") ? "Applicant photo is required." : ""}
             />
           </div>
           <FieldError message={isHighlighted("customerPhotoName") ? "Applicant photo is required before submission." : ""} />
@@ -833,7 +833,7 @@ export default function CustomerCreateStreamlinedForm({
                 onClear={() => clearAttachment("idDocumentName")}
                 required={strictOnboarding}
                 invalid={isHighlighted("idDocumentName")}
-                helperText={isHighlighted("idDocumentName") ? "ID proof is required." : "Government ID image or PDF"}
+                helperText={isHighlighted("idDocumentName") ? "ID proof is required." : ""}
               />
               <DocumentCompactAttach
                 label="Address Proof"
@@ -845,8 +845,6 @@ export default function CustomerCreateStreamlinedForm({
                 onClear={() => clearAttachment("addressProofName")}
                 required={false}
                 invalid={false}
-                emptyHint="Upload address proof if available"
-                helperText="Upload address proof if available"
               />
               <DocumentCompactAttach
                 label="Loan Document"
@@ -858,8 +856,6 @@ export default function CustomerCreateStreamlinedForm({
                 onClear={() => clearAttachment("loanAgreementName")}
                 required={false}
                 invalid={false}
-                emptyHint="Upload loan document if available"
-                helperText="Upload loan document if available"
               />
             </div>
             <FieldError
@@ -875,9 +871,6 @@ export default function CustomerCreateStreamlinedForm({
               <StatusPill ok={Boolean(crifDemoResult)} label="Eligibility" />
               <StatusPill ok={docsAttached >= 4} label={`Docs ${docsAttached}/4`} />
             </div>
-            <p className="mt-2 text-[10px] leading-snug text-slate-500">
-              Nominee and loan terms are added when you apply a loan from the customer list.
-            </p>
           </div>
 
           <div className="flex flex-col gap-2 border-t border-slate-200/70 pt-3 sm:flex-row sm:justify-end">

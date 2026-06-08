@@ -157,8 +157,9 @@ export function computeCustomerCollectionDetails(customer, customerEntries) {
   const daysSinceLastPayment = getDaysSinceLastPayment(customer, customerEntries);
   const daysSinceFirstOverdue = getDaysSinceFirstOverdue(schedule);
   const longTermNoPayment =
-    (pendingMonths.length > 0 && daysSinceFirstOverdue >= LONG_TERM_NO_PAYMENT_DAYS) ||
-    (balanceAmount > 0 && daysSinceLastPayment >= LONG_TERM_NO_PAYMENT_DAYS);
+    balanceAmount > 0 &&
+    ((pendingMonths.length > 0 && daysSinceFirstOverdue >= LONG_TERM_NO_PAYMENT_DAYS) ||
+      daysSinceLastPayment >= LONG_TERM_NO_PAYMENT_DAYS);
 
   return {
     paidInterest: formatMonthList(paidMonths),

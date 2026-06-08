@@ -2,10 +2,10 @@
  * Collection Report alert system — used only on the Collection Report page.
  *
  * Priority (highest first):
- * 1. Not paid 1+ year OR 3+ overdue months → entire row red TEXT only (no background)
- * 2. Not paid 1–2 months → Customer ID cell background red (normal text)
- * 3. Interest about to expire → Customer ID cell background yellow (normal text)
- * 4. Otherwise (paid / no overdue) → normal styling
+ * 1. Not paid 1+ year → entire row red TEXT only (customer details columns)
+ * 2. Unpaid 2–8 months (overdue tenures before current) → Customer ID cell background red
+ * 3. Interest / loan about to expire → Customer ID cell background yellow
+ * 4. Otherwise (paid / 0–1 month overdue) → normal styling
  */
 
 export const COLLECTION_REPORT_ALERT_TEXT = {
@@ -27,14 +27,27 @@ const ALERT_NONE = {
 };
 
 /**
- * @param {object} row Report row from buildCustomerDetailRow.
+ * @param {object} row Report row from buildCustomerDetailRow / collection report rows.
  */
+function isCustomerFullyPaid(row) {
+  const balance = Number(row.balanceAmountRaw ?? NaN);
+  if (!Number.isNaN(balance) && balance <= 0) return true;
+  const pendingAmount = Number(row.pendingAmountRaw ?? NaN);
+  if (!Number.isNaN(pendingAmount) && pendingAmount <= 0) {
+    const overdueMonths = Array.isArray(row.pendingTenures) ? row.pendingTenures.length : 0;
+    if (overdueMonths === 0) return true;
+  }
+  return false;
+}
+
 export function getCollectionReportAlert(row) {
   if (!row) return ALERT_NONE;
 
-  const overdueCount = Array.isArray(row.pendingTenures) ? row.pendingTenures.length : 0;
+  if (row.isFullyPaid || isCustomerFullyPaid(row)) return ALERT_NONE;
 
-  if (row.longTermNoPayment || overdueCount >= 3) {
+  const overdueMonths = Array.isArray(row.pendingTenures) ? row.pendingTenures.length : 0;
+
+  if (row.longTermNoPayment) {
     return {
       kind: "severeUnpaid",
       scope: "fullRow",
@@ -45,9 +58,9 @@ export function getCollectionReportAlert(row) {
     };
   }
 
-  if (overdueCount >= 1 && overdueCount <= 2) {
+  if (overdueMonths >= 2 && overdueMonths <= 8) {
     return {
-      kind: "overdue1to2",
+      kind: "overdue2to8",
       scope: "customerIdCell",
       textClass: "",
       cellBgClass: COLLECTION_REPORT_ALERT_CELL_BG.red,

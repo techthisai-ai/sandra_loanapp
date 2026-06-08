@@ -144,13 +144,18 @@ export function getCommittedPaidAmount(entryKey, paidState) {
   return sanitizePaidAmount(paidState?.committed?.[entryKey]?.amount);
 }
 
-/** Matches Collection Report Paid cell: green amount shown vs empty Amount input. */
-export function isPaidFieldCommittedForInstallment(customerId, installmentNumber, paidState) {
+/**
+ * Manual Paid-field commit for the current installment (any date — not today-only).
+ * Used by the Paid/Unpaid list filter.
+ */
+export function isPaidFieldCommittedForInstallment(customerId, installmentNumber, paidState, dueAmount = 0) {
   if (!customerId || installmentNumber == null) return false;
   const entryKey = makePaidEntryKey(customerId, installmentNumber);
-  const committedAmount = getCommittedPaidAmount(entryKey, paidState);
-  const todayPaid = getTodayPaidDisplayForCustomer(customerId, paidState);
-  return Boolean(todayPaid?.amount || committedAmount);
+  const committedAmount = Number(getCommittedPaidAmount(entryKey, paidState) || 0);
+  if (!committedAmount) return false;
+  const due = Number(dueAmount || 0);
+  if (due > 0) return committedAmount >= due;
+  return true;
 }
 
 function isSameCalendarDay(isoDate, reference = new Date()) {
@@ -159,13 +164,22 @@ function isSameCalendarDay(isoDate, reference = new Date()) {
   return paidDay === reference.toISOString().slice(0, 10);
 }
 
-/** Latest manual payment committed today for a customer (stays visible in the Paid column all day). */
-export function getTodayPaidDisplayForCustomer(customerId, paidState, reference = new Date()) {
+/**
+ * Latest manual payment committed today for a customer.
+ * When installmentNumber is provided, only that week's/month's Paid cell is considered.
+ */
+export function getTodayPaidDisplayForCustomer(
+  customerId,
+  paidState,
+  reference = new Date(),
+  installmentNumber = null
+) {
   let latest = null;
 
   Object.entries(paidState?.committed || {}).forEach(([key, record]) => {
     const parsed = parsePaidEntryKey(key);
     if (parsed.customerId !== customerId) return;
+    if (installmentNumber != null && parsed.installmentNumber !== installmentNumber) return;
     if (!isSameCalendarDay(record?.paidAt, reference)) return;
 
     const amount = sanitizePaidAmount(record?.amount);

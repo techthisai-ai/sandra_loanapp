@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Eye, EyeOff, LogOut } from "lucide-react";
 import { signOut } from "firebase/auth";
@@ -6,11 +6,11 @@ import BrandLogo from "../components/BrandLogo";
 import { auth } from "../firebase/config";
 import { loginWithRoleTimed } from "../services/userAuth";
 import useAuth from "../hooks/useAuth";
-import { clearAuthSession, markAuthSessionActive } from "../utils/authSession";
+import { clearAuthSession, isAuthSessionActive, markAuthSessionActive } from "../utils/authSession";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { profile, user, loading, refreshProfile, setProfile } = useAuth();
+  const { profile, user, loading, setProfileFromLogin } = useAuth();
   const identifierRef = useRef(null);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -20,6 +20,11 @@ export default function Login() {
   const [signingOut, setSigningOut] = useState(false);
 
   const brokenSession = Boolean(!loading && user && !profile);
+
+  useEffect(() => {
+    if (loading || !user || !profile || !isAuthSessionActive()) return;
+    navigate(profile.role === "admin" ? "/dashboard" : "/employee", { replace: true });
+  }, [loading, navigate, profile, user]);
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -36,10 +41,9 @@ export default function Login() {
     }
   };
 
-  const finishLogin = async (signedInProfile, credential) => {
+  const finishLogin = (signedInProfile, credential) => {
     markAuthSessionActive();
-    setProfile(signedInProfile);
-    await refreshProfile(credential.user);
+    setProfileFromLogin(signedInProfile, credential.user.uid);
     navigate(signedInProfile.role === "admin" ? "/dashboard" : "/employee", { replace: true });
   };
 
@@ -65,7 +69,7 @@ export default function Login() {
         email: trimmedIdentifier,
         password: trimmedPassword,
       });
-      await finishLogin(signedInProfile, credential);
+      finishLogin(signedInProfile, credential);
     } catch (loginError) {
       setError(loginError.message || "Login failed");
     } finally {

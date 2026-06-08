@@ -101,9 +101,11 @@ export function DocumentCompactAttach({
           <FileImage className="h-4.5 w-4.5" />
         </div>
         <p className="mt-2 text-[11px] font-medium text-slate-600">{hasFile ? "Document ready" : resolvedEmptyHint}</p>
-        <p className="mt-1 truncate text-[10px] text-slate-400" title={value || undefined}>
-          {hasFile ? value : helperText || "JPG, PNG, PDF supported"}
-        </p>
+        {hasFile || helperText ? (
+          <p className="mt-1 truncate text-[10px] text-slate-400" title={value || undefined}>
+            {hasFile ? value : helperText}
+          </p>
+        ) : null}
       </div>
       ) : (
         <p className="loan-apply-hint mt-1.5 truncate text-slate-400" title={value || undefined}>
@@ -180,9 +182,9 @@ export function DocumentCompactAttach({
             <X className={`${dense ? "h-3 w-3" : "h-3.5 w-3.5"}`} />
           </button>
         </div>
-      ) : !dense ? (
+      ) : !dense && helperText ? (
         <p className={`mt-2 text-[10px] font-medium ${invalid ? "text-rose-600" : "text-slate-400"}`}>
-          {helperText || "No file selected"}
+          {helperText}
         </p>
       ) : null}
     </div>
@@ -363,16 +365,18 @@ export function DocumentPhotoTile({
         title={`Camera — ${label}`}
       />
 
-      <p
-        className={`w-full px-0.5 text-center leading-snug ${
-          dense ? "loan-apply-hint mt-1" : "mt-2.5 text-[10px] font-medium"
-        } ${
-          fileName ? "text-emerald-800" : invalid ? "text-rose-600" : "text-slate-400"
-        }`}
-        title={fileName || undefined}
-      >
-        <span className="block truncate">{fileName || helperText || "No file selected"}</span>
-      </p>
+      {fileName || helperText ? (
+        <p
+          className={`w-full px-0.5 text-center leading-snug ${
+            dense ? "loan-apply-hint mt-1" : "mt-2.5 text-[10px] font-medium"
+          } ${
+            fileName ? "text-emerald-800" : invalid ? "text-rose-600" : "text-slate-400"
+          }`}
+          title={fileName || undefined}
+        >
+          <span className="block truncate">{fileName || helperText}</span>
+        </p>
+      ) : null}
     </div>
   );
 }

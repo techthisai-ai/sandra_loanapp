@@ -92,25 +92,54 @@ export function buildInstallmentSchedule(customer, customerEntries) {
   const approvedEntries = [...customerEntries]
     .filter((entry) => String(entry.approvalStatus || "").toLowerCase() === "approved")
     .sort((a, b) => String(a.collectionDate || a.submittedAt || "").localeCompare(String(b.collectionDate || b.submittedAt || "")));
-  let remainingDue = totalPayable;
-  let cumulativeCollected = 0;
 
-  return Array.from({ length: installmentCount }, (_, index) => {
+  let remainingDue = totalPayable;
+  const installmentSpecs = Array.from({ length: installmentCount }, (_, index) => {
     const dueAmount =
       index === installmentCount - 1 ? Math.max(remainingDue, 0) : Math.min(baseInstallment, remainingDue);
     remainingDue -= dueAmount;
-    const dueDate = addDays(emiStartDate, intervalDays * index);
-    const approvedEntry = approvedEntries[index] || null;
-    const paymentDate = approvedEntry?.collectionDate || approvedEntry?.submittedAt || "";
-    const paidAmount = Number(approvedEntry?.amount || 0);
+    return {
+      installmentNumber: index + 1,
+      dueDate: addDays(emiStartDate, intervalDays * index),
+      dueAmount,
+    };
+  });
+
+  let entryIndex = 0;
+  let entryRemaining = approvedEntries.length ? Number(approvedEntries[0].amount || 0) : 0;
+  let cumulativeCollected = 0;
+
+  return installmentSpecs.map((spec) => {
+    const { installmentNumber, dueDate, dueAmount } = spec;
+    let paidAmount = 0;
+    let appliedEntry = null;
+
+    while (paidAmount < dueAmount && entryIndex < approvedEntries.length) {
+      const entry = approvedEntries[entryIndex];
+      const take = Math.min(entryRemaining, dueAmount - paidAmount);
+      paidAmount += take;
+      entryRemaining -= take;
+      appliedEntry = entry;
+      if (entryRemaining <= 0) {
+        entryIndex += 1;
+        entryRemaining =
+          entryIndex < approvedEntries.length ? Number(approvedEntries[entryIndex].amount || 0) : 0;
+      }
+    }
+
     cumulativeCollected += paidAmount;
     const pendingAmount = Math.max(dueAmount - paidAmount, 0);
+    const paymentDate = appliedEntry?.collectionDate || appliedEntry?.submittedAt || "";
     const lateDays =
-      approvedEntry && safeDate(paymentDate)
+      appliedEntry && safeDate(paymentDate)
         ? Math.max(Math.ceil((startOfDay(safeDate(paymentDate)) - startOfDay(dueDate)) / 86400000), 0)
         : 0;
     const collectedBy =
-      approvedEntry?.collectorName || approvedEntry?.createdBy || approvedEntry?.employeeId || approvedEntry?.submittedBy || "—";
+      appliedEntry?.collectorName ||
+      appliedEntry?.createdBy ||
+      appliedEntry?.employeeId ||
+      appliedEntry?.submittedBy ||
+      "—";
     let status = "Pending";
     if (paidAmount >= dueAmount && paidAmount > 0) {
       status = lateDays > 0 ? "Late paid" : "Paid";
@@ -121,7 +150,7 @@ export function buildInstallmentSchedule(customer, customerEntries) {
     }
 
     return {
-      installmentNumber: index + 1,
+      installmentNumber,
       dueDate,
       dueAmount,
       paidAmount,
@@ -132,9 +161,9 @@ export function buildInstallmentSchedule(customer, customerEntries) {
       lateDays,
       remainingBalanceAfter: Math.max(totalPayable - cumulativeCollected, 0),
       remarks:
-        approvedEntry?.note ||
-        approvedEntry?.remarks ||
-        approvedEntry?.description ||
+        appliedEntry?.note ||
+        appliedEntry?.remarks ||
+        appliedEntry?.description ||
         (lateDays > 0 ? `Late ${lateDays}d` : ""),
     };
   });

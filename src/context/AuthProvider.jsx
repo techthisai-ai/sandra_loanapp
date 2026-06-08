@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../firebase/config";
 import { loadCurrentProfile, seedDefaultAccounts } from "../services/userAuth";
 import AuthContext from "./authContext";
 
-const AUTH_INIT_TIMEOUT_MS = 12_000;
+const AUTH_INIT_TIMEOUT_MS = 25_000;
 
 async function withTimeout(promise, timeoutMs, label) {
   let timeoutId;
@@ -27,16 +27,39 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const profileUidRef = useRef(null);
 
   const refreshProfile = async (targetUser = auth.currentUser) => {
     if (!targetUser) {
       setProfile(null);
+      profileUidRef.current = null;
       return null;
     }
 
-    const currentProfile = await loadCurrentProfile(targetUser);
-    setProfile(currentProfile);
-    return currentProfile;
+    try {
+      const currentProfile = await loadCurrentProfile(targetUser);
+      if (currentProfile) {
+        setProfile(currentProfile);
+        profileUidRef.current = targetUser.uid;
+        return currentProfile;
+      }
+
+      if (profileUidRef.current !== targetUser.uid) {
+        setProfile(null);
+      }
+      return null;
+    } catch (profileError) {
+      if (profileUidRef.current !== targetUser.uid) {
+        setProfile(null);
+      }
+      throw profileError;
+    }
+  };
+
+  const setProfileFromLogin = (nextProfile, uid) => {
+    if (!nextProfile || !uid) return;
+    setProfile(nextProfile);
+    profileUidRef.current = uid;
   };
 
   useEffect(() => {
@@ -45,6 +68,7 @@ export function AuthProvider({ children }) {
 
       if (!firebaseUser) {
         setProfile(null);
+        profileUidRef.current = null;
         setLoading(false);
         void seedDefaultAccounts().catch((bootstrapError) => {
           console.warn("[bootstrap] Default admin setup:", bootstrapError);
@@ -53,12 +77,16 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        // Ensure Firestore requests include a fresh ID token (avoids permission-denied right after sign-in or tab restore).
-        await withTimeout(firebaseUser.getIdToken(true), AUTH_INIT_TIMEOUT_MS, "Auth session");
+        await withTimeout(firebaseUser.getIdToken(), AUTH_INIT_TIMEOUT_MS, "Auth session");
         await withTimeout(refreshProfile(firebaseUser), AUTH_INIT_TIMEOUT_MS, "Profile load");
       } catch (initError) {
         console.warn("[auth] session init:", initError?.message || initError);
-        setProfile(null);
+        setProfile((previous) => {
+          if (previous && profileUidRef.current === firebaseUser.uid) {
+            return previous;
+          }
+          return null;
+        });
       } finally {
         setLoading(false);
       }
@@ -75,7 +103,9 @@ export function AuthProvider({ children }) {
       profileRef,
       (snapshot) => {
         if (snapshot.exists()) {
-          setProfile(snapshot.data());
+          const nextProfile = snapshot.data();
+          setProfile(nextProfile);
+          profileUidRef.current = user.uid;
         }
       },
       (listenerError) => {
@@ -91,6 +121,7 @@ export function AuthProvider({ children }) {
       user,
       profile,
       setProfile,
+      setProfileFromLogin,
       refreshProfile,
       loading,
       isAuthenticated: Boolean(user && profile),
