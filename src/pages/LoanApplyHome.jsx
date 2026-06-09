@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { CalendarDays, Search, UsersRound } from "lucide-react";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import LoanRequestsPanel from "../components/loan/LoanRequestsPanel";
+import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import { DEFAULT_DAY_CENTERS, loadLoanCenters } from "../constants/dayCenters";
 import { listAllCustomerAmountEntries, listCustomers } from "../services/userAuth";
 
@@ -111,7 +112,12 @@ function hasValidLoanApplied(customer) {
 export default function LoanApplyHome() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { loanRequests } = useLoanDataSync();
   const mainTab = searchParams.get("tab") === "requests" ? "requests" : "apply";
+  const pendingRequestCount = useMemo(
+    () => loanRequests.filter((row) => String(row.status || "").toLowerCase() === "pending").length,
+    [loanRequests]
+  );
 
   const setMainTab = (tab) => {
     if (tab === "requests") {
@@ -392,6 +398,11 @@ export default function LoanApplyHome() {
               }`}
             >
               Loan requests
+              {pendingRequestCount > 0 ? (
+                <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">
+                  {pendingRequestCount > 99 ? "99+" : pendingRequestCount}
+                </span>
+              ) : null}
             </button>
           </div>
         </div>

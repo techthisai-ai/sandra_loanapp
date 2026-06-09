@@ -1698,90 +1698,111 @@ export default function Reports() {
                 </div>
               </div>
 
-              <div className="reports-detail-toolbar min-w-0 rounded-2xl border border-slate-200/80 bg-slate-50/50 px-2 py-2">
-                <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setCollectionPreviewOpen(true)}
-                    title="View report"
-                    className="group inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-800 transition hover:border-blue-200 hover:bg-blue-50/70"
-                  >
-                    <Eye className="h-3.5 w-3.5 shrink-0 text-blue-600" aria-hidden />
-                    View
-                  </button>
-                  <button
-                    type="button"
-                    disabled={collectionExcelLoading}
-                    onClick={handleCollectionExcelDownload}
-                    title="Export Excel"
-                    className="app-button-primary inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium transition disabled:pointer-events-none disabled:opacity-60"
-                  >
-                    {collectionExcelLoading ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
-                    Excel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={collectionPdfLoading}
-                    onClick={handleCollectionPdfDownload}
-                    title="Export PDF"
-                    className="app-button-secondary inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium transition disabled:pointer-events-none disabled:opacity-60"
-                  >
-                    {collectionPdfLoading ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-                    PDF
-                  </button>
-                  <span
-                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50/90 px-2 text-[11px] font-semibold text-emerald-900"
-                    title="Live sync"
-                  >
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <div className="reports-detail-toolbar min-w-0 rounded-2xl border border-slate-200/80 bg-slate-50/50 px-2.5 py-2 sm:px-3">
+                <div className="reports-detail-toolbar-row flex w-full min-w-0 flex-wrap items-end gap-2">
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setCollectionPreviewOpen(true)}
+                      title="View report"
+                      className="group inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-800 transition hover:border-blue-200 hover:bg-blue-50/70"
+                    >
+                      <Eye className="h-3.5 w-3.5 shrink-0 text-blue-600" aria-hidden />
+                      View
+                    </button>
+                    <button
+                      type="button"
+                      disabled={collectionExcelLoading}
+                      onClick={handleCollectionExcelDownload}
+                      title="Export Excel"
+                      className="app-button-primary inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium transition disabled:pointer-events-none disabled:opacity-60"
+                    >
+                      {collectionExcelLoading ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
+                      Excel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={collectionPdfLoading}
+                      onClick={handleCollectionPdfDownload}
+                      title="Export PDF"
+                      className="app-button-secondary inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium transition disabled:pointer-events-none disabled:opacity-60"
+                    >
+                      {collectionPdfLoading ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                      PDF
+                    </button>
+                    <span
+                      className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50/90 px-2 text-[11px] font-semibold text-emerald-900"
+                      title="Live sync"
+                    >
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      </span>
+                      Sync
                     </span>
-                    Sync
-                  </span>
-
-                  <div className="relative w-[5.5rem] shrink-0">
-                    <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                    <input
-                      value={detailSearch}
-                      onChange={(e) => setDetailSearch(e.target.value)}
-                      placeholder="Search"
-                      className="app-input reports-detail-toolbar-field reports-detail-toolbar-search h-8 w-full rounded-lg bg-white pr-2 text-xs"
-                    />
                   </div>
 
-                  <select
-                    value={centerFilter}
-                    onChange={(e) => {
-                      setCenterFilter(e.target.value);
-                      setSubCenterFilter("All");
-                    }}
-                    title="Center filter"
-                    className="app-select reports-detail-toolbar-field reports-detail-toolbar-select h-8 shrink-0 rounded-lg bg-white"
-                  >
-                    <option value="All">All</option>
-                    {dayCenters.map((label) => (
-                      <option key={label} value={label}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="reports-detail-toolbar-filters grid min-w-0 flex-1 grid-cols-3 gap-2">
+                    <div className="min-w-0">
+                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        Search
+                      </label>
+                      <div className="relative min-w-0">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                        <input
+                          value={detailSearch}
+                          onChange={(e) => setDetailSearch(e.target.value)}
+                          placeholder="Search"
+                          className="app-input reports-detail-toolbar-filter-control reports-detail-toolbar-search w-full rounded-xl bg-white text-xs"
+                        />
+                      </div>
+                    </div>
 
-                  <select
-                    value={subCenterFilter}
-                    onChange={(e) => setSubCenterFilter(e.target.value)}
-                    title="Sub-center filter"
-                    className="app-select reports-detail-toolbar-field reports-detail-toolbar-select h-8 shrink-0 rounded-lg bg-white"
-                    disabled={centerFilter === "All"}
-                  >
-                    <option value="All">{centerFilter === "All" ? "Sub" : "All sub"}</option>
-                    <option value={NO_SUB_CENTER_LABEL}>{NO_SUB_CENTER_LABEL}</option>
-                    {(subCentersByDay.get(centerFilter) || []).map((label) => (
-                      <option key={label} value={label}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
+                    <div className="min-w-0">
+                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        Main center
+                      </label>
+                      <select
+                        value={centerFilter}
+                        onChange={(e) => {
+                          setCenterFilter(e.target.value);
+                          setSubCenterFilter("All");
+                        }}
+                        title="Center filter"
+                        className="app-select reports-detail-toolbar-filter-control w-full rounded-xl bg-white text-xs"
+                      >
+                        <option value="All">All centers</option>
+                        {dayCenters.map((label) => (
+                          <option key={label} value={label}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="min-w-0">
+                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        Sub center
+                      </label>
+                      <select
+                        value={subCenterFilter}
+                        onChange={(e) => setSubCenterFilter(e.target.value)}
+                        title="Sub-center filter"
+                        className="app-select reports-detail-toolbar-filter-control w-full rounded-xl bg-white text-xs"
+                        disabled={centerFilter === "All"}
+                      >
+                        <option value="All">
+                          {centerFilter === "All" ? "Select center first" : "All sub-centers"}
+                        </option>
+                        <option value={NO_SUB_CENTER_LABEL}>{NO_SUB_CENTER_LABEL}</option>
+                        {(subCentersByDay.get(centerFilter) || []).map((label) => (
+                          <option key={label} value={label}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
                   <div className="app-segmented shrink-0">
                     {[

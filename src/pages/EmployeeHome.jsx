@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { CheckCircle2, Clock3, FilePlus2, IndianRupee, UserPlus, UsersRound } from "lucide-react";
 import EmployeeAddCustomerModal from "../components/employee/EmployeeAddCustomerModal";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
@@ -64,20 +64,20 @@ function EmployeeStatCard({ icon: Icon, label, value, accent = "blue" }) {
   const tone = EMPLOYEE_STAT_ACCENTS[accent] || EMPLOYEE_STAT_ACCENTS.blue;
   const valueText = String(value ?? "");
   const valueSize =
-    valueText.length >= 12 ? "text-xs" : valueText.length >= 9 ? "text-sm" : "text-base";
+    valueText.length >= 12 ? "text-sm" : valueText.length >= 9 ? "text-base" : "text-lg";
 
   return (
     <div
-      className={`employee-stat-card flex flex-col items-center justify-center rounded-xl border bg-white px-2 py-2 shadow-sm transition hover:shadow-md ${tone.border}`}
+      className={`employee-stat-card flex flex-col items-center justify-center rounded-xl border bg-white px-2 py-2.5 shadow-sm transition hover:shadow-md ${tone.border}`}
     >
-      <div className={`mb-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${tone.iconShell}`}>
-        <Icon className="h-2.5 w-2.5" aria-hidden />
+      <div className={`mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${tone.iconShell}`}>
+        <Icon className="h-3.5 w-3.5" aria-hidden />
       </div>
-      <p className="max-w-full px-0.5 text-center text-[7px] font-semibold uppercase leading-tight tracking-[0.08em] text-slate-500">
+      <p className="employee-stat-label max-w-full px-0.5 text-center font-semibold uppercase leading-snug text-slate-600">
         {label}
       </p>
       <p
-        className={`mt-0.5 text-center font-bold tabular-nums leading-none tracking-tight ${valueSize} ${tone.value}`}
+        className={`employee-stat-value mt-1 text-center font-bold tabular-nums leading-none tracking-tight ${valueSize} ${tone.value}`}
       >
         {valueText}
       </p>
@@ -86,6 +86,7 @@ function EmployeeStatCard({ icon: Icon, label, value, accent = "blue" }) {
 }
 
 export default function EmployeeHome() {
+  const navigate = useNavigate();
   const { customers, entries, loading } = useLoanDataSync();
   const { profile } = useAuth();
   const { assignedCenters, assignedCentersLabel, allCenters, hasAssignedCenter, scopeCustomers } =
@@ -156,30 +157,21 @@ export default function EmployeeHome() {
 
   return (
     <div className="employee-page">
-      <header className="app-panel mb-2 flex items-center gap-2 rounded-2xl px-3 py-2 sm:mb-2.5">
-        <div className="min-w-0 flex-1">
-          <p className="app-eyebrow employee-page-eyebrow">Home</p>
-          <h1 className="employee-page-title text-base sm:text-lg">Today at a glance</h1>
-        </div>
-        <div className="employee-header-actions flex shrink-0 items-center justify-end gap-1">
-          <button
-            type="button"
-            onClick={() => setAddCustomerOpen(true)}
-            className="app-button-primary employee-header-btn"
-            aria-label="Add customer"
-          >
-            <UserPlus className="h-3 w-3 shrink-0" aria-hidden />
-            <span className="whitespace-nowrap">Customer</span>
-          </button>
-          <Link
-            to="/employee/loan-request"
-            className="app-button-primary employee-header-btn"
-          >
-            <FilePlus2 className="h-3 w-3 shrink-0" aria-hidden />
-            <span className="whitespace-nowrap">New Loan</span>
-          </Link>
-        </div>
-      </header>
+      <div className="employee-home-quick-actions mb-2 flex items-center justify-end gap-1.5">
+        <button
+          type="button"
+          onClick={() => setAddCustomerOpen(true)}
+          className="app-button-primary employee-home-action-btn"
+          aria-label="Add customer"
+        >
+          <UserPlus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span className="whitespace-nowrap">Add Customer</span>
+        </button>
+        <Link to="/employee/loan-request" className="app-button-primary employee-home-action-btn">
+          <FilePlus2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span className="whitespace-nowrap">New Loan</span>
+        </Link>
+      </div>
 
       {hasAssignedCenter ? (
         <p className="mb-1.5 rounded-xl border border-blue-100 bg-blue-50/60 px-2.5 py-1.5 text-[11px] text-blue-900">
@@ -258,6 +250,12 @@ export default function EmployeeHome() {
           allCenters={allCenters}
           hasAssignedCenter={hasAssignedCenter}
           onClose={() => setAddCustomerOpen(false)}
+          onSaved={(result) => {
+            setAddCustomerOpen(false);
+            if (result?.customerId) {
+              navigate("/employee/loan-request", { state: { customerId: result.customerId } });
+            }
+          }}
         />
       ) : null}
     </div>

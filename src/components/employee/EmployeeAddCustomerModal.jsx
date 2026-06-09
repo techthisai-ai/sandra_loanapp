@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Save, UserPlus, X } from "lucide-react";
 import { DocumentCompactAttach, DocumentPhotoTile } from "../DocumentUploadControls";
+import useAuth from "../../hooks/useAuth";
 import { createCustomer } from "../../services/userAuth";
 import { getDocumentDataUrlField } from "../../utils/customerDocumentAttachments";
+import { fileToStorableDataUrl } from "../../utils/fileToStorableDataUrl";
 import { persistableCenterFieldsFromSelectedDay } from "../../utils/centerDisplay";
 import {
   IDENTITY_TYPE_OPTIONS,
@@ -27,19 +29,19 @@ const EMPTY_FORM = {
 };
 
 function pickFile(setForm, setPreview, nameField, previewSetter) {
-  return (file) => {
+  return async (file) => {
     if (!file) return;
     const dataField = getDocumentDataUrlField(nameField);
     setForm((current) => ({ ...current, [nameField]: file.name || "" }));
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+    try {
+      const dataUrl = await fileToStorableDataUrl(file);
       if (previewSetter) previewSetter(dataUrl);
       if (dataField) {
         setForm((current) => ({ ...current, [dataField]: dataUrl }));
       }
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      setForm((current) => ({ ...current, [nameField]: "" }));
+    }
   };
 }
 
@@ -60,6 +62,7 @@ export default function EmployeeAddCustomerModal({
   onClose,
   onSaved,
 }) {
+  const { profile, user } = useAuth();
   const defaultCenter = assignedCenters[0] || "";
   const [form, setForm] = useState({ ...EMPTY_FORM, selectedCenter: defaultCenter });
   const [photoPreview, setPhotoPreview] = useState("");
@@ -152,6 +155,10 @@ export default function EmployeeAddCustomerModal({
         idDocumentDataUrl: form.idDocumentDataUrl,
         addressProofName: form.addressProofName,
         addressProofDataUrl: form.addressProofDataUrl,
+        createdByUid: user?.uid || "",
+        createdByEmployeeId: profile?.employeeId || "",
+        createdByEmployeeName: profile?.displayName || profile?.username || profile?.email || "Employee",
+        customerSource: "employee",
       });
       onSaved?.(result);
       onClose();

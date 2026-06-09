@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, query } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../firebase/config";
 import useAuth from "../hooks/useAuth";
 
@@ -127,6 +127,18 @@ export function LoanDataSyncProvider({ children }) {
     if (isAdmin) {
       unsubLoanRequests = onSnapshot(
         collection(db, "loanRequests"),
+        (snap) => {
+          setLoanRequests(mapLoanRequestDocs(snap.docs));
+          markLoanRequestsReady();
+        },
+        () => {
+          setLoanRequests([]);
+          markLoanRequestsReady();
+        }
+      );
+    } else if (user?.uid) {
+      unsubLoanRequests = onSnapshot(
+        query(collection(db, "loanRequests"), where("requestedByUid", "==", user.uid)),
         (snap) => {
           setLoanRequests(mapLoanRequestDocs(snap.docs));
           markLoanRequestsReady();

@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, FilePlus2, Send } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ArrowLeft, Bell, FilePlus2, Send } from "lucide-react";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import useAuth from "../hooks/useAuth";
 import useEmployeeCenterScope from "../hooks/useEmployeeCenterScope";
-import { createLoanRequest } from "../services/userAuth";
+import { createLoanRequest, listNotifications } from "../services/userAuth";
+import { isEmployeeVisibleCustomer } from "../utils/employeeScope";
 
 const FREQUENCY_OPTIONS = ["Daily", "Weekly", "Monthly"];
 
@@ -12,9 +13,33 @@ function formatCurrency(value) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
 }
 
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function normalizeStatusLabel(status) {
+  const value = String(status || "").toLowerCase();
+  if (value === "pending") return "Pending Approval";
+  if (value === "approved") return "Approved";
+  if (value === "rejected") return "Rejected";
+  return status || "—";
+}
+
+function statusBadgeClass(status) {
+  const value = String(status || "").toLowerCase();
+  if (value === "pending") return "bg-amber-100 text-amber-800 ring-amber-200";
+  if (value === "approved") return "bg-emerald-100 text-emerald-800 ring-emerald-200";
+  if (value === "rejected") return "bg-rose-100 text-rose-800 ring-rose-200";
+  return "bg-slate-100 text-slate-700 ring-slate-200";
+}
+
 export default function EmployeeLoanRequest() {
   const navigate = useNavigate();
-  const { customers, loading } = useLoanDataSync();
+  const location = useLocation();
+  const { customers, loanRequests, loading } = useLoanDataSync();
   const { profile, user } = useAuth();
   const { scopeCustomers, hasAssignedCenter } = useEmployeeCenterScope();
   const [customerId, setCustomerId] = useState("");
@@ -25,16 +50,66 @@ export default function EmployeeLoanRequest() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+
+  const loadNotifications = useCallback(async () => {
+    setNotificationsLoading(true);
+    try {
+      const items = await listNotifications();
+      setNotifications(
+        items.filter(
+          (item) =>
+            !item.audienceRole || item.audienceRole === "employee" || item.audienceRole === "all"
+        )
+      );
+    } catch {
+      setNotifications([]);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    const preselect = location.state?.customerId;
+    if (preselect) {
+      setCustomerId(String(preselect));
+    }
+  }, [location.state?.customerId]);
 
   const customerOptions = useMemo(() => {
     return scopeCustomers(customers)
-      .filter((customer) => String(customer.approvalStatus || "").toLowerCase() === "approved")
-      .sort((a, b) => String(a.customerName || "").localeCompare(String(b.customerName || "")));
+      .filter(isEmployeeVisibleCustomer)
+      .sort((left, right) =>
+        String(left.customerName || "").localeCompare(String(right.customerName || ""), undefined, {
+          sensitivity: "base",
+        })
+      );
   }, [customers, scopeCustomers]);
 
   const selectedCustomer = useMemo(
     () => customerOptions.find((customer) => customer.customerId === customerId) || null,
     [customerId, customerOptions]
+  );
+
+  const sortedRequests = useMemo(
+    () =>
+      [...loanRequests].sort((left, right) =>
+        String(right.submittedAt || "").localeCompare(String(left.submittedAt || ""))
+      ),
+    [loanRequests]
+  );
+
+  const recentNotifications = useMemo(
+    () =>
+      [...notifications]
+        .sort((left, right) => String(right.submittedAt || "").localeCompare(String(left.submittedAt || "")))
+        .slice(0, 8),
+    [notifications]
   );
 
   const handleSubmit = async (event) => {
@@ -65,6 +140,7 @@ export default function EmployeeLoanRequest() {
       setLoanWeeks("");
       setCollectionFrequency("Weekly");
       setRemarks("");
+      await loadNotifications();
     } catch (submitError) {
       setError(submitError?.message || "Unable to submit loan request.");
     } finally {
@@ -99,9 +175,7 @@ export default function EmployeeLoanRequest() {
 
       <form onSubmit={handleSubmit} className="app-panel space-y-4 rounded-2xl p-4 sm:rounded-[22px] sm:p-5">
         <div>
-          <label className="employee-field-label mb-1 block tracking-[0.14em]">
-            Customer
-          </label>
+          <label className="employee-field-label mb-1 block tracking-[0.14em]">Customer</label>
           <select
             value={customerId}
             onChange={(event) => setCustomerId(event.target.value)}
@@ -112,9 +186,17 @@ export default function EmployeeLoanRequest() {
             {customerOptions.map((customer) => (
               <option key={customer.customerId} value={customer.customerId}>
                 {customer.customerName || "Unnamed"} · {customer.customerId}
+                {String(customer.approvalStatus || "").toLowerCase() === "pending" ? " · Pending" : ""}
               </option>
             ))}
           </select>
+          {!loading && customerOptions.length === 0 ? (
+            <p className="mt-1.5 text-[11px] text-amber-800">
+              {hasAssignedCenter
+                ? "No customers in your assigned centres yet. Add a customer from Home, then return here."
+                : "No centre assigned. Ask your administrator to assign a centre, or add customers once assigned."}
+            </p>
+          ) : null}
         </div>
 
         {selectedCustomer ? (
@@ -135,9 +217,7 @@ export default function EmployeeLoanRequest() {
         ) : null}
 
         <div>
-          <label className="employee-field-label mb-1 block tracking-[0.14em]">
-            Loan amount
-          </label>
+          <label className="employee-field-label mb-1 block tracking-[0.14em]">Loan amount</label>
           <input
             type="number"
             min="1"
@@ -151,9 +231,7 @@ export default function EmployeeLoanRequest() {
         </div>
 
         <div>
-          <label className="employee-field-label mb-1 block tracking-[0.14em]">
-            Collection type
-          </label>
+          <label className="employee-field-label mb-1 block tracking-[0.14em]">Collection type</label>
           <select
             value={collectionFrequency}
             onChange={(event) => setCollectionFrequency(event.target.value)}
@@ -169,9 +247,7 @@ export default function EmployeeLoanRequest() {
         </div>
 
         <div>
-          <label className="employee-field-label mb-1 block tracking-[0.14em]">
-            Tenure
-          </label>
+          <label className="employee-field-label mb-1 block tracking-[0.14em]">Tenure</label>
           <input
             type="number"
             min="1"
@@ -192,9 +268,7 @@ export default function EmployeeLoanRequest() {
         </div>
 
         <div>
-          <label className="employee-field-label mb-1 block tracking-[0.14em]">
-            Remarks
-          </label>
+          <label className="employee-field-label mb-1 block tracking-[0.14em]">Remarks</label>
           <textarea
             value={remarks}
             onChange={(event) => setRemarks(event.target.value)}
@@ -229,6 +303,77 @@ export default function EmployeeLoanRequest() {
           </button>
         </div>
       </form>
+
+      <section className="app-panel mt-3 rounded-2xl p-4 sm:rounded-[22px] sm:p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+            <FilePlus2 className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-slate-950">Your loan requests</h2>
+            <p className="text-xs text-slate-500">Track status after admin review.</p>
+          </div>
+        </div>
+
+        {loading ? (
+          <p className="py-4 text-center text-sm text-slate-500">Loading requests…</p>
+        ) : sortedRequests.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-4 text-center text-sm text-slate-600">
+            No loan requests yet. Submit a request above.
+          </p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-slate-200/70">
+            {sortedRequests.map((row) => (
+              <li key={row.requestId || row.id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-950">{row.customerName || "Customer"}</p>
+                  <p className="mt-0.5 text-xs text-slate-600">
+                    {formatCurrency(row.loanAmount)} · {row.collectionFrequency || "Weekly"} · {row.loanWeeks || "—"} installments
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    {row.requestId || "—"} · {formatDate(row.submittedAt)}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusBadgeClass(row.status)}`}
+                >
+                  {normalizeStatusLabel(row.status)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="app-panel mt-3 rounded-2xl p-4 sm:rounded-[22px] sm:p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
+            <Bell className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-slate-950">Notifications</h2>
+            <p className="text-xs text-slate-500">Updates on customers and loan requests.</p>
+          </div>
+        </div>
+
+        {notificationsLoading ? (
+          <p className="py-4 text-center text-sm text-slate-500">Loading notifications…</p>
+        ) : recentNotifications.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-4 text-center text-sm text-slate-600">
+            No notifications yet.
+          </p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-slate-200/70">
+            {recentNotifications.map((item) => (
+              <li key={item.notificationId || item.id} className="py-3 first:pt-0 last:pb-0">
+                <p className="text-sm font-semibold text-slate-950">{item.title || "Notification"}</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-600">{item.message || "—"}</p>
+                <p className="mt-1 text-[11px] text-slate-500">{formatDate(item.submittedAt)}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

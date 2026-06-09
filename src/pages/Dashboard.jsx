@@ -347,7 +347,13 @@ export default function Dashboard() {
       try {
         const notificationItems = await listNotifications();
         if (!cancelled) {
-          setUnreadCount(notificationItems.filter((n) => n.status !== "read").length);
+          setUnreadCount(
+            notificationItems.filter(
+              (n) =>
+                n.status !== "read" &&
+                (!n.audienceRole || n.audienceRole === "admin" || n.audienceRole === "all")
+            ).length
+          );
         }
       } catch (loadError) {
         if (!cancelled) {

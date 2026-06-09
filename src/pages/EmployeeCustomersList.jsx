@@ -2,9 +2,44 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, Search } from "lucide-react";
 import { EMPLOYEE_ROOT_DAYS } from "../constants/employeeDays";
+import useAuth from "../hooks/useAuth";
 import useEmployeeCenterScope from "../hooks/useEmployeeCenterScope";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
+import { employeeMatchesCollector } from "../utils/employeeManagement";
 import { buildEmployeeCustomerSummary, getEmployeeCustomerSearchText } from "../utils/employeeCustomerSummary";
+
+function formatCurrency(value) {
+  return `₹${Number(value || 0).toLocaleString("en-IN")}`;
+}
+
+function EmployeeCustomerMetricCard({ emoji, label, value, accent = "blue" }) {
+  const accents = {
+    blue: "border-[#3B82F6]/30 bg-[#3B82F6]/5",
+    orange: "border-[#F59E0B]/30 bg-[#F59E0B]/5",
+    green: "border-[#10B981]/30 bg-[#10B981]/5",
+  };
+  const valueColors = {
+    blue: "text-slate-950",
+    orange: "text-[#B45309]",
+    green: "text-emerald-800",
+  };
+
+  return (
+    <div
+      className={`employee-customer-metric-card flex min-h-[4.75rem] flex-col items-center justify-center rounded-xl border px-2 py-2.5 text-center shadow-sm ${accents[accent] || accents.blue}`}
+    >
+      <span className="text-base leading-none" aria-hidden="true">
+        {emoji}
+      </span>
+      <p className={`mt-1 text-base font-bold tabular-nums leading-none tracking-tight ${valueColors[accent] || valueColors.blue}`}>
+        {value}
+      </p>
+      <p className="mt-1 text-[10px] font-semibold uppercase leading-tight tracking-[0.06em] text-slate-600">
+        {label}
+      </p>
+    </div>
+  );
+}
 
 const COLLECTION_STATUS_OPTIONS = [
   { key: "Collected", label: "Paid" },
@@ -49,6 +84,7 @@ function CustomerStatusValue({ emoji, label, collected, awaitingApproval }) {
 
 export default function EmployeeCustomersList() {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const { customers, entries, loading } = useLoanDataSync();
   const { allCenters, hasAssignedCenter, scopeCustomers } = useEmployeeCenterScope();
   const [query, setQuery] = useState("");
@@ -94,6 +130,36 @@ export default function EmployeeCustomersList() {
     });
   }, [allCenters, collectionFilter, query, customerRows]);
 
+  const collectionMetrics = useMemo(() => {
+    const scopedIds = new Set(readyCustomers.map((customer) => customer.customerId));
+    const todayKey = new Date().toISOString().slice(0, 10);
+
+    const collectedToday = entries.reduce((sum, entry) => {
+      if (!scopedIds.has(entry.customerId)) return sum;
+      if (String(entry.approvalStatus || "").toLowerCase() !== "approved") return sum;
+      if (!employeeMatchesCollector(profile, entry)) return sum;
+      const collectionDate = String(entry.collectionDate || entry.submittedAt || "").slice(0, 10);
+      if (collectionDate !== todayKey) return sum;
+      return sum + Number(entry.amount || 0);
+    }, 0);
+
+    const pendingAmount = customerRows.reduce((sum, row) => {
+      if (row.isCurrentTenureCollected) return sum;
+      if (row.dueStatusKey !== "due-today" && row.dueStatusKey !== "overdue") return sum;
+      return sum + Number(row.currentDueAmountNumber || 0);
+    }, 0);
+
+    const todayTarget = collectedToday + pendingAmount;
+    const progressPercent = todayTarget > 0 ? Math.min(100, Math.round((collectedToday / todayTarget) * 100)) : 0;
+
+    return {
+      todayTarget,
+      collectedToday,
+      pendingAmount,
+      progressPercent,
+    };
+  }, [customerRows, entries, profile, readyCustomers]);
+
   const openCustomerDetail = (row) => {
     const day = defaultDayLabel(row.customer.selectedDay);
     navigate(`/employee/customers/${encodeURIComponent(day)}/${encodeURIComponent(row.customer.customerId)}`, {
@@ -103,11 +169,61 @@ export default function EmployeeCustomersList() {
 
   return (
     <div className="employee-page">
-      <div className="mb-2 flex items-center gap-2">
+      <section className="employee-customer-summary mb-2" aria-label="Today's collection summary">
+        <div className="employee-customer-target-hero rounded-2xl border border-[#3B82F6]/35 bg-gradient-to-br from-[#3B82F6]/10 via-white to-white px-3.5 py-3 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#2563EB]">Today&apos;s target</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums leading-none tracking-tight text-slate-950">
+                {loading ? "…" : formatCurrency(collectionMetrics.todayTarget)}
+              </p>
+            </div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#3B82F6]/10 text-lg" aria-hidden="true">
+              🎯
+            </span>
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <p className="text-[10px] font-medium text-slate-600">
+              {loading ? "Loading progress…" : `${collectionMetrics.progressPercent}% collected`}
+            </p>
+            <p className="text-[10px] font-semibold tabular-nums text-[#2563EB]">
+              {loading ? "…" : formatCurrency(collectionMetrics.collectedToday)}
+            </p>
+          </div>
+          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#3B82F6]/10">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#3B82F6] to-[#2563EB] transition-all duration-500"
+              style={{ width: `${loading ? 0 : collectionMetrics.progressPercent}%` }}
+              role="progressbar"
+              aria-valuenow={collectionMetrics.progressPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Today's collection progress"
+            />
+          </div>
+        </div>
+
+        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+          <EmployeeCustomerMetricCard
+            emoji="💰"
+            label="Collected today"
+            value={loading ? "…" : formatCurrency(collectionMetrics.collectedToday)}
+            accent="green"
+          />
+          <EmployeeCustomerMetricCard
+            emoji="⏳"
+            label="Pending amount"
+            value={loading ? "…" : formatCurrency(collectionMetrics.pendingAmount)}
+            accent="orange"
+          />
+        </div>
+      </section>
+
+      <div className="employee-customers-toolbar mb-2 flex min-w-0 items-center gap-1.5">
         <button
           type="button"
           onClick={() => setCollectionFilter("All")}
-          className={`inline-flex h-10 shrink-0 items-center justify-center rounded-xl border px-3.5 text-sm font-semibold transition sm:h-11 sm:px-4 sm:text-base ${
+          className={`inline-flex h-9 shrink-0 items-center justify-center rounded-xl border px-2.5 text-xs font-semibold transition ${
             collectionFilter === "All"
               ? "border-blue-600 bg-blue-600 text-white"
               : "border-slate-200/90 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50"
@@ -118,7 +234,7 @@ export default function EmployeeCustomersList() {
         <select
           value={collectionFilter === "All" ? "" : collectionFilter}
           onChange={(event) => setCollectionFilter(event.target.value || "All")}
-          className="app-select h-10 min-w-0 flex-1 rounded-xl bg-white text-sm font-medium text-slate-800 sm:h-11 sm:text-base"
+          className="app-select employee-customers-filter h-9 shrink-0 rounded-xl bg-white text-xs font-medium text-slate-800"
         >
           <option value="">Filter</option>
           {COLLECTION_STATUS_OPTIONS.map((option) => (
@@ -127,17 +243,16 @@ export default function EmployeeCustomersList() {
             </option>
           ))}
         </select>
-      </div>
-
-      <div className="relative mb-2">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search name, phone, ID, place…"
-          className="w-full rounded-2xl border border-slate-200/90 bg-white py-3 pl-10 pr-3 text-base text-slate-900 shadow-sm outline-none ring-slate-300/40 placeholder:text-slate-400 focus:border-[var(--app-accent)] focus:ring-2 sm:py-3.5"
-        />
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search name, phone…"
+            className="employee-customers-search h-9 w-full rounded-xl border border-slate-200/90 bg-white pl-8 pr-2.5 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-[var(--app-accent)] focus:ring-2 focus:ring-slate-300/40"
+          />
+        </div>
       </div>
 
       {!hasAssignedCenter ? (
@@ -149,8 +264,12 @@ export default function EmployeeCustomersList() {
       <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95 shadow-sm">
         <div className="employee-customers-header employee-customers-grid">
           <span className="whitespace-nowrap">Name</span>
-          <span className="whitespace-nowrap">Current due</span>
-          <span className="whitespace-nowrap">Pend tenure</span>
+          <span className="whitespace-nowrap" title="Current due">
+            Cur. due
+          </span>
+          <span className="whitespace-nowrap" title="Pending tenures">
+            Pend tnr.
+          </span>
           <span className="whitespace-nowrap">Status</span>
           <span className="employee-customers-chevron-spacer" aria-hidden="true" />
         </div>
@@ -190,8 +309,8 @@ export default function EmployeeCustomersList() {
       </div>
 
       {!loading && filtered.length === 0 ? (
-        <p className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-6 text-center text-sm text-slate-600">
-          No customers match your search or collection status.
+        <p className="employee-customers-empty" title="No customers match your search or collection status.">
+          No customers match search or status
         </p>
       ) : null}
     </div>

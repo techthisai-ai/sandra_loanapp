@@ -169,18 +169,18 @@ export default function EmployeeCustomerEntryPage() {
                   </p>
                   <div className="flex min-w-0 justify-end">
                     {collected ? (
-                      <span className="inline-flex h-7 items-center justify-center rounded-full bg-emerald-100 px-2.5 text-[10px] font-semibold leading-none text-emerald-800 sm:px-3 sm:text-[11px]">
+                      <span className="inline-flex h-7 items-center justify-center rounded-full bg-emerald-100 px-2.5 text-[11px] font-semibold leading-none text-emerald-800">
                         Collected
                       </span>
                     ) : awaitingApproval ? (
-                      <span className="inline-flex h-7 items-center justify-center rounded-full bg-amber-100 px-2.5 text-[10px] font-semibold leading-none text-amber-800 sm:px-3 sm:text-[11px]">
+                      <span className="inline-flex h-7 items-center justify-center rounded-full bg-amber-100 px-2.5 text-[11px] font-semibold leading-none text-amber-800">
                         Pending
                       </span>
                     ) : (
                       <button
                         type="button"
                         onClick={() => setEntryCustomer(customer)}
-                        className="inline-flex h-7 items-center justify-center rounded-full bg-blue-600 px-2.5 text-[10px] font-semibold leading-none text-white transition hover:bg-blue-700 active:scale-[0.98] sm:px-3 sm:text-[11px]"
+                        className="inline-flex h-7 items-center justify-center rounded-full bg-blue-600 px-2.5 text-[11px] font-semibold leading-none text-white transition hover:bg-blue-700 active:scale-[0.98]"
                       >
                         Collect now
                       </button>
@@ -194,8 +194,8 @@ export default function EmployeeCustomerEntryPage() {
       </div>
 
       {!loading && filtered.length === 0 ? (
-        <p className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-6 text-center text-sm text-slate-600">
-          No customers match the selected centre filters.
+        <p className="employee-customers-empty" title="No customers match the selected centre filters.">
+          No customers for selected centres
         </p>
       ) : null}
 

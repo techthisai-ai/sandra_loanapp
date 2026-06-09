@@ -35,6 +35,7 @@ import {
   openPrintableLoanSheet,
 } from "../utils/loanSheet";
 import { calculateLoanValues, findLoanPreset, formatPresetLabel } from "../utils/loanCalculation";
+import { fileToStorableDataUrl } from "../utils/fileToStorableDataUrl";
 import { isValidNomineeRelation, normalizeNomineeRelation } from "../utils/nomineeRelationship";
 import {
   calculateLoanDueDate,
@@ -413,7 +414,7 @@ export default function LoanApply() {
     setNomineePhoneError(clean ? validatePhoneNumber(clean, "Nominee phone") : "");
   };
 
-  const pickNomineeFile = (field, previewSetter, dataField = "") => (file) => {
+  const pickNomineeFile = (field, previewSetter, dataField = "") => async (file) => {
     if (!file) return;
     const url = URL.createObjectURL(file);
     setNomineeAttachmentUrls((current) => {
@@ -423,14 +424,15 @@ export default function LoanApply() {
     if (field === "nomineeIdProofName") setNomineeIdProofName(file.name || "");
     if (field === "nomineePhotoName") setNomineePhotoName(file.name || "");
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+    try {
+      const dataUrl = await fileToStorableDataUrl(file);
       if (previewSetter) previewSetter(dataUrl);
       if (field === "nomineePhotoName" && dataField) setNomineePhotoDataUrl(dataUrl);
       if (field === "nomineeIdProofName") setNomineeIdProofDataUrl(dataUrl);
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      if (field === "nomineeIdProofName") setNomineeIdProofName("");
+      if (field === "nomineePhotoName") setNomineePhotoName("");
+    }
   };
 
   const clearNomineeFile = (field, previewSetter, dataField = "") => {

@@ -4,6 +4,7 @@ import { createCustomer } from "../services/userAuth";
 import { fetchDemoCrifEligibility } from "../services/crifEligibilityDemo";
 import { DocumentCompactAttach, DocumentPhotoTile } from "./DocumentUploadControls";
 import { getDocumentDataUrlField } from "../utils/customerDocumentAttachments";
+import { fileToStorableDataUrl } from "../utils/fileToStorableDataUrl";
 import PhoneOtpVerificationModal from "./PhoneOtpVerificationModal";
 import {
   IDENTITY_TYPE_OPTIONS,
@@ -228,7 +229,7 @@ export default function CustomerCreateProfessionalForm({
     if (field === "alternateNumber") setCrifPrecheckError("");
   };
 
-  const pickNamedFile = (field, previewSetter, dataField = "") => (file) => {
+  const pickNamedFile = (field, previewSetter, dataField = "") => async (file) => {
     if (!file) return;
     const url = URL.createObjectURL(file);
     const resolvedDataField = dataField || getDocumentDataUrlField(field);
@@ -238,15 +239,15 @@ export default function CustomerCreateProfessionalForm({
       return { ...current, [field]: url };
     });
     setForm((current) => ({ ...current, [field]: file.name || "" }));
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+    try {
+      const dataUrl = await fileToStorableDataUrl(file);
       if (previewSetter) previewSetter(dataUrl);
       if (resolvedDataField) {
         setForm((current) => ({ ...current, [resolvedDataField]: dataUrl }));
       }
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      setForm((current) => ({ ...current, [field]: "" }));
+    }
   };
 
   const clearAttachment = (field, previewSetter, dataField = "") => {

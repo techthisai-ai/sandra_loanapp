@@ -24,6 +24,7 @@ import {
 } from "../utils/customerValidation";
 import { getNextCustomerId } from "../services/userAuth";
 import { getDocumentDataUrlField } from "../utils/customerDocumentAttachments";
+import { fileToStorableDataUrl } from "../utils/fileToStorableDataUrl";
 import { persistableCenterFieldsFromSelectedDay } from "../utils/centerDisplay";
 import { DAY_CENTER_LABELS, loadLoanCenters } from "../constants/dayCenters";
 
@@ -397,7 +398,7 @@ export default function CustomerCreateStreamlinedForm({
     }
   }, [form.alternateNumber, form.customerName, form.identityNumber, form.identityType]);
 
-  const pickNamedFile = (field, previewSetter, dataField = "") => (file) => {
+  const pickNamedFile = (field, previewSetter, dataField = "") => async (file) => {
     if (!file) return;
     clearHighlight(field);
     const url = URL.createObjectURL(file);
@@ -407,15 +408,15 @@ export default function CustomerCreateStreamlinedForm({
       return { ...c, [field]: url };
     });
     setForm((cur) => ({ ...cur, [field]: file.name || "" }));
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+    try {
+      const dataUrl = await fileToStorableDataUrl(file);
       if (previewSetter) previewSetter(dataUrl);
       if (resolvedDataField) {
         setForm((cur) => ({ ...cur, [resolvedDataField]: dataUrl }));
       }
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      setForm((cur) => ({ ...cur, [field]: "" }));
+    }
   };
 
   const clearAttachment = (field, previewSetter, dataField = "") => {

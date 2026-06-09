@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { CheckCircle2, Clock3, ReceiptText, Wallet } from "lucide-react";
+import { CheckCircle2, Clock3, Wallet } from "lucide-react";
 import useEmployeeCenterScope from "../hooks/useEmployeeCenterScope";
 import useAuth from "../hooks/useAuth";
 import { employeeMatchesCollector } from "../utils/employeeManagement";
@@ -47,16 +47,6 @@ export default function EmployeeCollectionSummary() {
 
   return (
     <div className="employee-page">
-      <header className="app-panel mb-2.5 flex items-center gap-3 rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3">
-        <div className="app-icon-shell flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/70 sm:h-10 sm:w-10">
-          <ReceiptText className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="app-eyebrow employee-page-eyebrow">Collection</p>
-          <h1 className="employee-page-title">Activity & entries</h1>
-        </div>
-      </header>
-
       <div className="mb-3 grid grid-cols-3 gap-2">
         <div className="app-panel-muted rounded-xl px-2 py-2 text-center sm:rounded-2xl sm:px-3 sm:py-2.5">
           <Wallet className="mx-auto mb-1 h-4 w-4 text-slate-600 sm:h-5 sm:w-5" />

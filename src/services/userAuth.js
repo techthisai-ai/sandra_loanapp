@@ -2111,6 +2111,10 @@ export async function createCustomer({
   subCenterLabel = "",
   crifDemoEligibility = null,
   lastEligibilityCheckedAt = "",
+  createdByUid = "",
+  createdByEmployeeId = "",
+  createdByEmployeeName = "",
+  customerSource = "",
 }) {
   const customerId = requestedCustomerId
     ? await assertCustomerIdAvailable(requestedCustomerId)
@@ -2179,6 +2183,10 @@ export async function createCustomer({
     approvalStatus: "pending",
     amountStatus: "open",
     loanApprovedAt: null,
+    createdByUid: normalizeText(createdByUid),
+    createdByEmployeeId: normalizeText(createdByEmployeeId),
+    createdByEmployeeName: normalizeText(createdByEmployeeName),
+    customerSource: normalizeText(customerSource) || (createdByUid ? "employee" : "admin"),
     createdAt: serverTimestamp(),
     submittedAt: now.toISOString(),
     ...(crifSnapshot
@@ -2189,13 +2197,41 @@ export async function createCustomer({
       : {}),
   });
 
+  const actorName = normalizeText(createdByEmployeeName) || "Admin";
+  const actorRole = createdByUid ? "employee" : "admin";
+  const displayName = normalizeText(customerName) || "Customer";
+
+  await createNotification({
+    type: "approval_notification",
+    title: "New customer submitted",
+    message: createdByUid
+      ? `${displayName} (${customerId}) was added by ${actorName} and is pending review.`
+      : `${displayName} (${customerId}) was created and is pending review.`,
+    audienceRole: "admin",
+    customerId,
+    customerName: displayName,
+    relatedId: customerId,
+  });
+
+  if (createdByUid) {
+    await createNotification({
+      type: "approval_notification",
+      title: "Customer saved",
+      message: `${displayName} (${customerId}) was saved. You can submit a loan request from New Loan.`,
+      audienceRole: "employee",
+      customerId,
+      customerName: displayName,
+      relatedId: customerId,
+    });
+  }
+
   await createAuditLog({
     action: "create_customer",
     entityType: "customer",
     entityId: customerId,
-    message: `${normalizeText(customerName) || "Customer"} record was created.`,
-    actorName: "Admin",
-    actorRole: "admin",
+    message: `${displayName} record was created.`,
+    actorName,
+    actorRole,
   });
 
   return { customerId };
@@ -2755,15 +2791,30 @@ export async function createLoanRequest({
     createdAt: serverTimestamp(),
   });
 
+  const customerLabel = normalizeText(customer.customerName) || "Customer";
+  const employeeLabel = normalizeText(employeeName) || "employee";
+
   await createNotification({
     type: "approval_notification",
     title: "New loan request",
-    message: `${normalizeText(customer.customerName) || "Customer"} loan request of ₹${principal.toLocaleString("en-IN")} submitted by ${normalizeText(employeeName) || "employee"}.`,
+    message: `${customerLabel} loan request of ₹${principal.toLocaleString("en-IN")} submitted by ${employeeLabel}.`,
     audienceRole: "admin",
     customerId: normalizedCustomerId,
     customerName: customer.customerName,
     relatedId: requestId,
   });
+
+  if (requestedByUid) {
+    await createNotification({
+      type: "approval_notification",
+      title: "Loan request sent",
+      message: `Your loan request for ${customerLabel} (₹${principal.toLocaleString("en-IN")}) was sent for admin approval.`,
+      audienceRole: "employee",
+      customerId: normalizedCustomerId,
+      customerName: customer.customerName,
+      relatedId: requestId,
+    });
+  }
 
   await createAuditLog({
     action: "create_loan_request",
