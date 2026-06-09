@@ -5,13 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite --configLoader native",
+    "dev:emulator": "vite --mode emulator --configLoader native",
+    "emulators": "npx firebase emulators:start --only auth,firestore",
     "build": "vite build --configLoader native",
     "lint": "eslint .",
     "preview": "vite preview --configLoader native",
     "cap:sync": "cap sync",
     "cap:android": "cap open android",
     "android:apk": "npm run build && npx cap sync android && cd android && .\\gradlew.bat assembleDebug",
-    "deploy:hosting": "npm run build && npx firebase deploy --only hosting,firestore:rules",
+    "deploy:hosting": "npm run build && npx firebase deploy --only hosting,firestore:rules --project sandraloanapp-85985",
+    "deploy:live": "npm run deploy:hosting",
     "deploy:firebase": "npm run build && npx firebase deploy --only hosting,firestore:rules",
     "deploy:firestore": "npx firebase deploy --only firestore",
     "deploy:firestore-rules": "npx firebase deploy --only firestore:rules"

@@ -17,11 +17,13 @@ function EmployeeCustomerMetricCard({ emoji, label, value, accent = "blue" }) {
     blue: "border-[#3B82F6]/30 bg-[#3B82F6]/5",
     orange: "border-[#F59E0B]/30 bg-[#F59E0B]/5",
     green: "border-[#10B981]/30 bg-[#10B981]/5",
+    violet: "border-[#8B5CF6]/30 bg-[#8B5CF6]/5",
   };
   const valueColors = {
-    blue: "text-slate-950",
+    blue: "text-blue-800",
     orange: "text-[#B45309]",
     green: "text-emerald-800",
+    violet: "text-violet-800",
   };
 
   return (
@@ -41,43 +43,46 @@ function EmployeeCustomerMetricCard({ emoji, label, value, accent = "blue" }) {
   );
 }
 
-const COLLECTION_STATUS_OPTIONS = [
-  { key: "Collected", label: "Paid" },
-  { key: "Unpaid", label: "Unpaid" },
-  { key: "Partial Payment", label: "Partial" },
-  { key: "Rescheduled", label: "Rescheduled" },
-  { key: "Skipped", label: "Skipped" },
+const LIST_STATUS_OPTIONS = [
+  { key: "due-today", label: "Due Today" },
+  { key: "pending", label: "Pending" },
+  { key: "overdue", label: "Overdue" },
+  { key: "collected", label: "Collected" },
+  { key: "partially", label: "Partially" },
 ];
+
+const LIST_STATUS_DISPLAY = {
+  collected: { emoji: "🟢", label: "Collected", tone: "text-emerald-700" },
+  partially: { emoji: "🔵", label: "Partially", tone: "text-blue-700" },
+  pending: { emoji: "🟡", label: "Pending", tone: "text-amber-700" },
+  overdue: { emoji: "🔴", label: "Overdue", tone: "text-rose-700" },
+  "due-today": { emoji: "🟠", label: "Due Today", tone: "text-orange-600" },
+};
 
 function defaultDayLabel(selectedDay) {
   if (selectedDay) return selectedDay;
   return EMPLOYEE_ROOT_DAYS[0].label;
 }
 
-function CustomerStatusValue({ emoji, label, collected, awaitingApproval }) {
-  let statusEmoji = emoji || "";
-  let statusLabel = label || "—";
-  let tone = "text-emerald-700";
+/** One of: due-today | pending | overdue | collected | partially */
+function resolveEmployeeListStatus(row) {
+  if (row.isCurrentTenureCollected) return "collected";
+  if (row.collectionStatus === "Partial Payment") return "partially";
+  if (row.hasPendingApproval) return "pending";
+  if (row.dueStatusKey === "overdue") return "overdue";
+  if (row.dueStatusKey === "due-today") return "due-today";
+  return "pending";
+}
 
-  if (collected) {
-    statusEmoji = "🟢";
-    statusLabel = "Collected";
-  } else if (awaitingApproval) {
-    statusEmoji = "🟡";
-    statusLabel = "Pending";
-    tone = "text-amber-700";
-  } else if (label === "Overdue") {
-    tone = "text-rose-700";
-  } else if (label === "Due Today") {
-    tone = "text-amber-700";
-  }
+function CustomerStatusValue({ listStatus }) {
+  const display = LIST_STATUS_DISPLAY[listStatus] || LIST_STATUS_DISPLAY.pending;
 
   return (
-    <div className={`employee-status-cell min-w-0 ${tone}`}>
+    <div className={`employee-status-cell min-w-0 ${display.tone}`}>
       <span className="employee-status-emoji" aria-hidden="true">
-        {statusEmoji}
+        {display.emoji}
       </span>
-      <span className="employee-field-value truncate whitespace-nowrap">{statusLabel}</span>
+      <span className="employee-field-value truncate whitespace-nowrap">{display.label}</span>
     </div>
   );
 }
@@ -110,9 +115,11 @@ export default function EmployeeCustomersList() {
   const customerRows = useMemo(() => {
     return readyCustomers.map((customer) => {
       const customerEntries = entriesByCustomerId.get(customer.customerId) || [];
+      const summary = buildEmployeeCustomerSummary(customer, customerEntries, allCenters);
       return {
         customer,
-        ...buildEmployeeCustomerSummary(customer, customerEntries, allCenters),
+        ...summary,
+        listStatus: resolveEmployeeListStatus(summary),
       };
     });
   }, [allCenters, entriesByCustomerId, readyCustomers]);
@@ -121,11 +128,7 @@ export default function EmployeeCustomersList() {
     const q = query.trim().toLowerCase();
     return customerRows.filter((row) => {
       const matchesSearch = !q || getEmployeeCustomerSearchText(row.customer, row, allCenters).includes(q);
-      const matchesCollection =
-        collectionFilter === "All" ||
-        (collectionFilter === "Unpaid"
-          ? row.collectionStatus === "Pending"
-          : row.collectionStatus === collectionFilter);
+      const matchesCollection = collectionFilter === "All" || row.listStatus === collectionFilter;
       return matchesSearch && matchesCollection;
     });
   }, [allCenters, collectionFilter, query, customerRows]);
@@ -151,12 +154,18 @@ export default function EmployeeCustomersList() {
 
     const todayTarget = collectedToday + pendingAmount;
     const progressPercent = todayTarget > 0 ? Math.min(100, Math.round((collectedToday / todayTarget) * 100)) : 0;
+    const pendingTenureCustomers = customerRows.filter(
+      (row) => row.pendingTenuresLabel && row.pendingTenuresLabel !== "—"
+    ).length;
+    const partiallyPaidCustomers = customerRows.filter((row) => row.listStatus === "partially").length;
 
     return {
       todayTarget,
       collectedToday,
       pendingAmount,
       progressPercent,
+      pendingTenureCustomers,
+      partiallyPaidCustomers,
     };
   }, [customerRows, entries, profile, readyCustomers]);
 
@@ -203,7 +212,7 @@ export default function EmployeeCustomersList() {
           </div>
         </div>
 
-        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+        <div className="mt-1.5 grid grid-cols-3 gap-1.5">
           <EmployeeCustomerMetricCard
             emoji="💰"
             label="Collected today"
@@ -211,10 +220,16 @@ export default function EmployeeCustomersList() {
             accent="green"
           />
           <EmployeeCustomerMetricCard
-            emoji="⏳"
-            label="Pending amount"
-            value={loading ? "…" : formatCurrency(collectionMetrics.pendingAmount)}
+            emoji="📋"
+            label="Pending tenure"
+            value={loading ? "…" : String(collectionMetrics.pendingTenureCustomers)}
             accent="orange"
+          />
+          <EmployeeCustomerMetricCard
+            emoji="🔵"
+            label="Partially paid"
+            value={loading ? "…" : String(collectionMetrics.partiallyPaidCustomers)}
+            accent="blue"
           />
         </div>
       </section>
@@ -236,8 +251,8 @@ export default function EmployeeCustomersList() {
           onChange={(event) => setCollectionFilter(event.target.value || "All")}
           className="app-select employee-customers-filter h-9 shrink-0 rounded-xl bg-white text-xs font-medium text-slate-800"
         >
-          <option value="">Filter</option>
-          {COLLECTION_STATUS_OPTIONS.map((option) => (
+          <option value="">Filter status</option>
+          {LIST_STATUS_OPTIONS.map((option) => (
             <option key={option.key} value={option.key}>
               {option.label}
             </option>
@@ -261,14 +276,14 @@ export default function EmployeeCustomersList() {
         </p>
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95 shadow-sm">
+      <div className="employee-customers-list-shell overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95 shadow-sm">
         <div className="employee-customers-header employee-customers-grid">
           <span className="whitespace-nowrap">Name</span>
           <span className="whitespace-nowrap" title="Current due">
             Cur. due
           </span>
-          <span className="whitespace-nowrap" title="Pending tenures">
-            Pend tnr.
+          <span className="whitespace-nowrap" title="Pending tenure numbers">
+            Pend tenure
           </span>
           <span className="whitespace-nowrap">Status</span>
           <span className="employee-customers-chevron-spacer" aria-hidden="true" />
@@ -295,12 +310,7 @@ export default function EmployeeCustomersList() {
                 <p className="employee-field-value min-w-0 truncate whitespace-nowrap text-slate-800">
                   {row.pendingTenuresLabel || "—"}
                 </p>
-                <CustomerStatusValue
-                  emoji={row.dueStatusEmoji}
-                  label={row.dueStatusLabel}
-                  collected={row.isCurrentTenureCollected}
-                  awaitingApproval={row.hasPendingApproval}
-                />
+                <CustomerStatusValue listStatus={row.listStatus} />
                 <ChevronRight className="h-5 w-5 shrink-0 justify-self-end text-slate-400" aria-hidden="true" />
               </button>
             </li>

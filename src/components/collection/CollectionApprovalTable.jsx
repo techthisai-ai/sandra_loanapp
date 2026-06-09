@@ -41,18 +41,20 @@ function ApprovalStatusBadge({ approvalStatus }) {
 function CollectionStatusBadge({ collectionStatus }) {
   const status = String(collectionStatus || "Pending");
   const tone =
-    status === "Collected"
+    status === "Partially Paid" || status === "Partial Payment"
       ? "border-blue-200/90 bg-blue-50 text-blue-800"
-      : status === "Partial Payment"
-        ? "border-violet-200/90 bg-violet-50 text-violet-800"
+      : status === "Collected"
+        ? "border-emerald-200/90 bg-emerald-50 text-emerald-800"
         : status === "Skipped"
           ? "border-rose-200/90 bg-rose-50 text-rose-800"
           : status === "Rescheduled"
             ? "border-indigo-200/90 bg-indigo-50 text-indigo-800"
             : "border-slate-200/90 bg-slate-50 text-slate-700";
+  const label =
+    status === "Partial Payment" ? "Partially Paid" : status;
   return (
     <span className={`inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold shadow-sm ${tone}`}>
-      <span className="truncate">{status}</span>
+      <span className="truncate">{label}</span>
     </span>
   );
 }
@@ -370,7 +372,9 @@ export default function CollectionApprovalTable({
                         </span>
                       </td>
                       <td className="overflow-hidden border-r border-slate-100 px-3 py-3 align-middle">
-                        <CollectionStatusBadge collectionStatus={row.collectionStatus} />
+                        <CollectionStatusBadge
+                          collectionStatus={row.collectionDisplayStatus || row.collectionStatus}
+                        />
                       </td>
                       <td className="overflow-hidden border-r border-slate-100 px-3 py-3 align-middle">
                         <ApprovalStatusBadge approvalStatus={row.approvalStatus} />

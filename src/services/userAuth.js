@@ -38,6 +38,11 @@ import {
   validatePhoneNumber,
 } from "../utils/customerValidation";
 import {
+  isActiveCustomerRecord,
+  isRecordDeleted,
+  isVisibleCustomerRecord,
+} from "../utils/recordFlags";
+import {
   getEmployeeCollectorAliases,
   normalizeCollectorKey,
 } from "../utils/employeeCollectionDetails.js";
@@ -2322,11 +2327,15 @@ export async function listCustomers() {
   }
 
   return docs
-    .map((customerDoc) => ({
-      id: customerDoc.id,
-      ...customerDoc.data(),
-    }))
-    .filter((customer) => !customer.isDeleted)
+    .map((customerDoc) => {
+      const data = customerDoc.data();
+      return {
+        id: customerDoc.id,
+        ...data,
+        customerId: String(data?.customerId || customerDoc.id || "").trim() || customerDoc.id,
+      };
+    })
+    .filter(isVisibleCustomerRecord)
     .sort((a, b) => {
       const left = a.submittedAt || "";
       const right = b.submittedAt || "";
@@ -2336,13 +2345,13 @@ export async function listCustomers() {
 
 const DELETED_CUSTOMERS_COLLECTION = "deletedCustomers";
 
-async function resolveCustomerDocForDelete(customerId, firestoreDocId) {
+async function resolveCustomerDoc(customerId, firestoreDocId, { allowDeleted = false } = {}) {
   const normalizedInputId = normalizeText(customerId);
   const normalizedDocId = normalizeText(firestoreDocId);
 
   const fromSnap = (docSnap) => {
     const data = docSnap.data();
-    if (data.isDeleted) {
+    if (!allowDeleted && isRecordDeleted(data)) {
       throw new Error("Customer was already deleted.");
     }
     const canonicalId = normalizeText(data.customerId) || docSnap.id;
@@ -2373,6 +2382,10 @@ async function resolveCustomerDocForDelete(customerId, firestoreDocId) {
   throw new Error("Customer not found.");
 }
 
+async function resolveCustomerDocForDelete(customerId, firestoreDocId) {
+  return resolveCustomerDoc(customerId, firestoreDocId, { allowDeleted: false });
+}
+
 async function assertAdminActor(actorRole) {
   if (actorRole === "admin") return;
   const uid = auth.currentUser?.uid;
@@ -2385,13 +2398,47 @@ async function assertAdminActor(actorRole) {
   }
 }
 
-async function batchMarkDeleted(docRefs, deletePatch) {
+async function batchPatchDocuments(docRefs, patch) {
   if (!docRefs.length) return;
   for (let i = 0; i < docRefs.length; i += 450) {
     const batch = writeBatch(db);
-    docRefs.slice(i, i + 450).forEach((ref) => batch.update(ref, deletePatch));
+    docRefs.slice(i, i + 450).forEach((ref) => batch.update(ref, patch));
     await batch.commit();
   }
+}
+
+async function batchMarkDeleted(docRefs, deletePatch) {
+  return batchPatchDocuments(docRefs, deletePatch);
+}
+
+const CUSTOMER_RESTORE_PATCH = {
+  isDeleted: false,
+  deletedAt: null,
+  deletedByUid: "",
+  deletedByName: "",
+  isArchived: false,
+  archivedAt: null,
+};
+
+function mapCustomerDocSnap(customerDoc) {
+  const data = customerDoc.data();
+  return {
+    id: customerDoc.id,
+    ...data,
+    customerId: String(data?.customerId || customerDoc.id || "").trim() || customerDoc.id,
+  };
+}
+
+/** Customers hidden by soft-delete (still in Firestore `customers` collection). */
+export async function listSoftDeletedCustomers() {
+  if (!auth.currentUser) {
+    throw new Error("Sign in required to load deleted customers.");
+  }
+  const snapshot = await getDocs(collection(db, "customers"));
+  return snapshot.docs
+    .map(mapCustomerDocSnap)
+    .filter(isRecordDeleted)
+    .sort((a, b) => String(b.deletedAt || b.submittedAt || "").localeCompare(String(a.deletedAt || a.submittedAt || "")));
 }
 
 /**
@@ -2496,6 +2543,83 @@ export async function deleteCustomer(
       notifications: notificationSnap.size,
     },
   };
+}
+
+/** Restores a soft-deleted customer and linked loan/collection/ledger rows. */
+export async function restoreCustomer(customerId, { actorName, actorRole, firestoreDocId } = {}) {
+  if (!auth.currentUser) {
+    throw new Error("Sign in required to restore customers.");
+  }
+  await assertAdminActor(actorRole);
+
+  const { customerRef, customerData, canonicalId } = await resolveCustomerDoc(customerId, firestoreDocId, {
+    allowDeleted: true,
+  });
+  if (!isRecordDeleted(customerData)) {
+    throw new Error("This customer is not deleted.");
+  }
+
+  const [applicationSnap, amountSnap, walletSnap, notificationSnap] = await Promise.all([
+    getDocs(query(collection(db, "loanApplications"), where("customerId", "==", canonicalId))),
+    getDocs(query(collection(db, "customerAmounts"), where("customerId", "==", canonicalId))),
+    getDocs(query(collection(db, "walletTransactions"), where("customerId", "==", canonicalId))),
+    getDocs(query(collection(db, "notifications"), where("customerId", "==", canonicalId))),
+  ]);
+
+  const walletRefs = [...walletSnap.docs.map((d) => d.ref)];
+  const loanDisbRef = doc(db, "walletTransactions", `loan-disb-${canonicalId}`);
+  const loanDisbSnap = await getDoc(loanDisbRef);
+  if (loanDisbSnap.exists()) {
+    walletRefs.push(loanDisbRef);
+  }
+  for (const amountDoc of amountSnap.docs) {
+    const entryId = amountDoc.data()?.entryId || amountDoc.id;
+    if (!entryId) continue;
+    const emiRef = doc(db, "walletTransactions", `emi-${entryId}`);
+    const emiSnap = await getDoc(emiRef);
+    if (emiSnap.exists()) {
+      walletRefs.push(emiRef);
+    }
+  }
+
+  await updateDoc(customerRef, CUSTOMER_RESTORE_PATCH);
+  await batchPatchDocuments(applicationSnap.docs.map((d) => d.ref), CUSTOMER_RESTORE_PATCH);
+  await batchPatchDocuments(amountSnap.docs.map((d) => d.ref), CUSTOMER_RESTORE_PATCH);
+  await batchPatchDocuments(notificationSnap.docs.map((d) => d.ref), CUSTOMER_RESTORE_PATCH);
+  await batchPatchDocuments(walletRefs, CUSTOMER_RESTORE_PATCH);
+
+  try {
+    await deleteDoc(doc(db, DELETED_CUSTOMERS_COLLECTION, canonicalId));
+  } catch {
+    /* archive row may be missing */
+  }
+
+  const restoredByName = normalizeText(actorName) || "Admin";
+  await createAuditLog({
+    action: "restore_customer",
+    entityType: "customer",
+    entityId: canonicalId,
+    message: `${normalizeText(customerData.customerName) || "Customer"} was restored to active lists.`,
+    actorName: restoredByName,
+    actorRole: "admin",
+  });
+
+  return { customerId: canonicalId, customerName: customerData.customerName || "" };
+}
+
+/** Restores every soft-deleted customer in Firestore. */
+export async function restoreAllDeletedCustomers({ actorName, actorRole } = {}) {
+  const deletedRows = await listSoftDeletedCustomers();
+  const restored = [];
+  for (const row of deletedRows) {
+    const result = await restoreCustomer(row.customerId, {
+      actorName,
+      actorRole,
+      firestoreDocId: row.id,
+    });
+    restored.push(result);
+  }
+  return { restoredCount: restored.length, customers: restored };
 }
 
 export async function setCustomerArchived(customerId, isArchived) {

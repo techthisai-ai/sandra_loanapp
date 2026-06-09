@@ -199,25 +199,24 @@ export function getTodayPaidDisplayForCustomer(
 }
 
 export function commitPaidDraftEntry(paidState, entryKey) {
-  const hadDraft = Object.prototype.hasOwnProperty.call(paidState?.drafts || {}, entryKey);
   const sanitized = sanitizePaidAmount(paidState?.drafts?.[entryKey]);
   const nextDrafts = { ...paidState.drafts };
   delete nextDrafts[entryKey];
 
   if (!sanitized) {
-    const nextCommitted = { ...paidState.committed };
-    if (hadDraft) {
-      delete nextCommitted[entryKey];
-    }
-    return { drafts: nextDrafts, committed: nextCommitted };
+    return { drafts: nextDrafts, committed: { ...paidState.committed } };
   }
+
+  const existing = Number(getCommittedPaidAmount(entryKey, paidState) || 0);
+  const increment = Number(sanitized);
+  const nextAmount = existing + increment;
 
   return {
     drafts: nextDrafts,
     committed: {
       ...paidState.committed,
       [entryKey]: {
-        amount: sanitized,
+        amount: String(nextAmount),
         paidAt: new Date().toISOString(),
       },
     },

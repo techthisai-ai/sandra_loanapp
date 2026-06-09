@@ -24,6 +24,7 @@ import {
   rejectCustomerAmountEntry,
 } from "../services/userAuth";
 import CollectionApprovalTable from "../components/collection/CollectionApprovalTable";
+import { resolveCollectionEntryDisplayStatus } from "../utils/collectionEntryDisplay.js";
 import { useSearchParams } from "react-router-dom";
 import { downloadCollectionRegisterXlsx } from "../utils/collectionReportExports.js";
 import {
@@ -241,6 +242,7 @@ export default function Collection() {
           paymentMethod: entry.paymentMethod || "Cash",
           collectorName: entry.collectorName || "Employee",
           collectionStatus: entry.collectionStatus || "Collected",
+          collectionDisplayStatus: resolveCollectionEntryDisplayStatus(entry, customer),
           remarks: entry.note || "",
           approvalStatus: String(entry.approvalStatus || "pending").toLowerCase(),
           approvedAt: entry.approvedAt || "",
@@ -256,7 +258,12 @@ export default function Collection() {
     const query = search.trim().toLowerCase();
     return collectionRows.filter((row) => {
       const matchesFrequency = frequencyFilter === "All" || row.collectionFrequency === frequencyFilter;
-      const matchesStatus = statusFilter === "All" || row.collectionStatus === statusFilter;
+      const displayStatus = row.collectionDisplayStatus || row.collectionStatus;
+      const matchesStatus =
+        statusFilter === "All" ||
+        row.collectionStatus === statusFilter ||
+        displayStatus === statusFilter ||
+        (statusFilter === "Partial Payment" && displayStatus === "Partially Paid");
       const matchesPeriod = rowMatchesPeriodFilter(row, periodFilter);
       const matchesSearch =
         !query ||

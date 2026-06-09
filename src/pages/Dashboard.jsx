@@ -28,6 +28,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import FirebaseSyncAlert from "../components/FirebaseSyncAlert";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import PremiumKpiCard from "../components/dashboard/PremiumKpiCard";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
@@ -739,6 +740,11 @@ export default function Dashboard() {
       }
     >
       <div className="app-grid-page dash-premium grid w-full min-w-0 gap-4 md:gap-5">
+        <FirebaseSyncAlert
+          error={syncError}
+          customerCount={customers.length}
+          loading={syncLoading}
+        />
         {syncLoading && customers.length === 0 && entries.length === 0 ? <DashboardSkeleton /> : null}
 
         <div className="relative overflow-hidden rounded-[22px] border border-white/60 bg-gradient-to-br from-slate-50/95 via-white to-blue-50/35 px-3.5 pb-3.5 pt-3 shadow-[0_10px_36px_-22px_rgba(15,23,42,0.16)] ring-1 ring-slate-200/40 backdrop-blur-md sm:px-4 sm:pb-4 sm:pt-3.5 md:px-5 md:pb-5 md:pt-4">

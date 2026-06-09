@@ -4,6 +4,7 @@ import { ArrowRight, Eye, EyeOff, LogOut } from "lucide-react";
 import { signOut } from "firebase/auth";
 import BrandLogo from "../components/BrandLogo";
 import { auth } from "../firebase/config";
+import { isUsingFirebaseEmulators } from "../firebase/environment";
 import { loginWithRoleTimed } from "../services/userAuth";
 import useAuth from "../hooks/useAuth";
 import {
@@ -95,7 +96,14 @@ export default function Login() {
       });
       finishLogin(signedInProfile, credential);
     } catch (loginError) {
-      setError(loginError.message || "Login failed");
+      const code = loginError?.code || "";
+      if (code === "auth/network-request-failed" && isUsingFirebaseEmulators()) {
+        setError(
+          'Cannot reach the Firebase Emulator. Start it with "npm run emulators" in another terminal, or use "npm run dev" to sign in against live Firebase.'
+        );
+      } else {
+        setError(loginError.message || "Login failed");
+      }
     } finally {
       setBusy(false);
     }

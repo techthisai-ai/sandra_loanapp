@@ -13,6 +13,7 @@ import {
   seedDummySubcenterCustomers,
   updateUserRole,
 } from "../services/userAuth";
+import { isUsingFirebaseEmulators } from "../firebase/environment";
 import { isDevTestingMode } from "../utils/devTesting";
 
 export default function AdminControls() {
@@ -195,12 +196,24 @@ export default function AdminControls() {
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-600">QA / demos</p>
                 <h3 className="text-2xl font-semibold text-slate-950">Demo loan &amp; collection</h3>
                 <p className="mt-1 max-w-2xl text-sm text-slate-600">
-                  <span className="font-semibold text-slate-800">Seed demo data</span> adds one customer (Monday Centre, loan
-                  approved, one pending collection).{" "}
-                  <span className="font-semibold text-slate-800">Seed full test dataset</span> adds five weekday customers
-                  plus one KYC-only draft for filters, employee routes, and the Archived tab.{" "}
-                  <span className="font-semibold text-slate-800">Seed dummy sub-centres</span> adds two named sub-centres
-                  per weekday (local storage) and one loan customer per sub-centre for Reports / Center filters.
+                  {showDevReset ? (
+                    <>
+                      <span className="font-semibold text-slate-800">Seed demo data</span> adds one customer (Monday Centre,
+                      loan approved, one pending collection).{" "}
+                      <span className="font-semibold text-slate-800">Seed full test dataset</span> adds five weekday
+                      customers plus one KYC-only draft.{" "}
+                      <span className="font-semibold text-slate-800">Reset demo data</span> wipes emulator finance data only.
+                    </>
+                  ) : (
+                    <>
+                      Seed and reset tools are available only on the{" "}
+                      <span className="font-semibold text-slate-800">Firebase Emulator</span> so localhost testing cannot
+                      delete data on your deployed website. Run{" "}
+                      <code className="rounded bg-slate-100 px-1 text-xs">npm run emulators</code> then{" "}
+                      <code className="rounded bg-slate-100 px-1 text-xs">npm run dev</code>.
+                      {isUsingFirebaseEmulators() ? null : " You are currently connected to live Firebase."}
+                    </>
+                  )}
                 </p>
               </div>
             </div>

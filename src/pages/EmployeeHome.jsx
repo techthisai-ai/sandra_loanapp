@@ -37,6 +37,59 @@ function formatRecentWhen(entry) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+const PERIOD_OPTIONS = ["All", "Today", "Week", "Month", "Year"];
+
+function startOfWeekMonday(date) {
+  const d = startOfDay(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+function dateMatchesPeriod(dateValue, period, reference = new Date()) {
+  if (period === "All") return true;
+  const date = safeDate(dateValue);
+  if (!date) return false;
+  const target = startOfDay(date);
+  const today = startOfDay(reference);
+
+  if (period === "Today") return target.getTime() === today.getTime();
+  if (period === "Week") {
+    const weekStart = startOfWeekMonday(today);
+    return target >= weekStart && target <= today;
+  }
+  if (period === "Month") {
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    return target >= monthStart && target <= today;
+  }
+  if (period === "Year") {
+    const yearStart = new Date(today.getFullYear(), 0, 1);
+    return target >= yearStart && target <= today;
+  }
+  return true;
+}
+
+function entryMatchesPeriod(entry, period, reference = new Date()) {
+  return dateMatchesPeriod(entry.collectionDate || entry.submittedAt, period, reference);
+}
+
+function collectionPeriodLabel(period) {
+  if (period === "Today") return "Today's collection";
+  if (period === "Week") return "This week's collection";
+  if (period === "Month") return "This month's collection";
+  if (period === "Year") return "This year's collection";
+  return "Today's collection";
+}
+
+function pendingPeriodLabel(period) {
+  if (period === "Today") return "Pending customers";
+  if (period === "Week") return "Pending this week";
+  if (period === "Month") return "Pending this month";
+  if (period === "Year") return "Pending this year";
+  return "Pending customers";
+}
+
 const EMPLOYEE_STAT_ACCENTS = {
   blue: {
     border: "border-[#3B82F6]/30 hover:border-[#3B82F6]/45",
@@ -92,6 +145,7 @@ export default function EmployeeHome() {
   const { assignedCenters, assignedCentersLabel, allCenters, hasAssignedCenter, scopeCustomers } =
     useEmployeeCenterScope();
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+  const [periodFilter, setPeriodFilter] = useState("All");
 
   const metrics = useMemo(() => {
     const scoped = scopeCustomers(customers);
@@ -99,31 +153,31 @@ export default function EmployeeHome() {
     const approvedEntries = entries.filter(
       (e) => e.approvalStatus === "approved" && ids.has(e.customerId) && employeeMatchesCollector(profile, e)
     );
-    const approvedByCustomer = approvedEntries.reduce((map, e) => {
-      map[e.customerId] = (map[e.customerId] || 0) + Number(e.amount || 0);
-      return map;
-    }, {});
-    const todayKey = new Date().toISOString().slice(0, 10);
-    const today = startOfDay(new Date());
-    const todayApproved = approvedEntries.filter((e) => {
-      const d = (e.collectionDate || "").slice(0, 10);
-      return d === todayKey && ids.has(e.customerId);
-    });
-    const todayCollected = todayApproved.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const todayCollectedIds = new Set(todayApproved.map((e) => e.customerId));
-    const dueToday = scoped.filter((c) => {
-      const due = safeDate(c.dueDate);
-      return due && startOfDay(due).getTime() === today.getTime();
-    });
-    const pendingCollection = dueToday.filter((c) => !todayCollectedIds.has(c.customerId)).length;
+    const periodEntries =
+      periodFilter === "All"
+        ? approvedEntries.filter((e) => entryMatchesPeriod(e, "Today"))
+        : approvedEntries.filter((e) => entryMatchesPeriod(e, periodFilter));
+    const periodCollected = periodEntries.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const periodCollectedIds = new Set(periodEntries.map((e) => e.customerId));
+
+    const pendingScope =
+      periodFilter === "All"
+        ? scoped.filter((c) => {
+            const due = safeDate(c.dueDate);
+            return due && startOfDay(due).getTime() <= startOfDay(new Date()).getTime();
+          })
+        : scoped.filter((c) => dateMatchesPeriod(c.dueDate, periodFilter));
+
+    const pendingCollection = pendingScope.filter((c) => !periodCollectedIds.has(c.customerId)).length;
     const totalCollected = approvedEntries.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
     return {
       scopedCount: scoped.length,
-      todayCollected,
+      periodCollected,
       pendingCollection,
       totalCollected,
     };
-  }, [customers, entries, profile, scopeCustomers]);
+  }, [customers, entries, periodFilter, profile, scopeCustomers]);
 
   const recentPaid = useMemo(() => {
     const scoped = scopeCustomers(customers);
@@ -137,6 +191,7 @@ export default function EmployeeHome() {
       if (Number(e.amount || 0) <= 0) return false;
       const st = String(e.collectionStatus || "Collected").toLowerCase();
       if (st === "skipped" || st === "rescheduled") return false;
+      if (periodFilter !== "All" && !entryMatchesPeriod(e, periodFilter)) return false;
       return true;
     });
 
@@ -153,7 +208,7 @@ export default function EmployeeHome() {
       status: e.collectionStatus || "Collected",
       whenLabel: formatRecentWhen(e),
     }));
-  }, [customers, entries, profile, scopeCustomers]);
+  }, [customers, entries, periodFilter, profile, scopeCustomers]);
 
   return (
     <div className="employee-page">
@@ -192,13 +247,13 @@ export default function EmployeeHome() {
         />
         <EmployeeStatCard
           icon={IndianRupee}
-          label="Today's collection"
-          value={loading ? "…" : formatCurrency(metrics.todayCollected)}
+          label={collectionPeriodLabel(periodFilter)}
+          value={loading ? "…" : formatCurrency(metrics.periodCollected)}
           accent="purple"
         />
         <EmployeeStatCard
           icon={Clock3}
-          label="Pending customers"
+          label={pendingPeriodLabel(periodFilter)}
           value={loading ? "…" : String(metrics.pendingCollection)}
           accent="orange"
         />
@@ -208,6 +263,23 @@ export default function EmployeeHome() {
           value={loading ? "…" : formatCurrency(metrics.totalCollected)}
           accent="green"
         />
+      </div>
+
+      <div className="employee-home-period-filter mt-2 grid grid-cols-5 gap-1 rounded-xl border border-slate-200/90 bg-white p-0.5 shadow-sm">
+        {PERIOD_OPTIONS.map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => setPeriodFilter(option)}
+            className={`inline-flex h-9 items-center justify-center rounded-lg text-xs font-semibold transition sm:text-sm ${
+              periodFilter === option
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            {option}
+          </button>
+        ))}
       </div>
 
       <section className="app-panel-muted mt-2.5 rounded-2xl p-3 sm:mt-3" aria-labelledby="recent-paid-heading">
@@ -224,7 +296,7 @@ export default function EmployeeHome() {
           <p className="py-3 text-center text-sm text-slate-500">Loading…</p>
         ) : recentPaid.length === 0 ? (
           <p className="rounded-xl border border-dashed border-slate-200/90 bg-white/50 px-3 py-3 text-center text-sm text-slate-600">
-            No recent payments yet.
+            {periodFilter === "All" ? "No recent payments yet." : `No collections for ${periodFilter.toLowerCase()}.`}
           </p>
         ) : (
           <ul className="flex flex-col divide-y divide-slate-200/60">

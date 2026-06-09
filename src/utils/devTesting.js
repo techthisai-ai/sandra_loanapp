@@ -1,8 +1,13 @@
+import { canMutateFinanceTestData } from "../firebase/environment";
+
 /**
- * Dev / QA helpers. Reset controls are hidden in production builds unless
- * VITE_ENABLE_DEMO_RESET=true is set explicitly.
+ * Dev / QA helpers (seed + reset). Only available on Firebase Emulator so localhost
+ * cannot delete or pollute the live deployed database.
  */
 export function isDevTestingMode() {
+  if (!canMutateFinanceTestData()) {
+    return false;
+  }
   if (import.meta.env?.PROD && import.meta.env?.VITE_ENABLE_DEMO_RESET !== "true") {
     return false;
   }

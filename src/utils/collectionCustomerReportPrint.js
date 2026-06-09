@@ -9,6 +9,7 @@ import {
   makePaidEntryKey,
   sanitizePaidAmount,
 } from "./collectionReportPaidStorage.js";
+import { resolveReportPaidColumnAmount } from "./collectionReportRows.js";
 import {
   collectionReportPrintCellClass,
   getCollectionReportAlert,
@@ -51,17 +52,8 @@ function formatGeneratedStamp(date = new Date()) {
 }
 
 function resolvePaidForPrint(row, paidState = { drafts: {}, committed: {} }) {
-  if (row.paidDisplay) return row.paidDisplay;
-  if (row.paid && row.showPaidInput === false) return row.paid;
-  if (row.installmentNumber == null) return row.paid || "—";
-
-  const entryKey = makePaidEntryKey(row.customerId, row.installmentNumber);
-  const committedAmount = sanitizePaidAmount(paidState.committed?.[entryKey]?.amount);
-  if (committedAmount) return formatCurrency(Number(committedAmount));
-  if (row.isCurrentTenurePaid && Number(row.currentTenurePaidAmount || 0) > 0) {
-    return formatCurrency(Number(row.currentTenurePaidAmount));
-  }
-  return "—";
+  const amount = resolveReportPaidColumnAmount(row, paidState);
+  return amount > 0 ? formatCurrency(amount) : "—";
 }
 
 function resolveEntryForPrint(row, paidState = { drafts: {}, committed: {} }) {

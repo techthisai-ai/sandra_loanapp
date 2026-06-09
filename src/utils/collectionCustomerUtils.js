@@ -2,6 +2,7 @@ import { calculateLoanValues } from "./loanCalculation.js";
 import { getCollectionIntervalDays, normalizeCollectionFrequency } from "./loanTimelineDates.js";
 import { resolveCustomerCenterDisplay } from "./centerDisplay.js";
 import { getCenterMatchLabels } from "./employeeScope.js";
+import { isActiveCustomerRecord } from "./recordFlags.js";
 
 const LOAN_MERGE_FIELDS = [
   "loanAmount",
@@ -136,7 +137,7 @@ export function hasValidLoanForCollection(customer) {
 }
 
 export function isCollectionEligibleCustomer(customer) {
-  if (!customer || customer.isArchived || customer.isDeleted) return false;
+  if (!isActiveCustomerRecord(customer)) return false;
   if (String(customer.approvalStatus || "").toLowerCase() === "rejected") return false;
   return hasValidLoanForCollection(customer);
 }

@@ -32,6 +32,7 @@ import { NO_SUB_CENTER_LABEL, resolveCustomerCenterDisplay } from "../../utils/c
 import {
   collectionReportCellBgClass,
   collectionReportCellTextClass,
+  collectionReportPrintCellClass,
   getCollectionReportAlert,
 } from "../../utils/collectionAlerts";
 import {
@@ -220,7 +221,7 @@ function PendingAmountModal({ row, onClose }) {
         <div className="max-h-[min(60vh,420px)] overflow-auto px-5 py-4 sm:px-6">
           {breakdown.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-600">
-              No previous unpaid tenures.
+              No pending amount — current due and earlier tenures are cleared.
             </p>
           ) : (
             <table className="w-full text-sm">
@@ -233,8 +234,13 @@ function PendingAmountModal({ row, onClose }) {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {breakdown.map((line) => (
-                  <tr key={line.installmentNumber}>
-                    <td className="px-2 py-2.5 font-medium text-slate-900">{line.installmentNumber}</td>
+                  <tr key={`${line.installmentNumber}-${line.isCurrentTenure ? "current" : "prior"}`}>
+                    <td className="px-2 py-2.5 font-medium text-slate-900">
+                      {line.installmentNumber}
+                      {line.isCurrentTenure ? (
+                        <span className="ml-1 text-xs font-normal text-blue-600">(current)</span>
+                      ) : null}
+                    </td>
                     <td className="px-2 py-2.5 text-right tabular-nums text-slate-800">{line.amountDisplay}</td>
                     <td className="px-2 py-2.5 text-center">
                       <span
@@ -807,7 +813,7 @@ export default function CollectionReportPanel() {
       <div className="mt-4 min-w-0 max-w-full overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-sm [contain:inline-size]">
         <div className="w-full overflow-x-auto overscroll-x-contain pb-1 [scrollbar-color:rgba(148,163,184,0.9)_rgba(241,245,249,0.95)] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/90 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-100">
           <table
-            className="table-fixed border-collapse text-left text-sm"
+            className="collection-report-table table-fixed border-collapse text-left text-sm"
             style={{ width: `${REPORT_TABLE_MIN_WIDTH_PX}px`, minWidth: `${REPORT_TABLE_MIN_WIDTH_PX}px` }}
           >
             <colgroup>
@@ -841,12 +847,16 @@ export default function CollectionReportPanel() {
                 reportRows.map((row, index) => {
                   const rowAlert = getCollectionReportAlert(row);
                   return (
-                  <tr key={row.rowKey || row.customerId} className="hover:bg-slate-50/80">
+                  <tr
+                    key={row.rowKey || row.customerId}
+                    className={rowAlert.scope === "customerIdCell" ? "" : "hover:bg-slate-50/80"}
+                  >
                     {REPORT_COLUMNS.map((column) => {
                       const alertTextClass =
                         rowAlert.scope === "fullRow"
                           ? collectionReportCellTextClass(rowAlert, column.key)
                           : "";
+                      const alertPrintClass = collectionReportPrintCellClass(rowAlert, column.key);
                       const alertCellBgClass =
                         column.key === "customerId"
                           ? collectionReportCellBgClass(rowAlert, column.key)
@@ -860,7 +870,7 @@ export default function CollectionReportPanel() {
                       }
                       if (column.clickable && column.key === "pendingAmountDisplay") {
                         const pendingValue = row.pendingAmountDisplay || "—";
-                        const canOpen = Array.isArray(row.pendingBreakdown) && row.pendingBreakdown.length > 0;
+                        const canOpen = Number(row.pendingAmountRaw || 0) > 0;
                         return (
                           <td
                             key={column.key}
@@ -889,7 +899,11 @@ export default function CollectionReportPanel() {
                             className={reportTableBodyClass(column.align, "tabular-nums text-slate-700")}
                           >
                             {paidAmount > 0 ? (
-                              <span className="text-sm font-semibold text-emerald-700">
+                              <span
+                                className={`text-sm font-semibold ${
+                                  row.isCurrentTenurePartial ? "text-blue-700" : "text-emerald-700"
+                                }`}
+                              >
                                 {formatCurrency(paidAmount)}
                               </span>
                             ) : (
@@ -949,9 +963,9 @@ export default function CollectionReportPanel() {
                           ? "font-medium text-slate-950"
                           : "text-slate-700";
                       const alertHoverClass =
-                        alertCellBgClass === "bg-rose-100"
+                        alertPrintClass.includes("cr-alert-bg-red") || alertCellBgClass === "bg-rose-100"
                           ? "hover:bg-rose-100"
-                          : alertCellBgClass === "bg-amber-100"
+                          : alertPrintClass.includes("cr-alert-bg-yellow") || alertCellBgClass === "bg-amber-100"
                             ? "hover:bg-amber-100"
                             : "";
                       return (
@@ -959,7 +973,7 @@ export default function CollectionReportPanel() {
                           key={column.key}
                           className={reportTableBodyClass(
                             column.align,
-                            `${isNumeric ? "tabular-nums" : ""} ${alertCellBgClass} ${alertHoverClass} ${baseTextClass}`.trim(),
+                            `${isNumeric ? "tabular-nums" : ""} ${alertPrintClass} ${alertCellBgClass} ${alertHoverClass} ${baseTextClass}`.trim(),
                             { truncate: column.truncate }
                           )}
                         >

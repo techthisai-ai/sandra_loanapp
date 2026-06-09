@@ -93,7 +93,7 @@ npm run build
 
 ### 6. Deploy to Firebase Hosting
 
-Production uses **Firebase Hosting only** (project `cafe-c396e`).
+Production uses **Firebase Hosting only** (project `sandraloanapp-85985`, live URL https://sandraloanapp-85985.web.app).
 
 - **Automatic:** merge to `main` → GitHub Action deploys hosting (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for `FIREBASE_SERVICE_ACCOUNT` secret setup).
 - **Manual:**

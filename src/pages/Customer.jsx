@@ -11,12 +11,19 @@ import {
   Star,
   Trash2,
 } from "lucide-react";
-import { deleteCustomer } from "../services/userAuth";
+import {
+  deleteCustomer,
+  listSoftDeletedCustomers,
+  restoreAllDeletedCustomers,
+  restoreCustomer,
+} from "../services/userAuth";
+import FirebaseSyncAlert from "../components/FirebaseSyncAlert";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import { CUSTOMER_DAY_FILTER_OPTIONS, loadCentersWithDay } from "../constants/dayCenters";
 import useAuth from "../hooks/useAuth";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import { preloadCustomerCreatePage } from "../utils/customerCreateRouteLoader";
+import { isActiveCustomerRecord } from "../utils/recordFlags";
 const DAY_FILTERS = CUSTOMER_DAY_FILTER_OPTIONS;
 
 const FAVORITES_STORAGE_KEY = "loanCustomerFavorites";
@@ -140,9 +147,15 @@ export default function Customer() {
   const [toastError, setToastError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [deletedCustomers, setDeletedCustomers] = useState([]);
+  const [deletedLoading, setDeletedLoading] = useState(false);
+  const [restoringId, setRestoringId] = useState("");
+  const [restoringAll, setRestoringAll] = useState(false);
+  const [deletedCount, setDeletedCount] = useState(0);
   const filterRef = useRef(null);
 
   const isAdmin = profile?.role === "admin";
+  const listLoading = statusFilter === "Deleted" ? deletedLoading : loading;
 
   useEffect(() => {
     try {
@@ -175,12 +188,41 @@ export default function Customer() {
 
   const allCenters = useMemo(() => loadAllCenters(), []);
 
+  const loadDeletedCustomers = useCallback(async () => {
+    if (!isAdmin) return;
+    setDeletedLoading(true);
+    try {
+      const rows = await listSoftDeletedCustomers();
+      setDeletedCustomers(rows);
+    } catch (loadError) {
+      setToastError(loadError.message || "Unable to load deleted customers.");
+    } finally {
+      setDeletedLoading(false);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (statusFilter === "Deleted" && isAdmin) {
+      loadDeletedCustomers();
+    }
+  }, [statusFilter, isAdmin, loadDeletedCustomers]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    listSoftDeletedCustomers()
+      .then((rows) => setDeletedCount(rows.length))
+      .catch(() => setDeletedCount(0));
+  }, [isAdmin, customers.length]);
+
   const scopedCustomers = useMemo(() => {
+    if (statusFilter === "Deleted") {
+      return deletedCustomers;
+    }
     if (statusFilter === "Favourite") {
       return customers.filter((c) => favoriteSet.has(c.customerId));
     }
-    return customers.filter((c) => !c.isArchived);
-  }, [customers, statusFilter, favoriteSet]);
+    return customers.filter(isActiveCustomerRecord);
+  }, [customers, deletedCustomers, statusFilter, favoriteSet]);
 
   const centerOptions = useMemo(() => {
     const labels = new Set();
@@ -277,6 +319,56 @@ export default function Customer() {
     setDeleteTarget(null);
   }, [deleting]);
 
+  const handleRestoreCustomer = useCallback(
+    async (customer) => {
+      if (!isAdmin || restoringId) return;
+      setRestoringId(customer.customerId || customer.id);
+      setToastError("");
+      try {
+        await restoreCustomer(customer.customerId || customer.id, {
+          actorName: profile?.displayName || profile?.email || "Admin",
+          actorRole: "admin",
+          firestoreDocId: customer.id,
+        });
+        setToast(`Restored ${customer.customerName || customer.customerId}.`);
+        setDeletedCount((count) => Math.max(0, count - 1));
+        await loadDeletedCustomers();
+      } catch (restoreError) {
+        setToastError(restoreError.message || "Unable to restore customer.");
+      } finally {
+        setRestoringId("");
+      }
+    },
+    [isAdmin, loadDeletedCustomers, profile?.displayName, profile?.email, restoringId]
+  );
+
+  const handleRestoreAllDeleted = useCallback(async () => {
+    if (!isAdmin || restoringAll || deletedCustomers.length === 0) return;
+    if (
+      !window.confirm(
+        `Restore all ${deletedCustomers.length} deleted customer(s)? They will appear on the Active list again.`
+      )
+    ) {
+      return;
+    }
+    setRestoringAll(true);
+    setToastError("");
+    try {
+      const result = await restoreAllDeletedCustomers({
+        actorName: profile?.displayName || profile?.email || "Admin",
+        actorRole: "admin",
+      });
+      setToast(`Restored ${result.restoredCount} customer(s).`);
+      setDeletedCustomers([]);
+      setDeletedCount(0);
+      setStatusFilter("Active");
+    } catch (restoreError) {
+      setToastError(restoreError.message || "Unable to restore deleted customers.");
+    } finally {
+      setRestoringAll(false);
+    }
+  }, [deletedCustomers.length, isAdmin, profile?.displayName, profile?.email, restoringAll]);
+
   const handleConfirmDelete = useCallback(async () => {
     if ((!deleteTarget?.customerId && !deleteTarget?.id) || deleting) return;
     if (!isAdmin) {
@@ -325,6 +417,23 @@ export default function Customer() {
       }
     >
       <div className="flex h-[calc(100vh-5.5rem)] w-full min-w-0 max-w-full flex-col gap-3 overflow-hidden px-0.5 md:px-0 lg:max-w-[min(1440px,100%)]">
+        <FirebaseSyncAlert error={error} customerCount={customers.length} loading={loading} />
+        {isAdmin && statusFilter === "Active" && deletedCount > 0 ? (
+          <div className="shrink-0 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <p className="font-semibold">{deletedCount} customer(s) are hidden (soft-deleted)</p>
+            <p className="mt-1 text-xs leading-relaxed text-amber-900">
+              They still exist in Firebase but were removed from the Active list. Open the{" "}
+              <button
+                type="button"
+                onClick={() => setStatusFilter("Deleted")}
+                className="font-semibold text-amber-950 underline"
+              >
+                Deleted
+              </button>{" "}
+              tab to restore them.
+            </p>
+          </div>
+        ) : null}
         {toast ? (
           <div className="app-alert-success shrink-0 py-2 text-sm" role="status">
             {toast}
@@ -370,6 +479,36 @@ export default function Customer() {
                     {favoriteCount}
                   </span>
                 </button>
+                {isAdmin ? (
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter("Deleted")}
+                    className={`inline-flex items-center gap-1.5 border-b-2 pb-2 text-sm font-semibold transition ${
+                      statusFilter === "Deleted"
+                        ? "border-rose-500 text-rose-700"
+                        : "border-transparent text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    Deleted
+                    <span
+                      className={`rounded-full px-1.5 text-[10px] font-bold ${
+                        statusFilter === "Deleted" ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {deletedCount}
+                    </span>
+                  </button>
+                ) : null}
+                {isAdmin && statusFilter === "Deleted" && deletedCustomers.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleRestoreAllDeleted}
+                    disabled={restoringAll}
+                    className="app-button-primary ml-auto rounded-xl px-3 py-2 text-xs font-semibold"
+                  >
+                    {restoringAll ? "Restoring…" : `Restore all (${deletedCustomers.length})`}
+                  </button>
+                ) : null}
               </div>
 
               <select
@@ -481,12 +620,14 @@ export default function Customer() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {loading ? (
+              {listLoading ? (
                 <div className="customer-loading-state py-12 text-sm">Loading customers…</div>
               ) : null}
-              {error ? <div className="app-alert-error mb-2 text-sm">{error}</div> : null}
+              {error && statusFilter !== "Deleted" ? (
+                <div className="app-alert-error mb-2 text-sm">{error}</div>
+              ) : null}
 
-              {!loading && !error && filtered.length === 0 ? (
+              {!listLoading && (statusFilter === "Deleted" || !error) && filtered.length === 0 ? (
                 <div className="app-empty-state py-12 text-sm">
                   {search.trim() ? (
                     `No matches for “${search.trim()}”.`
@@ -496,13 +637,15 @@ export default function Customer() {
                       <Star className="mx-0.5 inline-block h-3.5 w-3.5 align-text-bottom text-amber-500" /> on any row
                       while viewing Active customers to add one here.
                     </>
+                  ) : statusFilter === "Deleted" ? (
+                    "No deleted customers. All records are on the Active tab."
                   ) : (
                     `No ${statusFilter.toLowerCase()} customers here.`
                   )}
                 </div>
               ) : null}
 
-              {!loading && !error && filtered.length > 0 ? (
+              {!listLoading && (statusFilter === "Deleted" || !error) && filtered.length > 0 ? (
                 <div className="customer-table-wrap overflow-y-visible overflow-x-auto rounded-3xl border border-slate-200/70 bg-white shadow-sm shadow-slate-900/5 ring-1 ring-slate-100/80">
                   <table className="w-full min-w-[1020px] table-auto border-collapse text-left text-xs">
                     <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50/95 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-600">
@@ -607,13 +750,24 @@ export default function Customer() {
                             </td>
                             <td className="align-middle p-2 text-center">
                               <div className="inline-flex justify-center">
-                              <ActionPanel
-                                customer={customer}
-                                isAdmin={isAdmin}
-                                onView={handleViewDetails}
-                                onApplyLoan={handleApplyLoan}
-                                onDelete={setDeleteTarget}
-                              />
+                                {statusFilter === "Deleted" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRestoreCustomer(customer)}
+                                    disabled={restoringId === (customer.customerId || customer.id)}
+                                    className="app-button-primary rounded-xl px-3 py-2 text-[11px] font-semibold disabled:opacity-60"
+                                  >
+                                    {restoringId === (customer.customerId || customer.id) ? "Restoring…" : "Restore"}
+                                  </button>
+                                ) : (
+                                  <ActionPanel
+                                    customer={customer}
+                                    isAdmin={isAdmin}
+                                    onView={handleViewDetails}
+                                    onApplyLoan={handleApplyLoan}
+                                    onDelete={setDeleteTarget}
+                                  />
+                                )}
                               </div>
                             </td>
                           </tr>

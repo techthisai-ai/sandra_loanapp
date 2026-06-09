@@ -6,6 +6,7 @@ import {
   safeDate,
   startOfDay,
 } from "./customerProfileSchedule.js";
+import { computeLoanNearEndAlert } from "./loanNearEndAlert.js";
 import { normalizeCollectionFrequency } from "./loanTimelineDates.js";
 
 export function formatCurrency(value) {
@@ -151,9 +152,7 @@ export function computeCustomerCollectionDetails(customer, customerEntries) {
 
   const totalPayable = Number(customer.totalPayable || 0);
   const balanceAmount = Math.max(totalPayable - paidAmountTotal, 0);
-  const futureUnpaidCount = schedule.filter((item) => !isInstallmentPaid(item) && startOfDay(item.dueDate) >= today).length;
-
-  const nearEndAlert = futureUnpaidCount === 1 && pendingMonths.length === 0;
+  const nearEndAlert = computeLoanNearEndAlert(schedule, customer);
   const daysSinceLastPayment = getDaysSinceLastPayment(customer, customerEntries);
   const daysSinceFirstOverdue = getDaysSinceFirstOverdue(schedule);
   const longTermNoPayment =
@@ -233,6 +232,15 @@ function isEntryPendingApproval(entry) {
   return status !== "approved" && status !== "rejected";
 }
 
+/** Partial Payment entry that is pending or admin-approved (not rejected). */
+function hasActivePartialPaymentEntry(customerEntries) {
+  return customerEntries.some((entry) => {
+    const approval = String(entry?.approvalStatus || "pending").toLowerCase();
+    if (approval === "rejected") return false;
+    return normalizeEmployeeCollectionStatus(entry.collectionStatus) === "Partial Payment";
+  });
+}
+
 export function getCurrentTenurePendingApprovalEntry(customer, customerEntries) {
   const tenure = computeTenureBreakdown(customer, customerEntries);
   const currentNumber = tenure.currentTenureNumber || 0;
@@ -278,6 +286,17 @@ export function isCurrentTenureCollected(customer, customerEntries) {
   return currentItem ? isInstallmentPaid(currentItem) : false;
 }
 
+export function isCurrentTenurePartiallyPaid(customer, customerEntries) {
+  if (isCurrentTenureCollected(customer, customerEntries)) return false;
+
+  const tenure = computeTenureBreakdown(customer, customerEntries);
+  const schedule = buildInstallmentSchedule(customer, customerEntries);
+  const currentItem = schedule.find((item) => item.installmentNumber === tenure.currentTenureNumber);
+  if (currentItem && Number(currentItem.paidAmount || 0) > 0) return true;
+
+  return hasActivePartialPaymentEntry(customerEntries);
+}
+
 export function getCurrentTenureCollectionStatus(customer, customerEntries) {
   const tenure = computeTenureBreakdown(customer, customerEntries);
   const currentNumber = tenure.currentTenureNumber || 0;
@@ -287,7 +306,7 @@ export function getCurrentTenureCollectionStatus(customer, customerEntries) {
   const currentItem = schedule.find((item) => item.installmentNumber === currentNumber);
   if (!currentItem) return "Pending";
   if (isInstallmentPaid(currentItem)) return "Collected";
-  if (Number(currentItem.paidAmount || 0) > 0) return "Partial Payment";
+  if (isCurrentTenurePartiallyPaid(customer, customerEntries)) return "Partial Payment";
 
   const pendingEntry = getCurrentTenurePendingApprovalEntry(customer, customerEntries);
   if (pendingEntry) return normalizeEmployeeCollectionStatus(pendingEntry.collectionStatus);

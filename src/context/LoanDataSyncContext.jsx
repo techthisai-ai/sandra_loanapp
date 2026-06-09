@@ -1,17 +1,22 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { collection, getDocsFromServer, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../firebase/config";
 import useAuth from "../hooks/useAuth";
+import { isRecordDeleted, isVisibleCustomerRecord } from "../utils/recordFlags";
 
 const LoanDataSyncContext = createContext(null);
 
 function mapCustomerDocs(docs) {
   return docs
-    .map((customerDoc) => ({
-      id: customerDoc.id,
-      ...customerDoc.data(),
-    }))
-    .filter((customer) => !customer.isDeleted)
+    .map((customerDoc) => {
+      const data = customerDoc.data();
+      return {
+        id: customerDoc.id,
+        ...data,
+        customerId: String(data?.customerId || customerDoc.id || "").trim() || customerDoc.id,
+      };
+    })
+    .filter(isVisibleCustomerRecord)
     .sort((a, b) => {
       const left = a.submittedAt || "";
       const right = b.submittedAt || "";
@@ -25,7 +30,7 @@ function mapEntryDocs(docs) {
       id: amountDoc.id,
       ...amountDoc.data(),
     }))
-    .filter((entry) => !entry.isDeleted)
+    .filter((entry) => !isRecordDeleted(entry))
     .sort((a, b) => {
       const left = a.submittedAt || "";
       const right = b.submittedAt || "";
@@ -52,7 +57,7 @@ function mapLoanApplicationDocs(docs) {
       id: applicationDoc.id,
       ...applicationDoc.data(),
     }))
-    .filter((application) => !application.isDeleted)
+    .filter((application) => !isRecordDeleted(application))
     .sort((a, b) => {
       const left = a.submittedAt || "";
       const right = b.submittedAt || "";
@@ -84,13 +89,21 @@ export function LoanDataSyncProvider({ children }) {
       return undefined;
     }
 
+    let cancelled = false;
+    let unsubCustomers = () => {};
+    let unsubEntries = () => {};
+    let unsubLoanRequests = () => {};
+    let unsubLoanApplications = () => {};
+
     setLoading(true);
     setError(null);
     const isAdmin = profile?.role === "admin";
-    const gates = { customers: false, entries: false, loanRequests: false, loanApplications: false };
+    // Core lists (customers + collections) must not wait on loan requests/applications —
+    // otherwise the Customer page can stay on "Loading…" forever while Firestore data exists.
+    const gates = { customers: false, entries: false };
 
     const tryDone = () => {
-      if (gates.customers && gates.entries && gates.loanRequests && gates.loanApplications) {
+      if (gates.customers && gates.entries) {
         setLoading(false);
       }
     };
@@ -103,76 +116,124 @@ export function LoanDataSyncProvider({ children }) {
     };
 
     const onCoreErr = (err) => {
-      setError(err?.message || "Unable to sync data");
+      if (cancelled) return;
+      setError(err?.message || "Unable to sync data from Firebase");
       setLoading(false);
     };
 
-    const unsubCustomers = onSnapshot(query(collection(db, "customers")), (snap) => {
-      setCustomers(mapCustomerDocs(snap.docs));
-      if (!gates.customers) {
-        gates.customers = true;
-        tryDone();
+    const startListeners = async () => {
+      try {
+        const [serverCustomers, serverEntries] = await Promise.all([
+          getDocsFromServer(query(collection(db, "customers"))),
+          getDocsFromServer(collection(db, "customerAmounts")),
+        ]);
+        if (!cancelled) {
+          setCustomers(mapCustomerDocs(serverCustomers.docs));
+          setEntries(mapEntryDocs(serverEntries.docs));
+          if (!gates.customers) {
+            gates.customers = true;
+            tryDone();
+          }
+          if (!gates.entries) {
+            gates.entries = true;
+            tryDone();
+          }
+        }
+      } catch (serverError) {
+        console.warn("[sync] server fetch:", serverError?.message || serverError);
       }
-    }, onCoreErr);
 
-    const unsubEntries = onSnapshot(collection(db, "customerAmounts"), (snap) => {
-      setEntries(mapEntryDocs(snap.docs));
-      if (!gates.entries) {
-        gates.entries = true;
-        tryDone();
+      unsubCustomers = onSnapshot(query(collection(db, "customers")), (snap) => {
+        if (cancelled) return;
+        setCustomers(mapCustomerDocs(snap.docs));
+        if (!gates.customers) {
+          gates.customers = true;
+          tryDone();
+        }
+      }, onCoreErr);
+
+      unsubEntries = onSnapshot(collection(db, "customerAmounts"), (snap) => {
+        if (cancelled) return;
+        setEntries(mapEntryDocs(snap.docs));
+        if (!gates.entries) {
+          gates.entries = true;
+          tryDone();
+        }
+      }, onCoreErr);
+
+      if (isAdmin) {
+        unsubLoanRequests = onSnapshot(
+          collection(db, "loanRequests"),
+          (snap) => {
+            if (cancelled) return;
+            setLoanRequests(mapLoanRequestDocs(snap.docs));
+            markLoanRequestsReady();
+          },
+          () => {
+            if (cancelled) return;
+            setLoanRequests([]);
+            markLoanRequestsReady();
+          }
+        );
+      } else if (user?.uid) {
+        unsubLoanRequests = onSnapshot(
+          query(collection(db, "loanRequests"), where("requestedByUid", "==", user.uid)),
+          (snap) => {
+            if (cancelled) return;
+            setLoanRequests(mapLoanRequestDocs(snap.docs));
+            markLoanRequestsReady();
+          },
+          () => {
+            if (cancelled) return;
+            setLoanRequests([]);
+            markLoanRequestsReady();
+          }
+        );
+      } else {
+        setLoanRequests([]);
+        markLoanRequestsReady();
       }
-    }, onCoreErr);
 
-    let unsubLoanRequests = () => {};
-    if (isAdmin) {
-      unsubLoanRequests = onSnapshot(
-        collection(db, "loanRequests"),
+      const markLoanApplicationsReady = () => {
+        if (!gates.loanApplications) {
+          gates.loanApplications = true;
+          tryDone();
+        }
+      };
+
+      unsubLoanApplications = onSnapshot(
+        query(collection(db, "loanApplications")),
         (snap) => {
-          setLoanRequests(mapLoanRequestDocs(snap.docs));
-          markLoanRequestsReady();
+          if (cancelled) return;
+          setLoanApplications(mapLoanApplicationDocs(snap.docs));
+          markLoanApplicationsReady();
         },
         () => {
-          setLoanRequests([]);
-          markLoanRequestsReady();
+          if (cancelled) return;
+          setLoanApplications([]);
+          markLoanApplicationsReady();
         }
       );
-    } else if (user?.uid) {
-      unsubLoanRequests = onSnapshot(
-        query(collection(db, "loanRequests"), where("requestedByUid", "==", user.uid)),
-        (snap) => {
-          setLoanRequests(mapLoanRequestDocs(snap.docs));
-          markLoanRequestsReady();
-        },
-        () => {
-          setLoanRequests([]);
-          markLoanRequestsReady();
-        }
-      );
-    } else {
-      setLoanRequests([]);
-      markLoanRequestsReady();
-    }
-
-    const markLoanApplicationsReady = () => {
-      if (!gates.loanApplications) {
-        gates.loanApplications = true;
-        tryDone();
-      }
     };
 
-    const unsubLoanApplications = onSnapshot(
-      query(collection(db, "loanApplications")),
-      (snap) => {
-        setLoanApplications(mapLoanApplicationDocs(snap.docs));
-        markLoanApplicationsReady();
-      },
-      () => {
-        setLoanApplications([]);
-        markLoanApplicationsReady();
+    (async () => {
+      try {
+        await user.getIdToken(true);
+        if (cancelled) return;
+        startListeners();
+      } catch (tokenError) {
+        try {
+          await user.getIdToken();
+          if (cancelled) return;
+          startListeners();
+        } catch (retryError) {
+          onCoreErr(retryError);
+        }
       }
-    );
+    })();
 
     return () => {
+      cancelled = true;
       unsubCustomers();
       unsubEntries();
       unsubLoanRequests();

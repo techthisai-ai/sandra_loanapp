@@ -1,5 +1,6 @@
 import { EMPLOYEE_ROOT_DAYS, loadLoanCenters } from "../constants/dayCenters";
 import { NO_CENTER_LABEL, NO_SUB_CENTER_LABEL, resolveCustomerCenterDisplay } from "./centerDisplay.js";
+import { isActiveCustomerRecord } from "./recordFlags.js";
 
 /** Centres list: root weekdays plus optional extras from localStorage (same shape as day-customer screen). */
 export function loadEmployeeCenters() {
@@ -8,7 +9,7 @@ export function loadEmployeeCenters() {
 
 /** Active customers that may appear on employee centre screens (not sheet/loan gated). */
 export function isEmployeeVisibleCustomer(customer) {
-  if (!customer || customer.isArchived || customer.isDeleted) return false;
+  if (!isActiveCustomerRecord(customer)) return false;
   return Boolean(String(customer.customerId || customer.id || "").trim());
 }
 

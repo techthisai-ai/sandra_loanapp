@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { CheckCircle2, Clock3, Wallet } from "lucide-react";
 import useEmployeeCenterScope from "../hooks/useEmployeeCenterScope";
 import useAuth from "../hooks/useAuth";
@@ -17,19 +17,26 @@ function formatWhen(entry) {
   return d.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+function normalizeApprovalStatus(entry) {
+  return String(entry?.approvalStatus || "pending").toLowerCase();
+}
+
+const APPROVAL_FILTER_OPTIONS = ["All", "Approved", "Pending"];
+
 export default function EmployeeCollectionSummary() {
   const { customers, entries, loading } = useLoanDataSync();
   const { profile } = useAuth();
   const { scopeCustomers } = useEmployeeCenterScope();
+  const [approvalFilter, setApprovalFilter] = useState("All");
 
   const { rows, stats } = useMemo(() => {
     const scoped = scopeCustomers(customers);
     const ids = new Set(scoped.map((c) => c.customerId));
     const scopedEntries = entries.filter((e) => ids.has(e.customerId) && employeeMatchesCollector(profile, e));
     const todayKey = new Date().toISOString().slice(0, 10);
-    const pending = scopedEntries.filter((e) => e.approvalStatus !== "approved");
+    const pending = scopedEntries.filter((e) => normalizeApprovalStatus(e) !== "approved");
     const todayAll = scopedEntries.filter((e) => (e.collectionDate || "").slice(0, 10) === todayKey);
-    const todayApproved = todayAll.filter((e) => e.approvalStatus === "approved");
+    const todayApproved = todayAll.filter((e) => normalizeApprovalStatus(e) === "approved");
     const todayAmount = todayApproved.reduce((s, e) => s + Number(e.amount || 0), 0);
     const sorted = [...scopedEntries].sort((a, b) => {
       const ta = String(b.submittedAt || b.collectionDate || "").localeCompare(String(a.submittedAt || a.collectionDate || ""));
@@ -44,6 +51,16 @@ export default function EmployeeCollectionSummary() {
       },
     };
   }, [customers, entries, profile, scopeCustomers]);
+
+  const filteredRows = useMemo(() => {
+    if (approvalFilter === "Approved") {
+      return rows.filter((entry) => normalizeApprovalStatus(entry) === "approved");
+    }
+    if (approvalFilter === "Pending") {
+      return rows.filter((entry) => normalizeApprovalStatus(entry) !== "approved");
+    }
+    return rows;
+  }, [approvalFilter, rows]);
 
   return (
     <div className="employee-page">
@@ -65,7 +82,29 @@ export default function EmployeeCollectionSummary() {
         </div>
       </div>
 
-      <p className="employee-field-label mb-2">Recent entries (your centres)</p>
+      <div className="mb-2">
+        <p className="employee-field-label mb-2">Recent entries (your centres)</p>
+        <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200/90 bg-white p-0.5 shadow-sm">
+          {APPROVAL_FILTER_OPTIONS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setApprovalFilter(option)}
+              className={`inline-flex h-9 items-center justify-center rounded-lg text-xs font-semibold transition sm:text-sm ${
+                approvalFilter === option
+                  ? option === "Approved"
+                    ? "bg-emerald-600 text-white"
+                    : option === "Pending"
+                      ? "bg-amber-500 text-white"
+                      : "bg-blue-600 text-white"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      </div>
       <ul className="flex flex-col gap-1.5">
         {loading ? (
           <li className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-600">Loading…</li>
@@ -73,9 +112,13 @@ export default function EmployeeCollectionSummary() {
           <li className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-600">
             No collection entries for routed customers yet.
           </li>
+        ) : filteredRows.length === 0 ? (
+          <li className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-600">
+            No {approvalFilter.toLowerCase()} entries to show.
+          </li>
         ) : (
-          rows.map((e) => {
-            const approved = e.approvalStatus === "approved";
+          filteredRows.map((e) => {
+            const approved = normalizeApprovalStatus(e) === "approved";
             return (
               <li
                 key={e.entryId || `${e.customerId}-${e.submittedAt}`}

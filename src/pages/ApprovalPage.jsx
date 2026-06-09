@@ -14,6 +14,7 @@ import EnterpriseReportPreview from "../components/reports/EnterpriseReportPrevi
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import useReportMeta from "../hooks/useReportMeta";
 import CollectionApprovalTable from "../components/collection/CollectionApprovalTable";
+import { resolveCollectionEntryDisplayStatus } from "../utils/collectionEntryDisplay.js";
 import {
   approveCustomerAmountEntry,
   bulkApproveCustomerAmountEntries,
@@ -147,6 +148,7 @@ export function ApprovalRegisterPanel() {
           paymentMethod: entry.paymentMethod || "Cash",
           collectorName: entry.collectorName || "Employee",
           collectionStatus: entry.collectionStatus || "Pending",
+          collectionDisplayStatus: resolveCollectionEntryDisplayStatus(entry, customer),
           remarks: entry.note || "",
           approvalStatus: String(entry.approvalStatus || "pending").toLowerCase(),
           approvedAt: formatDate(entry.approvedAt),
