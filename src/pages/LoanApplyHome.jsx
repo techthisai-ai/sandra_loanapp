@@ -7,6 +7,7 @@ import LoanRequestsPanel from "../components/loan/LoanRequestsPanel";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import { DEFAULT_DAY_CENTERS, loadLoanCenters } from "../constants/dayCenters";
 import { listAllCustomerAmountEntries, listCustomers } from "../services/userAuth";
+import { isActiveCustomerRecord } from "../utils/recordFlags";
 
 const defaultCenters = DEFAULT_DAY_CENTERS;
 
@@ -125,7 +126,8 @@ export default function LoanApplyHome() {
     () =>
       customers.filter(
         (customer) =>
-          !customer.isArchived && String(customer.approvalStatus || "").toLowerCase() === "pending"
+          isActiveCustomerRecord(customer) &&
+          String(customer.approvalStatus || "").toLowerCase() === "pending"
       ).length,
     [customers]
   );
@@ -139,6 +141,11 @@ export default function LoanApplyHome() {
   };
   const [centers] = useState(() => loadCenters());
   const [allCustomers, setAllCustomers] = useState([]);
+
+  const activeCustomers = useMemo(
+    () => allCustomers.filter(isActiveCustomerRecord),
+    [allCustomers]
+  );
   const [amountEntries, setAmountEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState(null);
@@ -240,13 +247,13 @@ export default function LoanApplyHome() {
     const map = new Map();
     dayCenters.forEach((dayCenter) => {
       const subLabels = centers.filter((c) => c.parent === dayCenter.label).map((c) => c.label);
-      const count = allCustomers.filter(
+      const count = activeCustomers.filter(
         (customer) => customer.selectedDay === dayCenter.label || subLabels.includes(customer.selectedDay)
       ).length;
       map.set(dayCenter.label, count);
     });
     return map;
-  }, [allCustomers, centers, dayCenters]);
+  }, [activeCustomers, centers, dayCenters]);
   const childCenters = useMemo(
     () => centers.filter((center) => center.parent === selectedDay),
     [centers, selectedDay]
@@ -254,13 +261,13 @@ export default function LoanApplyHome() {
   const centerCustomers = useMemo(() => {
     if (!selectedDay) return [];
     if (selectedCenter) {
-      return allCustomers.filter((customer) => customer.selectedDay === selectedCenter);
+      return activeCustomers.filter((customer) => customer.selectedDay === selectedCenter);
     }
     const subLabels = childCenters.map((center) => center.label);
-    return allCustomers.filter(
+    return activeCustomers.filter(
       (customer) => customer.selectedDay === selectedDay || subLabels.includes(customer.selectedDay)
     );
-  }, [allCustomers, selectedDay, selectedCenter, childCenters]);
+  }, [activeCustomers, selectedDay, selectedCenter, childCenters]);
   const filteredCustomers = useMemo(() => {
     const key = searchTerm.trim().toLowerCase();
     if (!key) return centerCustomers;
@@ -515,7 +522,7 @@ export default function LoanApplyHome() {
                 >
                   <p className="text-xs font-semibold">{center.label}</p>
                   <p className="text-[11px] text-slate-500">
-                    {allCustomers.filter((customer) => customer.selectedDay === center.label).length} customers
+                    {activeCustomers.filter((customer) => customer.selectedDay === center.label).length} customers
                   </p>
                 </button>
               );

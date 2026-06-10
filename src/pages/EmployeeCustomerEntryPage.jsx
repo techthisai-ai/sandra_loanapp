@@ -5,6 +5,7 @@ import EmployeeAddCustomerModal from "../components/employee/EmployeeAddCustomer
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import useAuth from "../hooks/useAuth";
 import useEmployeeCenterScope from "../hooks/useEmployeeCenterScope";
+import { isActiveCustomerRecord } from "../utils/recordFlags";
 
 function isEmployeeAddedCustomer(customer, userUid, employeeId) {
   const uid = String(userUid || "");
@@ -86,6 +87,7 @@ export default function EmployeeCustomerEntryPage() {
   const customerRows = useMemo(() => {
     return scopeCustomers(customers)
       .filter((customer) => isEmployeeAddedCustomer(customer, user?.uid, profile?.employeeId))
+      .filter(isActiveCustomerRecord)
       .sort((left, right) =>
         String(left.customerName || "").localeCompare(String(right.customerName || ""), undefined, {
           sensitivity: "base",

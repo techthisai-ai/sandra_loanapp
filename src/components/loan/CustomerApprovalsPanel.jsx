@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 import { CheckCircle2, Search, XCircle } from "lucide-react";
 import { useLoanDataSync } from "../../context/LoanDataSyncContext";
 import { approveCustomer, rejectCustomer } from "../../services/userAuth";
+import { isActiveCustomerRecord } from "../../utils/recordFlags";
 
-const STATUS_OPTIONS = ["All", "Pending Approval", "Approved", "Rejected"];
+const STATUS_OPTIONS = ["All", "Pending Approval", "Approved"];
 
 function formatDate(value) {
   if (!value) return "—";
@@ -39,7 +40,7 @@ export default function CustomerApprovalsPanel() {
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return customers
-      .filter((customer) => !customer.isArchived)
+      .filter(isActiveCustomerRecord)
       .filter((customer) => {
         const statusLabel = normalizeStatusLabel(customer.approvalStatus);
         if (statusFilter !== "All" && statusLabel !== statusFilter) return false;

@@ -2305,6 +2305,8 @@ export async function rejectCustomer(customerId, { rejectionNote = "", reviewerN
   await updateDoc(customerRef, {
     approvalStatus: "rejected",
     customerRejectedAt: rejectedAt,
+    isArchived: true,
+    archivedAt: rejectedAt,
     ...(note ? { customerRejectionNote: note } : {}),
   });
 

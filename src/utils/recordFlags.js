@@ -26,7 +26,13 @@ export function isVisibleCustomerRecord(record) {
   return Boolean(record) && !isRecordDeleted(record);
 }
 
-/** Active tab on admin Customer page (not deleted and not archived). */
+export function isRejectedCustomerRecord(record) {
+  return String(record?.approvalStatus || "").toLowerCase() === "rejected";
+}
+
+/** Active tab on admin Customer page (not deleted, archived, or rejected). */
 export function isActiveCustomerRecord(record) {
-  return isVisibleCustomerRecord(record) && !isRecordArchived(record);
+  return (
+    isVisibleCustomerRecord(record) && !isRecordArchived(record) && !isRejectedCustomerRecord(record)
+  );
 }
