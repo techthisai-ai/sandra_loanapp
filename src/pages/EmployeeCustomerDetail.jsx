@@ -39,6 +39,123 @@ const FROM_LIST_DETAIL_FIELDS = [
   { key: "currentTenure", label: "Current Tenure", icon: BadgeCheck },
 ];
 
+const DETAIL_TILE_ACCENTS = {
+  customerId: {
+    card: "border-violet-200/90 bg-gradient-to-br from-violet-50/95 via-white to-white shadow-sm",
+    iconShell: "border-violet-100 bg-violet-100",
+    icon: "text-violet-700",
+    label: "text-violet-800/80",
+    value: "text-violet-950",
+  },
+  customerName: {
+    card: "border-blue-200/90 bg-gradient-to-br from-blue-50/95 via-white to-white shadow-sm",
+    iconShell: "border-blue-100 bg-blue-100",
+    icon: "text-blue-700",
+    label: "text-blue-800/80",
+    value: "text-slate-950",
+  },
+  phoneNumber: {
+    card: "border-sky-200/90 bg-gradient-to-br from-sky-50/95 via-white to-white shadow-sm",
+    iconShell: "border-sky-100 bg-sky-100",
+    icon: "text-sky-700",
+    label: "text-sky-800/80",
+    value: "text-slate-950",
+  },
+  centerLabel: {
+    card: "border-cyan-200/90 bg-gradient-to-br from-cyan-50/95 via-white to-white shadow-sm",
+    iconShell: "border-cyan-100 bg-cyan-100",
+    icon: "text-cyan-700",
+    label: "text-cyan-800/80",
+    value: "text-slate-950",
+  },
+  currentDueClear: {
+    card: "border-emerald-200/90 bg-gradient-to-br from-emerald-50/95 via-white to-white shadow-sm",
+    iconShell: "border-emerald-100 bg-emerald-100",
+    icon: "text-emerald-700",
+    label: "text-emerald-800/80",
+    value: "text-emerald-900",
+  },
+  currentDueDue: {
+    card: "border-rose-200/90 bg-gradient-to-br from-rose-50/95 via-white to-white shadow-sm",
+    iconShell: "border-rose-100 bg-rose-100",
+    icon: "text-rose-700",
+    label: "text-rose-800/80",
+    value: "text-rose-900",
+  },
+  partiallyPaid: {
+    card: "border-blue-200/90 bg-gradient-to-br from-blue-50/95 via-white to-white shadow-sm",
+    iconShell: "border-blue-100 bg-blue-100",
+    icon: "text-blue-700",
+    label: "text-blue-800/80",
+    value: "text-blue-900",
+  },
+  partiallyEmpty: {
+    card: "border-slate-200/90 bg-gradient-to-br from-slate-50/95 via-white to-white shadow-sm",
+    iconShell: "border-slate-100 bg-slate-100",
+    icon: "text-slate-600",
+    label: "text-slate-600",
+    value: "text-slate-700",
+  },
+  pendingClear: {
+    card: "border-emerald-200/90 bg-gradient-to-br from-emerald-50/95 via-white to-white shadow-sm",
+    iconShell: "border-emerald-100 bg-emerald-100",
+    icon: "text-emerald-700",
+    label: "text-emerald-800/80",
+    value: "text-emerald-900",
+  },
+  pendingDue: {
+    card: "border-amber-200/90 bg-gradient-to-br from-amber-50/95 via-white to-white shadow-sm",
+    iconShell: "border-amber-100 bg-amber-100",
+    icon: "text-amber-700",
+    label: "text-amber-800/80",
+    value: "text-amber-900",
+  },
+  nextDueDate: {
+    card: "border-orange-200/90 bg-gradient-to-br from-orange-50/95 via-white to-white shadow-sm",
+    iconShell: "border-orange-100 bg-orange-100",
+    icon: "text-orange-700",
+    label: "text-orange-800/80",
+    value: "text-slate-950",
+  },
+  loanDate: {
+    card: "border-indigo-200/90 bg-gradient-to-br from-indigo-50/95 via-white to-white shadow-sm",
+    iconShell: "border-indigo-100 bg-indigo-100",
+    icon: "text-indigo-700",
+    label: "text-indigo-800/80",
+    value: "text-slate-950",
+  },
+  currentTenure: {
+    card: "border-teal-200/90 bg-gradient-to-br from-teal-50/95 via-white to-white shadow-sm",
+    iconShell: "border-teal-100 bg-teal-100",
+    icon: "text-teal-700",
+    label: "text-teal-800/80",
+    value: "text-teal-900",
+  },
+};
+
+function parseRupeeAmount(value) {
+  const digits = String(value || "").replace(/[^\d]/g, "");
+  return Number(digits || 0);
+}
+
+function resolveDetailTileAccent(fieldKey, value, summary) {
+  if (fieldKey === "currentDueAmount") {
+    const amount = Number(summary?.currentDueAmountNumber ?? parseRupeeAmount(value));
+    return amount > 0 ? DETAIL_TILE_ACCENTS.currentDueDue : DETAIL_TILE_ACCENTS.currentDueClear;
+  }
+  if (fieldKey === "partiallyPaidDisplay") {
+    const amount = parseRupeeAmount(value);
+    return amount > 0 ? DETAIL_TILE_ACCENTS.partiallyPaid : DETAIL_TILE_ACCENTS.partiallyEmpty;
+  }
+  if (fieldKey === "pendingTenuresLabel") {
+    const label = String(value || "").trim();
+    const hasPending = label && label !== "—" && label !== "0";
+    return hasPending ? DETAIL_TILE_ACCENTS.pendingDue : DETAIL_TILE_ACCENTS.pendingClear;
+  }
+  if (fieldKey === "nextDueDateDisplay") return DETAIL_TILE_ACCENTS.nextDueDate;
+  return DETAIL_TILE_ACCENTS[fieldKey] || DETAIL_TILE_ACCENTS.partiallyEmpty;
+}
+
 function InfoBox({ icon: Icon, label, value, wide }) {
   return (
     <div className={`rounded-2xl border border-slate-200 bg-slate-50 p-4 ${wide ? "col-span-2" : ""}`}>
@@ -51,18 +168,24 @@ function InfoBox({ icon: Icon, label, value, wide }) {
   );
 }
 
-function DetailStatTile({ icon: Icon, label, value, wide = false }) {
+function DetailStatTile({ icon: Icon, label, value, accent, wide = false }) {
+  const tone = accent || DETAIL_TILE_ACCENTS.partiallyEmpty;
+
   return (
-    <div className={`app-panel-muted rounded-2xl p-3 sm:rounded-[22px] sm:p-3.5 ${wide ? "col-span-2" : ""}`}>
+    <div
+      className={`rounded-2xl border p-3 sm:rounded-[22px] sm:p-3.5 ${tone.card} ${wide ? "col-span-2" : ""}`}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="employee-field-label tracking-[0.18em]">{label}</p>
-          <p className="employee-field-value mt-1 break-words leading-snug">
+          <p className={`employee-field-label tracking-[0.18em] ${tone.label}`}>{label}</p>
+          <p className={`employee-field-value mt-1 break-words leading-snug tabular-nums ${tone.value}`}>
             {value || "—"}
           </p>
         </div>
-        <div className="app-icon-shell flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/70 sm:h-10 sm:w-10">
-          <Icon className="h-4 w-4 text-slate-700 sm:h-[18px] sm:w-[18px]" />
+        <div
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border sm:h-10 sm:w-10 ${tone.iconShell}`}
+        >
+          <Icon className={`h-4 w-4 sm:h-[18px] sm:w-[18px] ${tone.icon}`} aria-hidden />
         </div>
       </div>
     </div>
@@ -193,6 +316,7 @@ export default function EmployeeCustomerDetail() {
               icon={field.icon}
               label={field.label}
               value={summary[field.key]}
+              accent={resolveDetailTileAccent(field.key, summary[field.key], summary)}
               wide={field.wide}
             />
           ))}
