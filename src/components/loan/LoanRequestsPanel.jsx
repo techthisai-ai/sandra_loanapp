@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, Search, XCircle } from "lucide-react";
+import CustomerDetailLink from "../customer/CustomerDetailLink";
 import { useLoanDataSync } from "../../context/LoanDataSyncContext";
 import { approveLoanRequest, rejectLoanRequest } from "../../services/userAuth";
 
@@ -147,7 +148,12 @@ export default function LoanRequestsPanel() {
                   return (
                     <tr key={row.requestId} className="hover:bg-slate-50/80">
                       <td className="px-3 py-2.5">
-                        <p className="font-medium text-slate-950">{row.customerName || "—"}</p>
+                        <CustomerDetailLink
+                          customerId={row.customerId}
+                          className="font-medium text-slate-950 no-underline"
+                        >
+                          {row.customerName || "—"}
+                        </CustomerDetailLink>
                         <p className="text-xs text-slate-500">{row.customerId || "—"}</p>
                       </td>
                       <td className="px-3 py-2.5">

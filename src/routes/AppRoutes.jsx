@@ -25,12 +25,14 @@ import CustomerProfile from "../pages/CustomerProfile";
 import Collection from "../pages/Collection";
 import EmployeePage from "../pages/Employee";
 import EmployeeProfilePage from "../pages/EmployeeProfilePage";
+import EmployeeNotificationsPage from "../pages/EmployeeNotificationsPage";
 import Center from "../pages/Center";
 import ImageDetails from "../pages/ImageDetails";
 import Reports from "../pages/Reports";
 import Settings from "../pages/Settings";
 import AdminControls from "../pages/AdminControls";
 import BackendRequirements from "../pages/BackendRequirements";
+import AppLoadingScreen from "../components/AppLoadingScreen";
 import RouteGuard from "../components/RouteGuard";
 import EmployeeAppLayout from "../components/dashboard/EmployeeAppLayout";
 import CustomerCreatePage from "../pages/CustomerCreatePage";
@@ -50,16 +52,7 @@ function PublicLayout() {
 }
 
 function RouteLoadingScreen({ label = "Loading page..." }) {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#f5fbfc_0%,#eef6f9_100%)] px-4 text-slate-900">
-      <div className="rounded-3xl border border-slate-200 bg-white/95 px-5 py-4 shadow-lg shadow-slate-200/60 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
-          <span className="text-sm font-medium text-slate-700">{label}</span>
-        </div>
-      </div>
-    </div>
-  );
+  return <AppLoadingScreen message={label} />;
 }
 
 class RouteLoadErrorBoundary extends Component {
@@ -173,6 +166,7 @@ export default function AppRoutes() {
           <Route path="/employee/customers" element={<EmployeeCustomersList />} />
           <Route path="/employee/collection" element={<EmployeeCollectionSummary />} />
           <Route path="/employee/profile" element={<EmployeeProfilePage />} />
+          <Route path="/employee/notifications" element={<EmployeeNotificationsPage />} />
           <Route path="/employee/customers/:day" element={<EmployeeDayCustomers />} />
           <Route path="/employee/customers/:day/sheet" element={<ImageDetails />} />
           <Route path="/employee/customers/:day/:customerId" element={<EmployeeCustomerDetail />} />

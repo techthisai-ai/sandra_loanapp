@@ -19,7 +19,8 @@ import {
 } from "lucide-react";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
-import { buildInstallmentSchedule, safeDate } from "../utils/customerProfileSchedule";
+import { buildInstallmentSchedule, formatTotalTenureLabel, safeDate } from "../utils/customerProfileSchedule";
+import { computeTenureBreakdown } from "../utils/employeeCollectionDetails";
 import { downloadCustomerProfilePdf } from "../utils/customerProfilePdf";
 import { isImageAttachment, isPdfAttachment, openCustomerDocument } from "../utils/customerDocumentAttachments";
 
@@ -280,6 +281,19 @@ function CustomerProfileContent() {
 
   const firstEmiAmount = schedule[0]?.dueAmount ?? 0;
 
+  const tenureBreakdown = useMemo(() => {
+    if (!customer || !hasLoan) return null;
+    return computeTenureBreakdown(customer, customerEntries);
+  }, [customer, customerEntries, hasLoan]);
+
+  const pendingTenureLabel = !schedule.length
+    ? "—"
+    : tenureBreakdown?.pendingTenures?.length
+      ? tenureBreakdown.pendingTenures.join(", ")
+      : "0";
+
+  const totalTenureLabel = formatTotalTenureLabel(customer, schedule.length);
+
   const scheduleFiltered = useMemo(() => {
     const q = profileSearch.trim().toLowerCase();
     if (!q) return schedule;
@@ -355,6 +369,8 @@ function CustomerProfileContent() {
         { label: "Total payable", value: formatCurrency(totalPayable) },
         { label: "Collected (approved)", value: formatCurrency(totalCollected) },
         { label: "Pending balance", value: formatCurrency(pendingBalance) },
+        { label: "Total tenure", value: totalTenureLabel },
+        { label: "Pending tenure", value: pendingTenureLabel },
         { label: "Co-applicant", value: customer.coApplicantName || "—" },
       ];
       const tl = timeline.map((t) => ({ date: formatDateTime(t.at), label: t.label }));
@@ -367,7 +383,7 @@ function CustomerProfileContent() {
     } finally {
       setPdfBusy(false);
     }
-  }, [customer, principal, totalPayable, totalCollected, pendingBalance, schedule, timeline]);
+  }, [customer, principal, totalPayable, totalCollected, pendingBalance, pendingTenureLabel, totalTenureLabel, schedule, timeline]);
 
   const loading = syncLoading && !customer;
   const showInvalidId = !syncLoading && !customerIdValid;
@@ -617,7 +633,7 @@ function CustomerProfileContent() {
                   <div className="no-print mt-4 flex flex-wrap gap-2">
                     <Link
                       to={`/dashboard/loan-apply/${customer.customerId}`}
-                      state={{ customer }}
+                      state={{ applyLoan: true, customer }}
                       className="app-button-primary inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold"
                     >
                       <Banknote className="h-4 w-4" />
@@ -683,6 +699,8 @@ function CustomerProfileContent() {
                     ["Pending amount", formatCurrency(pendingBalance)],
                     ["Remaining balance", formatCurrency(pendingBalance)],
                     ["Loan status", customer.loanStatus || (pendingBalance <= 0 ? "Settled" : "Active")],
+                    ["Pending tenure", pendingTenureLabel],
+                    ["Total tenure", totalTenureLabel],
                   ].map(([k, v]) => (
                     <div key={k} className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{k}</p>

@@ -1,5 +1,14 @@
-import { isInstallmentPaid, safeDate, startOfDay } from "./customerProfileSchedule.js";
-import { resolveLoanTimelineDates } from "./loanTimelineDates.js";
+import {
+  buildTenureCalendarContext,
+  isInstallmentPaid,
+  safeDate,
+  startOfDay,
+} from "./customerProfileSchedule.js";
+import {
+  getElapsedTenurePeriods,
+  inferCollectionFrequencyFromSchedule,
+  resolveLoanTimelineDates,
+} from "./loanTimelineDates.js";
 
 /** Days before final due when Customer ID cell should turn yellow. */
 export const NEAR_END_DUE_DAYS = 14;
@@ -9,19 +18,26 @@ export function isInstallmentUnpaidForAlert(item) {
   return !isInstallmentPaid(item);
 }
 
-export function getCalendarCurrentTenureNumber(schedule) {
+/**
+ * Active collection tenure from EMI start and frequency:
+ * Daily → new tenure each day, Weekly → every 7 days, Monthly → same day each calendar month.
+ */
+export function getCalendarCurrentTenureNumber(schedule, context = {}) {
   const total = schedule.length;
   if (!total) return 0;
-  const today = startOfDay(new Date());
-  let elapsed = 0;
-  schedule.forEach((item) => {
-    if (startOfDay(item.dueDate) <= today) elapsed += 1;
-  });
-  return Math.min(Math.max(elapsed, 1), total);
+
+  const frequency = context.frequency || inferCollectionFrequencyFromSchedule(schedule);
+  const emiStartDate = context.emiStartDate || schedule[0]?.dueDate;
+  const elapsed = getElapsedTenurePeriods(emiStartDate, frequency);
+
+  return Math.min(Math.max(elapsed + 1, 1), total);
 }
 
-function hasScheduleArrears(schedule) {
-  const calendarCurrent = getCalendarCurrentTenureNumber(schedule);
+function hasScheduleArrears(schedule, customer = null) {
+  const calendarCurrent = getCalendarCurrentTenureNumber(
+    schedule,
+    customer ? buildTenureCalendarContext(customer, schedule) : {}
+  );
   return schedule.some(
     (item) => item.installmentNumber < calendarCurrent && isInstallmentUnpaidForAlert(item)
   );
@@ -52,7 +68,7 @@ export function computeLoanNearEndAlert(schedule, customer = null) {
   const unpaidItems = (schedule || []).filter((item) => isInstallmentUnpaidForAlert(item));
   if (unpaidItems.length === 0) return false;
 
-  if (schedule?.length && hasScheduleArrears(schedule)) return false;
+  if (schedule?.length && hasScheduleArrears(schedule, customer)) return false;
 
   if (unpaidItems.length === 1) return true;
 

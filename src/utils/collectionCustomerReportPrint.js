@@ -1,10 +1,14 @@
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { NO_SUB_CENTER_LABEL, resolveCustomerCenterDisplay } from "./centerDisplay.js";
+import { ensurePdfUnicodeFont } from "./pdfUnicodeFont.js";
+import { reportDateStamp } from "./reportFilenames.js";
 import {
   getAssignedSubCentersForDayCenter,
   getSubCenterLabels,
 } from "./employeeScope.js";
 import { getEmployeeAssignedCenters } from "./employeeManagement.js";
-import { formatCurrency } from "./employeeCollectionDetails.js";
+import { formatCurrencyForPrint, toPrintCurrencyText } from "./formatCurrency.js";
 import {
   makePaidEntryKey,
   sanitizePaidAmount,
@@ -53,14 +57,14 @@ function formatGeneratedStamp(date = new Date()) {
 
 function resolvePaidForPrint(row, paidState = { drafts: {}, committed: {} }) {
   const amount = resolveReportPaidColumnAmount(row, paidState);
-  return amount > 0 ? formatCurrency(amount) : "—";
+  return amount > 0 ? formatCurrencyForPrint(amount) : "—";
 }
 
 function resolveEntryForPrint(row, paidState = { drafts: {}, committed: {} }) {
   if (row.installmentNumber == null) return "—";
   const entryKey = makePaidEntryKey(row.customerId, row.installmentNumber);
   const draftAmount = sanitizePaidAmount(paidState.drafts?.[entryKey]);
-  return draftAmount ? formatCurrency(Number(draftAmount)) : "—";
+  return draftAmount ? formatCurrencyForPrint(Number(draftAmount)) : "—";
 }
 
 function mapRowForPrint(row, paidState) {
@@ -71,10 +75,10 @@ function mapRowForPrint(row, paidState) {
     nomineeName: row.nomineeName || "—",
     loanDate: row.loanDate || "—",
     currentTenure: row.currentTenure || "—",
-    currentDueAmount: row.currentDueAmount || "—",
+    currentDueAmount: toPrintCurrencyText(row.currentDueAmount || "—"),
     pendingTenuresLabel: row.pendingTenuresLabel || "—",
-    pendingAmountDisplay: row.pendingAmountDisplay || "—",
-    balanceAmount: row.balanceAmount || "—",
+    pendingAmountDisplay: toPrintCurrencyText(row.pendingAmountDisplay || "—"),
+    balanceAmount: toPrintCurrencyText(row.balanceAmount || "—"),
     paid: resolvePaidForPrint(row, paidState),
     entry: resolveEntryForPrint(row, paidState),
   };
@@ -83,6 +87,25 @@ function mapRowForPrint(row, paidState) {
 /**
  * Group collection report rows by sub-center under a main center.
  */
+function buildAllCentersSections(reportRows = []) {
+  const sectionMap = new Map();
+
+  reportRows.forEach((row) => {
+    const day = String(row.dayCenter || "").trim() || "—";
+    const sub = row.subCenter || NO_SUB_CENTER_LABEL;
+    const sectionLabel = day !== "—" ? `${day} · ${sub}` : sub;
+
+    if (!sectionMap.has(sectionLabel)) {
+      sectionMap.set(sectionLabel, { subCenter: sectionLabel, rows: [] });
+    }
+    sectionMap.get(sectionLabel).rows.push(row);
+  });
+
+  return [...sectionMap.values()]
+    .filter((section) => section.rows.length)
+    .sort((a, b) => a.subCenter.localeCompare(b.subCenter));
+}
+
 export function groupReportRowsBySubCenter({
   reportRows = [],
   mainCenter,
@@ -90,7 +113,9 @@ export function groupReportRowsBySubCenter({
   employee,
 }) {
   const main = String(mainCenter || "").trim();
-  if (!main) return [];
+  if (!main || main === "All") {
+    return buildAllCentersSections(reportRows);
+  }
 
   const allSubs = getSubCenterLabels(main, allCenters);
   let orderedSubs = allSubs;
@@ -215,7 +240,7 @@ function buildSummaryCardsHtml(cards = []) {
           (card) => `
         <div class="summary-card">
           <p class="summary-label">${escapeHtml(card.label)}</p>
-          <p class="summary-value">${escapeHtml(card.value)}</p>
+          <p class="summary-value">${escapeHtml(toPrintCurrencyText(card.value))}</p>
         </div>`
         )
         .join("")}
@@ -249,6 +274,7 @@ export function buildCollectionCustomerReportHtml({
   <head>
     <meta charset="UTF-8" />
     <title>Collection Customer Report</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" />
     <style>
       @page {
         size: A4 landscape;
@@ -257,11 +283,13 @@ export function buildCollectionCustomerReportHtml({
       * { box-sizing: border-box; }
       body {
         margin: 0;
-        font-family: "Segoe UI", Arial, sans-serif;
+        font-family: "Noto Sans Tamil", "Segoe UI", Arial, sans-serif;
         color: #0f172a;
         background: #fff;
         line-height: 1.35;
         font-size: 10px;
+        font-variant-numeric: normal;
+        letter-spacing: normal;
       }
       .sheet { width: 100%; margin: 0 auto; }
       .top-band {
@@ -516,9 +544,93 @@ export function printCollectionCustomerReport(payload) {
   }
 }
 
-export function validateCollectionPrintSelection({ mainCenter }) {
-  if (!mainCenter || mainCenter === "All") {
-    return "Please select a Main Center before printing.";
+export async function downloadCollectionCustomerReport(payload, stamp = reportDateStamp()) {
+  const {
+    employeeName,
+    mainCenter,
+    sections = [],
+    paidState = { drafts: {}, committed: {} },
+    filterLines = [],
+    reportId = "",
+  } = payload;
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const pdfFont = await ensurePdfUnicodeFont(doc, origin);
+  const margin = 10;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  let y = 14;
+
+  doc.setFont(pdfFont, "bold");
+  doc.setFontSize(14);
+  doc.text("Ruthra Financial Solutions", margin, y);
+  y += 6;
+  doc.setFontSize(11);
+  doc.text("Collection report", margin, y);
+  y += 5;
+  doc.setFont(pdfFont, "normal");
+  doc.setFontSize(8);
+  doc.text(`Employee: ${employeeName || "All employees"} · Main center: ${mainCenter || "All"}`, margin, y);
+  y += 4;
+  if (reportId) {
+    doc.text(`Report ID: ${reportId}`, margin, y);
+    y += 4;
   }
-  return "";
+
+  if (filterLines.length) {
+    y += 2;
+    filterLines.forEach((line) => {
+      if (y > pageHeight - 20) {
+        doc.addPage();
+        y = 14;
+      }
+      doc.text(line, margin, y);
+      y += 4;
+    });
+    y += 2;
+  }
+
+  const head = [PRINT_COLUMNS.map((column) => column.label)];
+  const populatedSections = sections.filter((section) => section.rows?.length);
+
+  if (!populatedSections.length) {
+    doc.setFont(pdfFont, "italic");
+    doc.text("No customers found for the selected filters.", margin, y);
+  } else {
+    populatedSections.forEach((section) => {
+      if (y > pageHeight - 30) {
+        doc.addPage();
+        y = 14;
+      }
+
+      doc.setFont(pdfFont, "bold");
+      doc.setFontSize(9);
+      doc.text(section.subCenter, margin, y);
+      y += 4;
+
+      const body = section.rows.map((row) =>
+        PRINT_COLUMNS.map((column) => {
+          const mapped = mapRowForPrint(row, paidState);
+          return mapped[column.key] ?? "—";
+        })
+      );
+
+      autoTable(doc, {
+        startY: y,
+        head,
+        body,
+        margin: { left: margin, right: margin },
+        styles: { font: pdfFont, fontSize: 7, cellPadding: 1.4 },
+        headStyles: {
+          fillColor: [17, 94, 89],
+          textColor: 255,
+          fontStyle: "bold",
+          fontSize: 6.5,
+        },
+      });
+      y = doc.lastAutoTable.finalY + 6;
+    });
+  }
+
+  doc.save(`collection-customer-report-${stamp}.pdf`);
 }

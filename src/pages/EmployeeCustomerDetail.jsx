@@ -34,6 +34,7 @@ const FROM_LIST_DETAIL_FIELDS = [
   { key: "currentDueAmount", label: "Current Due", icon: DollarSign },
   { key: "partiallyPaidDisplay", label: "Partially", icon: CircleDot },
   { key: "pendingTenuresLabel", label: "Pending Tenure", icon: Clock3 },
+  { key: "totalTenureLabel", label: "Total Tenure", icon: CalendarDays },
   { key: "nextDueDateDisplay", label: "Next Due Date", icon: CalendarClock },
   { key: "loanDate", label: "Loan Date", icon: CalendarDays },
   { key: "currentTenure", label: "Current Tenure", icon: BadgeCheck },
@@ -109,6 +110,13 @@ const DETAIL_TILE_ACCENTS = {
     icon: "text-amber-700",
     label: "text-amber-800/80",
     value: "text-amber-900",
+  },
+  totalTenureLabel: {
+    card: "border-indigo-200/90 bg-gradient-to-br from-indigo-50/95 via-white to-white shadow-sm",
+    iconShell: "border-indigo-100 bg-indigo-100",
+    icon: "text-indigo-700",
+    label: "text-indigo-800/80",
+    value: "text-slate-950",
   },
   nextDueDate: {
     card: "border-orange-200/90 bg-gradient-to-br from-orange-50/95 via-white to-white shadow-sm",

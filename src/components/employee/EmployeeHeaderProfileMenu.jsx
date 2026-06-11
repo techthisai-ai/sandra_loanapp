@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
-import { LogOut, UserRound } from "lucide-react";
+import { Bell, LogOut, UserRound } from "lucide-react";
+import { Link } from "react-router-dom";
 import { auth } from "../../firebase/config";
 import useAuth from "../../hooks/useAuth";
 import { clearAuthSession } from "../../utils/authSession";
@@ -63,11 +64,20 @@ export default function EmployeeHeaderProfileMenu() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Signed in as</p>
             <p className="mt-1 truncate text-sm font-semibold text-slate-900">{username}</p>
           </div>
+          <Link
+            to="/employee/notifications"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            <Bell className="h-4 w-4 text-violet-600" />
+            Notification history
+          </Link>
           <button
             type="button"
             role="menuitem"
             onClick={handleSignOut}
-            className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-rose-700 transition hover:bg-rose-50"
+            className="flex w-full items-center gap-2 border-t border-slate-100 px-4 py-3 text-left text-sm font-medium text-rose-700 transition hover:bg-rose-50"
           >
             <LogOut className="h-4 w-4" />
             Sign out

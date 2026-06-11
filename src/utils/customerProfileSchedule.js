@@ -1,7 +1,11 @@
 /** Shared EMI schedule builder for customer profile & PDF (aligned with Reports.jsx). */
 
 import { enrichCustomerForCollection } from "./collectionCustomerUtils.js";
-import { getCollectionIntervalDays, normalizeCollectionFrequency } from "./loanTimelineDates.js";
+import {
+  addTenurePeriod,
+  inferCollectionFrequencyFromSchedule,
+  normalizeCollectionFrequency,
+} from "./loanTimelineDates.js";
 
 export function safeDate(value) {
   if (!value) return null;
@@ -58,6 +62,16 @@ export function getInstallmentPeriodLabel(frequency, installmentNumber) {
   return `${unit} ${installmentNumber}`;
 }
 
+/** Human-readable total loan tenure, e.g. "10 wks", "12 Months", "30 Days". */
+export function formatTotalTenureLabel(customer, installmentCount) {
+  const count = Math.max(Number(installmentCount ?? customer?.loanWeeks ?? 0), 0);
+  if (!count) return "—";
+  const kind = normalizeCollectionFrequency(customer?.collectionFrequency);
+  if (kind === "Daily") return `${count} ${count === 1 ? "Day" : "Days"}`;
+  if (kind === "Weekly") return `${count} wks`;
+  return `${count} ${count === 1 ? "Month" : "Months"}`;
+}
+
 export function isInstallmentPaid(item) {
   return item.paidAmount >= item.dueAmount && item.dueAmount > 0 && item.paidAmount > 0;
 }
@@ -69,12 +83,26 @@ export function getInstallmentAmount(customer, totalPayable) {
   return totalPayable > 0 ? Math.round(totalPayable / count) : 0;
 }
 
-/**
- * @param {object} customer
- * @param {object[]} customerEntries — entries for this customer only
- */
-export function buildInstallmentSchedule(customer, customerEntries) {
-  const resolvedCustomer = enrichCustomerForCollection(customer);
+function isAllocatableCollectionEntry(entry, { includePendingApprovals = false } = {}) {
+  if (!entry || entry.isDeleted) return false;
+  const status = String(entry.approvalStatus || "pending").toLowerCase();
+  if (status === "rejected") return false;
+  if (status === "approved") return true;
+  return includePendingApprovals && status === "pending";
+}
+
+function sortPaymentsChronologically(payments) {
+  return [...payments].sort((left, right) => {
+    const leftKey = String(left.collectionDate || left.submittedAt || "");
+    const rightKey = String(right.collectionDate || right.submittedAt || "");
+    const byDate = leftKey.localeCompare(rightKey);
+    if (byDate !== 0) return byDate;
+    return String(left.entryId || left.id || "").localeCompare(String(right.entryId || right.id || ""));
+  });
+}
+
+/** Due-date specs only — no payment allocation. */
+export function buildInstallmentSpecs(resolvedCustomer, customerEntries = []) {
   const frequency = normalizeCollectionFrequency(resolvedCustomer.collectionFrequency);
   const installmentCount = getInstallmentCount(resolvedCustomer, customerEntries);
   const baseInstallment = getInstallmentAmount(
@@ -87,43 +115,56 @@ export function buildInstallmentSchedule(customer, customerEntries) {
       : baseInstallment > 0
         ? baseInstallment * installmentCount
         : 0;
-  const intervalDays = getCollectionIntervalDays(frequency);
   const emiStartDate = resolveFirstEmiDate(resolvedCustomer);
-  const approvedEntries = [...customerEntries]
-    .filter((entry) => String(entry.approvalStatus || "").toLowerCase() === "approved")
-    .sort((a, b) => String(a.collectionDate || a.submittedAt || "").localeCompare(String(b.collectionDate || b.submittedAt || "")));
 
   let remainingDue = totalPayable;
-  const installmentSpecs = Array.from({ length: installmentCount }, (_, index) => {
-    const dueAmount =
-      index === installmentCount - 1 ? Math.max(remainingDue, 0) : Math.min(baseInstallment, remainingDue);
-    remainingDue -= dueAmount;
-    return {
-      installmentNumber: index + 1,
-      dueDate: addDays(emiStartDate, intervalDays * index),
-      dueAmount,
-    };
-  });
+  return {
+    totalPayable,
+    specs: Array.from({ length: installmentCount }, (_, index) => {
+      const dueAmount =
+        index === installmentCount - 1 ? Math.max(remainingDue, 0) : Math.min(baseInstallment, remainingDue);
+      remainingDue -= dueAmount;
+      return {
+        installmentNumber: index + 1,
+        dueDate: addTenurePeriod(emiStartDate, index, frequency),
+        dueAmount,
+      };
+    }),
+  };
+}
 
-  let entryIndex = 0;
-  let entryRemaining = approvedEntries.length ? Number(approvedEntries[0].amount || 0) : 0;
+export function buildTenureCalendarContext(customer, schedule = []) {
+  const resolvedCustomer = customer?.collectionFrequency ? customer : enrichCustomerForCollection(customer || {});
+  return {
+    frequency: normalizeCollectionFrequency(
+      resolvedCustomer?.collectionFrequency || inferCollectionFrequencyFromSchedule(schedule)
+    ),
+    emiStartDate: resolveFirstEmiDate(resolvedCustomer) || schedule[0]?.dueDate || new Date(),
+  };
+}
+
+/** Oldest-due-first payment allocation across installment specs. */
+export function applyFifoPaymentsToSpecs(specs, payments, totalPayable = 0) {
+  const sortedPayments = sortPaymentsChronologically(payments);
+  let paymentIndex = 0;
+  let paymentRemaining = sortedPayments.length ? Number(sortedPayments[0].amount || 0) : 0;
   let cumulativeCollected = 0;
 
-  return installmentSpecs.map((spec) => {
+  return specs.map((spec) => {
     const { installmentNumber, dueDate, dueAmount } = spec;
     let paidAmount = 0;
     let appliedEntry = null;
 
-    while (paidAmount < dueAmount && entryIndex < approvedEntries.length) {
-      const entry = approvedEntries[entryIndex];
-      const take = Math.min(entryRemaining, dueAmount - paidAmount);
+    while (paidAmount < dueAmount && paymentIndex < sortedPayments.length) {
+      const payment = sortedPayments[paymentIndex];
+      const take = Math.min(paymentRemaining, dueAmount - paidAmount);
       paidAmount += take;
-      entryRemaining -= take;
-      appliedEntry = entry;
-      if (entryRemaining <= 0) {
-        entryIndex += 1;
-        entryRemaining =
-          entryIndex < approvedEntries.length ? Number(approvedEntries[entryIndex].amount || 0) : 0;
+      paymentRemaining -= take;
+      appliedEntry = payment;
+      if (paymentRemaining <= 0) {
+        paymentIndex += 1;
+        paymentRemaining =
+          paymentIndex < sortedPayments.length ? Number(sortedPayments[paymentIndex].amount || 0) : 0;
       }
     }
 
@@ -167,4 +208,26 @@ export function buildInstallmentSchedule(customer, customerEntries) {
         (lateDays > 0 ? `Late ${lateDays}d` : ""),
     };
   });
+}
+
+export function collectSchedulePayments(customerEntries, options = {}) {
+  return sortPaymentsChronologically(
+    (customerEntries || []).filter((entry) => isAllocatableCollectionEntry(entry, options))
+  );
+}
+
+/**
+ * @param {object} customer
+ * @param {object[]} customerEntries — entries for this customer only
+ * @param {{ includePendingApprovals?: boolean, extraPayments?: object[] }} [options]
+ */
+export function buildInstallmentSchedule(customer, customerEntries, options = {}) {
+  const resolvedCustomer = enrichCustomerForCollection(customer);
+  const { totalPayable, specs } = buildInstallmentSpecs(resolvedCustomer, customerEntries);
+  const payments = [
+    ...collectSchedulePayments(customerEntries, options),
+    ...(options.extraPayments || []),
+  ];
+
+  return applyFifoPaymentsToSpecs(specs, payments, totalPayable);
 }

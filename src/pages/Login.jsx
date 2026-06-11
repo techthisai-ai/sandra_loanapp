@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Eye, EyeOff, LogOut } from "lucide-react";
 import { signOut } from "firebase/auth";
+import AppLoadingScreen from "../components/AppLoadingScreen";
 import BrandLogo from "../components/BrandLogo";
 import { auth } from "../firebase/config";
 import { isUsingFirebaseEmulators } from "../firebase/environment";
@@ -115,13 +116,7 @@ export default function Login() {
   };
 
   if (loading) {
-    return (
-      <main className="app-shell flex min-h-[100dvh] items-center justify-center px-6 py-10 text-slate-900">
-        <section className="app-panel w-full max-w-md rounded-[24px] p-6 text-center sm:rounded-[28px] sm:p-8 md:max-w-lg">
-          <p className="text-sm font-medium text-slate-700">Preparing sign in…</p>
-        </section>
-      </main>
-    );
+    return <AppLoadingScreen message="Preparing sign in…" />;
   }
 
   return (

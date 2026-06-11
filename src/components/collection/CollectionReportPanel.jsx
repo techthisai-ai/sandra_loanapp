@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  CalendarDays,
-  Clock,
-  Download,
-  Eye,
-  FileSpreadsheet,
-  FileText,
-  Printer,
-  Search,
-} from "lucide-react";
+import CustomerDetailLink from "../customer/CustomerDetailLink";
+import { ExportToolbar, ExportToolbarButton } from "../reports/ExportToolbar.jsx";
+import { Download, Search } from "lucide-react";
 import { useLoanDataSync } from "../../context/LoanDataSyncContext";
 import useAuth from "../../hooks/useAuth";
 import { LOAN_CENTERS_CHANGED_EVENT } from "../../constants/loanCenterStorage";
@@ -92,9 +85,9 @@ function reportTableCellContent(value, { truncate = false, title } = {}) {
   return <span>{value}</span>;
 }
 import {
+  downloadCollectionCustomerReport,
   groupReportRowsBySubCenter,
   printCollectionCustomerReport,
-  validateCollectionPrintSelection,
 } from "../../utils/collectionCustomerReportPrint";
 import { reportDateStamp } from "../../utils/reportFilenames";
 import {
@@ -109,12 +102,6 @@ import { normalizeCollectionFrequency } from "../../utils/loanTimelineDates";
 
 const FREQUENCY_OPTIONS = ["All", "Daily", "Weekly", "Monthly"];
 const PAYMENT_STATUS_OPTIONS = ["All", "Paid", "Unpaid"];
-
-function parseInputDate(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
 
 const REPORT_SUMMARY_ACCENTS = {
   blue: {
@@ -139,19 +126,14 @@ const REPORT_SUMMARY_ACCENTS = {
   },
 };
 
-function ReportSummaryCard({ label, value, icon: Icon, accent = "blue" }) {
+function ReportSummaryCard({ label, value, accent = "blue" }) {
   const tone = REPORT_SUMMARY_ACCENTS[accent] || REPORT_SUMMARY_ACCENTS.blue;
 
   return (
     <div className={`rounded-xl border px-3 py-2.5 shadow-sm ${tone.card}`}>
-      <div className="flex items-start justify-between gap-2">
-        <p className={`min-w-0 text-[10px] font-semibold uppercase leading-tight tracking-[0.14em] ${tone.label}`}>
-          {label}
-        </p>
-        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tone.icon}`}>
-          <Icon className="h-4 w-4" />
-        </div>
-      </div>
+      <p className={`min-w-0 text-[10px] font-semibold uppercase leading-tight tracking-[0.14em] ${tone.label}`}>
+        {label}
+      </p>
       <p className="mt-1.5 text-center text-lg font-semibold tabular-nums leading-tight tracking-tight text-slate-950 sm:text-xl">
         {value}
       </p>
@@ -291,10 +273,9 @@ export default function CollectionReportPanel() {
   const [subCenterFilter, setSubCenterFilter] = useState("All");
   const [frequencyFilter, setFrequencyFilter] = useState("All");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("All");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
   const [search, setSearch] = useState("");
   const [printLoading, setPrintLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [paidState, setPaidState] = useState(() => loadCollectionReportPaidState());
   const [pendingAmountRow, setPendingAmountRow] = useState(null);
   const [entryPersistError, setEntryPersistError] = useState("");
@@ -405,8 +386,6 @@ export default function CollectionReportPanel() {
   ]);
 
   const reportRows = useMemo(() => {
-    const fromDate = parseInputDate(dateFrom);
-    const toDate = parseInputDate(dateTo);
     const query = search.trim().toLowerCase();
 
     return scopedCustomers
@@ -454,8 +433,6 @@ export default function CollectionReportPanel() {
     allCenters,
     centerFilter,
     subCenterFilter,
-    dateFrom,
-    dateTo,
     entriesByCustomerId,
     frequencyFilter,
     paymentStatusFilter,
@@ -470,8 +447,6 @@ export default function CollectionReportPanel() {
     const customerIds = new Set(reportRows.map((row) => row.customerId));
     let totalCollected = 0;
     let pendingCollection = 0;
-    let todayCollection = 0;
-    const todayKey = new Date().toISOString().slice(0, 10);
 
     entries.forEach((entry) => {
       if (!customerIds.has(entry.customerId)) return;
@@ -480,7 +455,6 @@ export default function CollectionReportPanel() {
       const approved = String(entry.approvalStatus || "").toLowerCase() === "approved";
       if (approved) {
         totalCollected += amount;
-        if ((entry.collectionDate || "").slice(0, 10) === todayKey) todayCollection += amount;
       } else {
         pendingCollection += amount;
       }
@@ -491,11 +465,16 @@ export default function CollectionReportPanel() {
       if (balance > 0) pendingCollection += balance;
     });
 
+    const pendingCustomers = reportRows.filter((row) => {
+      if (row.isFullyPaid) return false;
+      return !row.isCurrentTenurePaid;
+    }).length;
+
     return {
-      assignedCustomers: reportRows.length,
+      totalCustomers: reportRows.length,
       totalCollected,
+      pendingCustomers,
       pendingCollection,
-      todayCollection,
     };
   }, [entries, reportRows, selectedEmployee]);
 
@@ -582,68 +561,44 @@ export default function CollectionReportPanel() {
   };
 
   const printEmployee = selectedEmployee || loggedInEmployee;
-  const printSelectionHint = validateCollectionPrintSelection({
-    mainCenter: centerFilter,
-  });
 
-  const handlePrint = useCallback(() => {
-    const validationError = validateCollectionPrintSelection({
+  const buildExportPayload = useCallback(() => {
+    let sections = groupReportRowsBySubCenter({
+      reportRows,
       mainCenter: centerFilter,
+      allCenters,
+      employee: printEmployee || null,
     });
-    if (validationError) {
-      window.alert(validationError);
-      return;
+    if (subCenterFilter !== "All") {
+      sections = sections.filter((section) => section.subCenter === subCenterFilter);
     }
 
-    setPrintLoading(true);
-    try {
-      let sections = groupReportRowsBySubCenter({
-        reportRows,
-        mainCenter: centerFilter,
-        allCenters,
-        employee: printEmployee || null,
-      });
-      if (subCenterFilter !== "All") {
-        sections = sections.filter((section) => section.subCenter === subCenterFilter);
-      }
+    const employeeLabel =
+      printEmployee?.displayName ||
+      printEmployee?.username ||
+      printEmployee?.employeeId ||
+      (isEmployeeUser ? "—" : "All employees");
 
-      if (!sections.some((section) => section.rows?.length)) {
-        window.alert("No customers found for the selected filters. Adjust Employee, Main center, or Payment filter.");
-        return;
-      }
-
-      const employeeLabel =
-        printEmployee?.displayName ||
-        printEmployee?.username ||
-        printEmployee?.employeeId ||
-        (isEmployeeUser ? "—" : "All employees");
-
-      printCollectionCustomerReport({
-        employeeName: employeeLabel,
-        mainCenter: centerFilter,
-        sections,
-        paidState,
-        reportId: `RFS-CRR-${reportDateStamp()}`,
-        filterLines: [
-          `Employee: ${employeeLabel}`,
-          `Main center: ${centerFilter}`,
-          `Sub-center: ${subCenterFilter === "All" ? "All" : subCenterFilter}`,
-          `Collection type: ${frequencyFilter === "All" ? "All" : frequencyFilter}`,
-          `Payment: ${paymentStatusFilter === "All" ? "All" : paymentStatusFilter}`,
-        ],
-        summaryCards: [
-          { label: "Assigned customers", value: String(stats.assignedCustomers) },
-          { label: "Total collected", value: formatCurrency(stats.totalCollected) },
-          { label: "Pending collection", value: formatCurrency(stats.pendingCollection) },
-          { label: "Today's collection", value: formatCurrency(stats.todayCollection) },
-        ],
-      });
-    } catch (printError) {
-      console.error(printError);
-      window.alert(printError?.message || "Print failed. Please try again.");
-    } finally {
-      setPrintLoading(false);
-    }
+    return {
+      employeeName: employeeLabel,
+      mainCenter: centerFilter === "All" ? "All" : centerFilter,
+      sections,
+      paidState,
+      reportId: `RFS-CRR-${reportDateStamp()}`,
+      filterLines: [
+        `Employee: ${employeeLabel}`,
+        `Main center: ${centerFilter}`,
+        `Sub-center: ${subCenterFilter === "All" ? "All" : subCenterFilter}`,
+        `Collection type: ${frequencyFilter === "All" ? "All" : frequencyFilter}`,
+        `Payment: ${paymentStatusFilter === "All" ? "All" : paymentStatusFilter}`,
+      ],
+      summaryCards: [
+        { label: "Customers", value: String(stats.totalCustomers) },
+        { label: "Collection", value: formatCurrency(stats.totalCollected) },
+        { label: "Pending customer", value: String(stats.pendingCustomers) },
+        { label: "Pending amount", value: formatCurrency(stats.pendingCollection) },
+      ],
+    };
   }, [
     allCenters,
     centerFilter,
@@ -657,6 +612,40 @@ export default function CollectionReportPanel() {
     subCenterFilter,
   ]);
 
+  const handlePrint = useCallback(() => {
+    setPrintLoading(true);
+    try {
+      const payload = buildExportPayload();
+      if (!payload.sections.some((section) => section.rows?.length)) {
+        window.alert("No customers found for the selected filters.");
+        return;
+      }
+      printCollectionCustomerReport(payload);
+    } catch (printError) {
+      console.error(printError);
+      window.alert(printError?.message || "Print failed. Please try again.");
+    } finally {
+      setPrintLoading(false);
+    }
+  }, [buildExportPayload]);
+
+  const handlePdf = useCallback(async () => {
+    setPdfLoading(true);
+    try {
+      const payload = buildExportPayload();
+      if (!payload.sections.some((section) => section.rows?.length)) {
+        window.alert("No customers found for the selected filters.");
+        return;
+      }
+      await downloadCollectionCustomerReport(payload);
+    } catch (pdfError) {
+      console.error(pdfError);
+      window.alert(pdfError?.message || "PDF download failed. Please try again.");
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [buildExportPayload]);
+
   const loading = syncLoading || employeesLoading;
 
   return (
@@ -666,74 +655,96 @@ export default function CollectionReportPanel() {
           {entryPersistError}
         </p>
       ) : null}
-      <div className="collection-report-top-bar flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
-        <div className="collection-report-summary-grid grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-4 lg:flex-[0_1_68%] xl:flex-[0_1_72%]">
-          <ReportSummaryCard
-            label="Assigned customers"
-            value={String(stats.assignedCustomers)}
-            icon={Eye}
-            accent="blue"
-          />
-          <ReportSummaryCard
-            label="Total collected"
-            value={formatCurrency(stats.totalCollected)}
-            icon={FileSpreadsheet}
-            accent="green"
-          />
-          <ReportSummaryCard
-            label="Pending collection"
-            value={formatCurrency(stats.pendingCollection)}
-            icon={Clock}
-            accent="red"
-          />
-          <ReportSummaryCard
-            label="Today's collection"
-            value={formatCurrency(stats.todayCollection)}
-            icon={CalendarDays}
-            accent="purple"
-          />
-        </div>
+      <div className="collection-report-toolbar flex flex-col gap-2">
+        <div className="collection-report-toolbar-row flex min-w-0 flex-wrap items-start gap-2.5 lg:flex-nowrap lg:gap-3">
+          <div className="min-w-0 w-full lg:min-w-0 lg:flex-1">
+            <div className="collection-report-summary-grid grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <ReportSummaryCard
+                label="Customers"
+                value={String(stats.totalCustomers)}
+                accent="blue"
+              />
+              <ReportSummaryCard
+                label="Collection"
+                value={formatCurrency(stats.totalCollected)}
+                accent="green"
+              />
+              <ReportSummaryCard
+                label="Pending customer"
+                value={String(stats.pendingCustomers)}
+                accent="purple"
+              />
+              <ReportSummaryCard
+                label="Pending amount"
+                value={formatCurrency(stats.pendingCollection)}
+                accent="red"
+              />
+            </div>
+          </div>
 
-        <div className="collection-report-export-actions flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-          <button
-            type="button"
-            disabled={printLoading}
-            onClick={handlePrint}
-            title={printSelectionHint || "Print customer report grouped by sub-center"}
-            className="collection-report-export-btn inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-medium"
-          >
-            <Printer className="h-3.5 w-3.5 text-slate-600" />
-            {printLoading ? "Printing…" : "Print"}
-          </button>
-          <button
-            type="button"
-            className="collection-report-export-btn inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-medium"
-          >
-            <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
-            Export Excel
-          </button>
-          <button
-            type="button"
-            className="collection-report-export-btn inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-medium"
-          >
-            <FileText className="h-3.5 w-3.5 text-rose-600" />
-            Export PDF
-          </button>
-          <button
-            type="button"
-            disabled={!reportRows.length}
-            onClick={() => downloadReportRowsCsv(reportRows, paidState)}
-            className="collection-report-export-btn inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-medium"
-          >
-            <Download className="h-3.5 w-3.5 text-emerald-600" />
-            Export CSV
-          </button>
+          <div className="collection-report-toolbar-side flex min-w-0 flex-col gap-2 lg:shrink-0 lg:border-l lg:border-slate-200/80 lg:pl-3">
+            <ExportToolbar className="collection-report-export-actions">
+              <ExportToolbarButton
+                variant="print"
+                loading={printLoading}
+                disabled={printLoading || !reportRows.length}
+                onClick={handlePrint}
+                title="Print customer report"
+              >
+                Print
+              </ExportToolbarButton>
+              <ExportToolbarButton variant="excel">Excel</ExportToolbarButton>
+              <ExportToolbarButton
+                variant="pdf"
+                loading={pdfLoading}
+                disabled={pdfLoading || !reportRows.length}
+                onClick={() => void handlePdf()}
+                title="Download customer report PDF"
+              >
+                PDF
+              </ExportToolbarButton>
+              <ExportToolbarButton
+                variant="neutral"
+                icon={Download}
+                disabled={!reportRows.length}
+                onClick={() => downloadReportRowsCsv(reportRows, paidState)}
+              >
+                CSV
+              </ExportToolbarButton>
+            </ExportToolbar>
+            <div className="collection-report-toolbar-filters">
+              <select
+                value={frequencyFilter}
+                onChange={(e) => setFrequencyFilter(e.target.value)}
+                className="app-select collection-report-toolbar-filter"
+                aria-label="Collection type"
+              >
+                {FREQUENCY_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option === "All" ? "All types" : option}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={paymentStatusFilter}
+                onChange={(e) => setPaymentStatusFilter(e.target.value)}
+                className="app-select collection-report-toolbar-filter"
+                aria-label="Payment status"
+              >
+                {PAYMENT_STATUS_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="collection-report-filters mt-4 space-y-3 rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-sm">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 xl:items-end">
-          <div className="min-w-0 sm:col-span-2 lg:col-span-3 xl:col-span-1">
+      <div className="collection-report-filters mt-4 rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-sm">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:items-end">
+          <div className="min-w-0 sm:col-span-2 lg:col-span-2 xl:col-span-1">
             <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
               Search customer
             </label>
@@ -808,49 +819,6 @@ export default function CollectionReportPanel() {
                   </option>
                 ))}
             </select>
-          </div>
-          <div className="min-w-0">
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Collection type
-            </label>
-            <select value={frequencyFilter} onChange={(e) => setFrequencyFilter(e.target.value)} className="app-select w-full">
-              {FREQUENCY_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option === "All" ? "All types" : `${option} collection`}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 items-end">
-          <div className="min-w-0">
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Payment
-            </label>
-            <select
-              value={paymentStatusFilter}
-              onChange={(e) => setPaymentStatusFilter(e.target.value)}
-              className="app-select w-full"
-            >
-              {PAYMENT_STATUS_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option === "All" ? "All" : option}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="min-w-0">
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Date from
-            </label>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="app-input w-full" />
-          </div>
-          <div className="min-w-0">
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Date to
-            </label>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="app-input w-full" />
           </div>
         </div>
       </div>
@@ -1013,6 +981,7 @@ export default function CollectionReportPanel() {
                           : alertPrintClass.includes("cr-alert-bg-yellow") || alertCellBgClass === "bg-amber-100"
                             ? "hover:bg-amber-100"
                             : "";
+                      const customerForRow = column.key === "customerName" ? customers.find((c) => c.customerId === row.customerId) : null;
                       return (
                         <td
                           key={column.key}
@@ -1022,10 +991,22 @@ export default function CollectionReportPanel() {
                             { truncate: column.truncate }
                           )}
                         >
-                          {reportTableCellContent(value, {
-                            truncate: column.truncate,
-                            title: cellTitle,
-                          })}
+                          {column.key === "customerName" && row.customerId ? (
+                            <CustomerDetailLink
+                              customerId={row.customerId}
+                              variant={isEmployeeUser ? "employee" : "admin"}
+                              selectedDay={customerForRow?.selectedDay}
+                              className={`block truncate font-medium text-slate-950 ${alertTextClass || ""}`.trim()}
+                              title={cellTitle}
+                            >
+                              {value}
+                            </CustomerDetailLink>
+                          ) : (
+                            reportTableCellContent(value, {
+                              truncate: column.truncate,
+                              title: cellTitle,
+                            })
+                          )}
                         </td>
                       );
                     })}

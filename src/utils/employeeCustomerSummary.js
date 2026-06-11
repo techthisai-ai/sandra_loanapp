@@ -61,6 +61,7 @@ export function buildEmployeeCustomerSummary(customer, customerEntries = [], all
     currentDueAmountNumber: listDisplay.dueAmountNumber,
     partiallyPaidDisplay: getCurrentTenurePartiallyPaidDisplay(customer, customerEntries),
     pendingTenuresLabel: detail.pendingTenuresLabel || "—",
+    totalTenureLabel: detail.totalTenureLabel || "—",
     nextDueDateDisplay: getNextDueDateDisplay(customer, customerEntries),
     loanDate: detail.loanDate || "—",
     currentDueDate: listDisplay.dueDateDisplay,

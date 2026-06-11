@@ -1,7 +1,13 @@
+import { enrichCustomerForCollection } from "./collectionCustomerUtils.js";
 import {
   buildInstallmentSchedule,
+  buildInstallmentSpecs,
+  buildTenureCalendarContext,
+  applyFifoPaymentsToSpecs,
+  collectSchedulePayments,
   getInstallmentPeriodLabel,
   isInstallmentPaid,
+  startOfDay,
 } from "./customerProfileSchedule.js";
 import { computeLoanNearEndAlert, getCalendarCurrentTenureNumber } from "./loanNearEndAlert.js";
 
@@ -11,8 +17,8 @@ import { buildCustomerDetailRow, formatCurrency } from "./employeeCollectionDeta
 import {
   getCommittedPaidAmount,
   getCommittedPaymentsForCustomer,
-  isPaidFieldCommittedForInstallment,
   makePaidEntryKey,
+  parsePaidEntryKey,
   sanitizePaidAmount,
 } from "./collectionReportPaidStorage.js";
 
@@ -38,46 +44,91 @@ export function resolveCurrentTenurePayment(customer, customerEntries, calendarC
   return { isPaid, isPartial, paidAmount };
 }
 
-export function buildScheduleWithManualPayments(customer, customerEntries, paidState) {
+function getInstallmentManualAmounts(customerId, installmentNumber, paidState) {
+  if (!customerId || installmentNumber == null) {
+    return { committed: 0, draft: 0, entryKey: "" };
+  }
+  const entryKey = makePaidEntryKey(customerId, installmentNumber);
+  return {
+    entryKey,
+    committed: Number(getCommittedPaidAmount(entryKey, paidState) || 0),
+    draft: Number(sanitizePaidAmount(paidState.drafts?.[entryKey]) || 0),
+  };
+}
+
+/**
+ * Unreconciled manual Amount-cell entry for FIFO preview.
+ * Avoids counting committed + draft twice for the same payment while typing.
+ */
+export function computeUnreconciledManualAmount(customerId, installmentNumber, customerEntries, paidState) {
+  const { committed, draft } = getInstallmentManualAmounts(customerId, installmentNumber, paidState);
+  const approvedTotal = collectSchedulePayments(customerEntries).reduce(
+    (sum, entry) => sum + Number(entry.amount || 0),
+    0
+  );
+  const unreconciledCommitted = Math.max(0, committed - approvedTotal);
+
+  if (draft > 0) {
+    return draft + Math.max(0, unreconciledCommitted - draft);
+  }
+
+  return unreconciledCommitted;
+}
+
+function buildManualExtraPayments(customerId, installmentNumber, customerEntries, paidState) {
+  const amount = computeUnreconciledManualAmount(customerId, installmentNumber, customerEntries, paidState);
+  if (amount <= 0) return [];
+
+  const { entryKey } = getInstallmentManualAmounts(customerId, installmentNumber, paidState);
+  const committedRecord = paidState?.committed?.[entryKey];
+  const paidAt = String(committedRecord?.paidAt || new Date().toISOString());
+
+  return [
+    {
+      amount,
+      collectionDate: paidAt.slice(0, 10) || new Date().toISOString().slice(0, 10),
+      submittedAt: paidAt,
+      source: "manual-entry",
+    },
+  ];
+}
+
+export function buildScheduleWithManualPayments(customer, customerEntries, paidState, installmentNumber = null) {
+  const resolvedCustomer = enrichCustomerForCollection(customer);
+  const { totalPayable, specs } = buildInstallmentSpecs(resolvedCustomer, customerEntries);
+  const approvedPayments = collectSchedulePayments(customerEntries);
   const baseSchedule = buildInstallmentSchedule(customer, customerEntries);
-  const manualPayments = getCommittedPaymentsForCustomer(customer.customerId, paidState);
-  const totalPayable = Number(customer.totalPayable || 0);
-  let cumulativeCollected = 0;
+  const tenureContext = buildTenureCalendarContext(resolvedCustomer, baseSchedule);
+  const activeInstallmentNumber =
+    installmentNumber ?? getCalendarCurrentTenureNumber(baseSchedule, tenureContext) ?? null;
+  const extraPayments = buildManualExtraPayments(
+    customer.customerId,
+    activeInstallmentNumber,
+    customerEntries,
+    paidState
+  );
 
-  return baseSchedule.map((item) => {
-    const manual = manualPayments.get(item.installmentNumber);
-    let paidAmount = item.paidAmount;
+  const schedule = applyFifoPaymentsToSpecs(
+    specs,
+    [...approvedPayments, ...extraPayments],
+    totalPayable
+  );
 
-    if (manual) {
-      paidAmount = Math.min(
-        item.dueAmount,
-        Number(paidAmount || 0) + Number(manual.amount || 0)
-      );
-    }
-
-    cumulativeCollected += paidAmount;
-    const pendingAmount = Math.max(item.dueAmount - paidAmount, 0);
-    let status = item.status;
-    if (paidAmount >= item.dueAmount && paidAmount > 0) {
-      status = "Paid";
-    } else if (paidAmount > 0) {
-      status = "Partial";
-    }
-
+  const manualByInstallment = getCommittedPaymentsForCustomer(customer.customerId, paidState);
+  return schedule.map((item) => {
+    const baseItem = baseSchedule.find((row) => row.installmentNumber === item.installmentNumber) || item;
+    const manual = manualByInstallment.get(item.installmentNumber);
     return {
       ...item,
-      paidAmount,
-      pendingAmount,
-      paymentDate: manual?.paidAt || item.paymentDate,
-      status,
-      remainingBalanceAfter: Math.max(totalPayable - cumulativeCollected, 0),
-      isManualCommit: Boolean(manual && !isInstallmentPaid({ ...item, paidAmount: item.paidAmount })),
+      isManualCommit: Boolean(
+        manual && Number(item.paidAmount || 0) > Number(baseItem.paidAmount || 0)
+      ),
     };
   });
 }
 
-export function getCalendarCurrentInstallment(schedule) {
-  const currentNumber = getCalendarCurrentTenureNumber(schedule);
+export function getCalendarCurrentInstallment(schedule, context = {}) {
+  const currentNumber = getCalendarCurrentTenureNumber(schedule, context);
   if (!currentNumber) return null;
   return schedule.find((item) => item.installmentNumber === currentNumber) || null;
 }
@@ -111,7 +162,11 @@ export function formatCompactInstallmentNumbers(numbers, maxVisible = 4) {
  */
 export function computeReportTenureBreakdown(schedule, frequency, customer = null) {
   const total = schedule.length;
-  const calendarCurrent = getCalendarCurrentTenureNumber(schedule);
+  const tenureContext = buildTenureCalendarContext(
+    customer ? { ...customer, collectionFrequency: frequency || customer.collectionFrequency } : { collectionFrequency: frequency },
+    schedule
+  );
+  const calendarCurrent = getCalendarCurrentTenureNumber(schedule, tenureContext);
   const currentItem =
     calendarCurrent > 0
       ? schedule.find((item) => item.installmentNumber === calendarCurrent) || null
@@ -125,8 +180,11 @@ export function computeReportTenureBreakdown(schedule, frequency, customer = nul
     (sum, item) => sum + installmentOutstandingAmount(item),
     0
   );
+  const today = startOfDay(new Date());
   const currentDueOutstanding =
-    currentItem && !isInstallmentPaidForReport(currentItem)
+    currentItem &&
+    !isInstallmentPaidForReport(currentItem) &&
+    startOfDay(currentItem.dueDate) <= today
       ? installmentOutstandingAmount(currentItem)
       : 0;
   const pendingAmountRaw = priorPendingAmountRaw + currentDueOutstanding;
@@ -184,24 +242,56 @@ function formatCurrentDueAmount(currentDue, { isPaid = false } = {}) {
   return formatCurrency(outstanding);
 }
 
+/** Paid column: manual entry in the Amount cell, else FIFO-allocated current tenure paid. */
+export function resolveReportPaidDisplayAmount(
+  customer,
+  customerEntries,
+  paidState,
+  { currentInstallmentNumber, currentTenurePaidAmount, effectiveSchedule }
+) {
+  const manualEntryAmount = computeUnreconciledManualAmount(
+    customer.customerId,
+    currentInstallmentNumber,
+    customerEntries,
+    paidState
+  );
+  if (manualEntryAmount > 0) {
+    return manualEntryAmount;
+  }
+
+  const { committed, draft } = getInstallmentManualAmounts(
+    customer.customerId,
+    currentInstallmentNumber,
+    paidState
+  );
+  const storedManualAmount = committed + draft;
+  if (storedManualAmount > 0) {
+    return storedManualAmount;
+  }
+
+  const baseSchedule = buildInstallmentSchedule(customer, customerEntries);
+  const baseTotalPaid = baseSchedule.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0);
+  const effectiveTotalPaid = (effectiveSchedule || []).reduce(
+    (sum, item) => sum + Number(item.paidAmount || 0),
+    0
+  );
+  const manualPreviewTotal = Math.max(0, effectiveTotalPaid - baseTotalPaid);
+  if (manualPreviewTotal > 0) {
+    return manualPreviewTotal;
+  }
+
+  return Number(currentTenurePaidAmount || 0);
+}
+
 /**
- * Amount paid toward the current calendar tenure only (partial or full).
- * Uncommitted Entry draft is previewed as an increment on top of the stored tenure payment.
+ * Amount shown in the Paid column for a collection report row.
  */
 export function resolveReportPaidColumnAmount(row, paidState = { drafts: {}, committed: {} }) {
   if (!row?.customerId) return 0;
-
-  let amount = Number(row.currentTenurePaidAmount || 0);
-
-  if (row.installmentNumber != null) {
-    const entryKey = makePaidEntryKey(row.customerId, row.installmentNumber);
-    const draft = sanitizePaidAmount(paidState.drafts?.[entryKey]);
-    if (draft) {
-      amount += Number(draft);
-    }
+  if (Number(row.reportPaidDisplayAmount || 0) > 0) {
+    return Number(row.reportPaidDisplayAmount);
   }
-
-  return amount;
+  return Number(row.currentTenurePaidAmount || 0);
 }
 
 export function formatReportPaidColumnDisplay(row, paidState) {
@@ -234,10 +324,19 @@ export function buildCollectionReportRowsForCustomer(
 ) {
   const { paidState = { drafts: {}, committed: {} } } = options;
   const frequency = normalizeCollectionFrequency(customer.collectionFrequency);
-  const effectiveSchedule = buildScheduleWithManualPayments(customer, customerEntries, paidState);
+  const baseSchedule = buildInstallmentSchedule(customer, customerEntries);
+  const calendarInstallmentNumber =
+    getCalendarCurrentTenureNumber(baseSchedule, buildTenureCalendarContext(customer, baseSchedule)) || null;
+  const effectiveSchedule = buildScheduleWithManualPayments(
+    customer,
+    customerEntries,
+    paidState,
+    calendarInstallmentNumber
+  );
   const detail = buildCustomerDetailRow(customer, customerEntries);
+  const tenureContext = buildTenureCalendarContext(customer, effectiveSchedule);
   const tenure = computeReportTenureBreakdown(effectiveSchedule, frequency, customer);
-  const calendarCurrent = getCalendarCurrentInstallment(effectiveSchedule);
+  const calendarCurrent = getCalendarCurrentInstallment(effectiveSchedule, tenureContext);
   const totalCollected = effectiveSchedule.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0);
   const remainingBalance = Math.max(Number(customer.totalPayable || 0) - totalCollected, 0);
 
@@ -262,22 +361,13 @@ export function buildCollectionReportRowsForCustomer(
 
   const isFullyPaid = remainingBalance <= 0;
   const currentInstallmentNumber = calendarCurrent?.installmentNumber ?? null;
-  const currentDueAmount = Number(calendarCurrent?.dueAmount || 0);
-  const paidFieldCommitted = isPaidFieldCommittedForInstallment(
-    customer.customerId,
+  const reportPaidDisplayAmount = resolveReportPaidDisplayAmount(customer, customerEntries, paidState, {
     currentInstallmentNumber,
-    paidState,
-    currentDueAmount
-  );
-  const committedCurrentManual = Number(
-    getCommittedPaidAmount(makePaidEntryKey(customer.customerId, currentInstallmentNumber), paidState) || 0
-  );
-  const isPaidForFilter =
-    isFullyPaid ||
-    isCurrentTenurePaid ||
-    paidFieldCommitted ||
-    currentTenurePaidAmount > 0 ||
-    committedCurrentManual > 0;
+    currentTenurePaidAmount,
+    effectiveSchedule,
+  });
+  const hasManualEntryPreview = reportPaidDisplayAmount > Number(currentTenurePaidAmount || 0);
+  const isPaidForFilter = isFullyPaid || isCurrentTenurePaid;
   const clearedTenure = isFullyPaid
     ? {
         pendingTenures: [],
@@ -298,8 +388,9 @@ export function buildCollectionReportRowsForCustomer(
     ...clearedTenure,
     isFullyPaid,
     isCurrentTenurePaid,
-    isCurrentTenurePartial,
+    isCurrentTenurePartial: isCurrentTenurePartial || hasManualEntryPreview,
     currentTenurePaidAmount,
+    reportPaidDisplayAmount,
     currentDueAmount: clearedTenure.currentDueAmount ?? base.currentDueAmount,
     paidDisplay: formatReportPaidColumnDisplay(
       {
@@ -307,6 +398,7 @@ export function buildCollectionReportRowsForCustomer(
         installmentNumber: currentInstallmentNumber,
         isCurrentTenurePaid,
         currentTenurePaidAmount,
+        reportPaidDisplayAmount,
       },
       paidState
     ),

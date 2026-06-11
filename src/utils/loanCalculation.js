@@ -7,9 +7,10 @@ export function calculateLoanValues({ loanAmount, loanWeeks, interestRate = 0, p
   const principal = toNumber(loanAmount);
   const weeks = Math.max(0, Math.round(toNumber(loanWeeks)));
   const presetEmiAmount = toNumber(preset?.emiAmount);
+  const hasUsablePreset = Boolean(preset) && weeks > 0 && presetEmiAmount > 0;
 
-  if (preset && weeks > 0) {
-    const emiAmount = presetEmiAmount > 0 ? presetEmiAmount : 0;
+  if (hasUsablePreset) {
+    const emiAmount = presetEmiAmount;
     const totalPayable = emiAmount * weeks;
     const interestAmount = Math.max(totalPayable - principal, 0);
 

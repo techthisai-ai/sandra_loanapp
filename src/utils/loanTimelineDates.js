@@ -20,6 +20,71 @@ export function getCollectionIntervalDays(frequency) {
   return 7;
 }
 
+function tenureStartOfDay(date) {
+  const value = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(value.getTime())) return new Date();
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+}
+
+function tenureSafeDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Calendar months elapsed since EMI start (same day-of-month anchor). */
+export function monthsElapsedSince(startDate, referenceDate = new Date()) {
+  const start = tenureStartOfDay(tenureSafeDate(startDate) || new Date());
+  const ref = tenureStartOfDay(referenceDate);
+  if (ref < start) return 0;
+  let months = (ref.getFullYear() - start.getFullYear()) * 12 + (ref.getMonth() - start.getMonth());
+  if (ref.getDate() < start.getDate()) months -= 1;
+  return Math.max(0, months);
+}
+
+/** Due date for tenure period index (0 = first period) by collection frequency. */
+export function addTenurePeriod(startDate, periodIndex, frequency) {
+  const base = tenureSafeDate(startDate) || new Date();
+  const index = Math.max(Number(periodIndex) || 0, 0);
+  const kind = normalizeCollectionFrequency(frequency);
+  const next = new Date(base);
+  if (kind === "Daily") {
+    next.setDate(next.getDate() + index);
+    return tenureStartOfDay(next);
+  }
+  if (kind === "Weekly") {
+    next.setDate(next.getDate() + index * 7);
+    return tenureStartOfDay(next);
+  }
+  return tenureStartOfDay(new Date(base.getFullYear(), base.getMonth() + index, base.getDate()));
+}
+
+/** 0-based elapsed tenure periods since EMI start (day / week / calendar month). */
+export function getElapsedTenurePeriods(emiStartDate, frequency, referenceDate = new Date()) {
+  const start = tenureStartOfDay(tenureSafeDate(emiStartDate) || new Date());
+  const today = tenureStartOfDay(referenceDate);
+  if (today < start) return 0;
+  const kind = normalizeCollectionFrequency(frequency);
+  if (kind === "Daily") {
+    return Math.floor((today.getTime() - start.getTime()) / 86400000);
+  }
+  if (kind === "Weekly") {
+    return Math.floor((today.getTime() - start.getTime()) / (7 * 86400000));
+  }
+  return monthsElapsedSince(start, today);
+}
+
+export function inferCollectionFrequencyFromSchedule(schedule = []) {
+  if (!Array.isArray(schedule) || schedule.length < 2) return "Weekly";
+  const first = tenureSafeDate(schedule[0]?.dueDate);
+  const second = tenureSafeDate(schedule[1]?.dueDate);
+  if (!first || !second) return "Weekly";
+  const diffDays = Math.round((tenureStartOfDay(second) - tenureStartOfDay(first)) / 86400000);
+  if (diffDays <= 1) return "Daily";
+  if (diffDays <= 7) return "Weekly";
+  return "Monthly";
+}
+
 export function calculateLoanDueDate(disbursementDate, weeks, frequency) {
   const baseDate = disbursementDate ? new Date(disbursementDate) : new Date();
   if (Number.isNaN(baseDate.getTime())) return "";

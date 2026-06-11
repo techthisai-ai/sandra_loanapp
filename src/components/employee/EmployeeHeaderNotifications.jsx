@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Bell, CheckCircle2, XCircle } from "lucide-react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebase/config";
@@ -31,7 +31,7 @@ function resolveEmployeeNavPath(notification) {
   const combined = `${title} ${message}`;
 
   if (combined.includes("loan request") || combined.includes("loan approved") || combined.includes("loan rejected")) {
-    return "/employee/loan-request";
+    return "/employee/notifications";
   }
   if (
     combined.includes("customer approved") ||
@@ -202,6 +202,16 @@ export default function EmployeeHeaderNotifications() {
                 })}
               </ul>
             )}
+          </div>
+
+          <div className="border-t border-slate-100 bg-slate-50/80 px-4 py-2.5">
+            <Link
+              to="/employee/notifications"
+              onClick={() => setOpen(false)}
+              className="block text-center text-xs font-semibold text-blue-700 hover:text-blue-800"
+            >
+              View notification history
+            </Link>
           </div>
         </div>
       ) : null}

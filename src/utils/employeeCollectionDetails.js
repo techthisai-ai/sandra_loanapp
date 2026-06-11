@@ -1,12 +1,14 @@
 import {
   buildInstallmentSchedule,
+  buildTenureCalendarContext,
   formatInstallmentNumberList,
+  formatTotalTenureLabel,
   getInstallmentPeriodLabel,
   isInstallmentPaid,
   safeDate,
   startOfDay,
 } from "./customerProfileSchedule.js";
-import { computeLoanNearEndAlert } from "./loanNearEndAlert.js";
+import { computeLoanNearEndAlert, getCalendarCurrentTenureNumber } from "./loanNearEndAlert.js";
 import { normalizeCollectionFrequency } from "./loanTimelineDates.js";
 
 export function formatCurrency(value) {
@@ -185,12 +187,9 @@ export function computeTenureBreakdown(customer, customerEntries) {
   const frequency = normalizeCollectionFrequency(customer.collectionFrequency);
   const schedule = buildInstallmentSchedule(customer, customerEntries);
   const total = schedule.length;
-  const today = startOfDay(new Date());
-  let elapsed = 0;
-  schedule.forEach((item) => {
-    if (startOfDay(item.dueDate) <= today) elapsed += 1;
-  });
-  const currentNumber = total ? Math.min(Math.max(elapsed, 1), total) : 0;
+  const currentNumber = total
+    ? getCalendarCurrentTenureNumber(schedule, buildTenureCalendarContext(customer, schedule))
+    : 0;
 
   const pendingTenures = schedule
     .filter((item) => item.installmentNumber < currentNumber && !isInstallmentPaid(item))
@@ -232,15 +231,19 @@ function isEntryPendingApproval(entry) {
   return status !== "approved" && status !== "rejected";
 }
 
-export function getCurrentTenurePendingApprovalEntry(customer, customerEntries) {
+function getCurrentTenureScheduleItem(customer, customerEntries, { includePendingApprovals = false } = {}) {
   const tenure = computeTenureBreakdown(customer, customerEntries);
-  const currentNumber = tenure.currentTenureNumber || 0;
-  if (!currentNumber) return null;
+  const schedule = buildInstallmentSchedule(customer, customerEntries, { includePendingApprovals });
+  return schedule.find((item) => item.installmentNumber === tenure.currentTenureNumber) || null;
+}
 
-  const schedule = buildInstallmentSchedule(customer, customerEntries);
-  const currentItem = schedule.find((item) => item.installmentNumber === currentNumber);
-  if (!currentItem || isInstallmentPaid(currentItem)) return null;
+function pendingPaymentAllocatesToCurrentTenure(customer, customerEntries) {
+  const approvedItem = getCurrentTenureScheduleItem(customer, customerEntries);
+  const previewItem = getCurrentTenureScheduleItem(customer, customerEntries, { includePendingApprovals: true });
+  return Number(previewItem?.paidAmount || 0) > Number(approvedItem?.paidAmount || 0);
+}
 
+export function getCurrentTenurePendingApprovalEntry(customer, customerEntries) {
   const pendingEntries = [...customerEntries]
     .filter((entry) => isEntryPendingApproval(entry))
     .sort((left, right) =>
@@ -286,52 +289,39 @@ export function getNextDueDateDisplay(customer, customerEntries) {
 }
 
 export function isCurrentTenureCollected(customer, customerEntries) {
-  const tenure = computeTenureBreakdown(customer, customerEntries);
-  const schedule = buildInstallmentSchedule(customer, customerEntries);
-  const currentItem = schedule.find((item) => item.installmentNumber === tenure.currentTenureNumber);
+  const currentItem = getCurrentTenureScheduleItem(customer, customerEntries);
   if (!currentItem) return false;
-  if (isInstallmentPaid(currentItem)) return true;
-  return (
-    Number(currentItem.dueAmount || 0) > 0 &&
-    Number(currentItem.pendingAmount || 0) === 0 &&
-    Number(currentItem.paidAmount || 0) > 0
-  );
+  return isInstallmentPaid(currentItem);
 }
 
 export function isCurrentTenurePartiallyPaid(customer, customerEntries) {
   if (isCurrentTenureCollected(customer, customerEntries)) return false;
 
-  const tenure = computeTenureBreakdown(customer, customerEntries);
-  const schedule = buildInstallmentSchedule(customer, customerEntries);
-  const currentItem = schedule.find((item) => item.installmentNumber === tenure.currentTenureNumber);
-  if (!currentItem) return false;
+  const approvedItem = getCurrentTenureScheduleItem(customer, customerEntries);
+  if (!approvedItem) return false;
 
-  // All approved entries (employee + admin) are allocated in the schedule.
-  if (Number(currentItem.paidAmount || 0) > 0 && !isInstallmentPaid(currentItem)) {
+  if (Number(approvedItem.paidAmount || 0) > 0 && !isInstallmentPaid(approvedItem)) {
     return true;
   }
 
-  // Pending partial entry for the current tenure (not yet counted in schedule totals).
-  const pendingEntry = getCurrentTenurePendingApprovalEntry(customer, customerEntries);
-  return (
-    Boolean(pendingEntry) &&
-    normalizeEmployeeCollectionStatus(pendingEntry.collectionStatus) === "Partial Payment"
-  );
+  if (!pendingPaymentAllocatesToCurrentTenure(customer, customerEntries)) {
+    return false;
+  }
+
+  const previewItem = getCurrentTenureScheduleItem(customer, customerEntries, { includePendingApprovals: true });
+  return Number(previewItem?.paidAmount || 0) > 0 && !isInstallmentPaid(previewItem);
 }
 
 export function getCurrentTenureCollectionStatus(customer, customerEntries) {
-  const tenure = computeTenureBreakdown(customer, customerEntries);
-  const currentNumber = tenure.currentTenureNumber || 0;
-  if (!currentNumber) return "Pending";
-
-  const schedule = buildInstallmentSchedule(customer, customerEntries);
-  const currentItem = schedule.find((item) => item.installmentNumber === currentNumber);
+  const currentItem = getCurrentTenureScheduleItem(customer, customerEntries);
   if (!currentItem) return "Pending";
   if (isInstallmentPaid(currentItem)) return "Collected";
   if (isCurrentTenurePartiallyPaid(customer, customerEntries)) return "Partial Payment";
 
   const pendingEntry = getCurrentTenurePendingApprovalEntry(customer, customerEntries);
-  if (pendingEntry) return normalizeEmployeeCollectionStatus(pendingEntry.collectionStatus);
+  if (pendingEntry && pendingPaymentAllocatesToCurrentTenure(customer, customerEntries)) {
+    return normalizeEmployeeCollectionStatus(pendingEntry.collectionStatus);
+  }
 
   return "Pending";
 }
@@ -396,6 +386,7 @@ export function buildCustomerDetailRow(customer, customerEntries) {
     : tenure.pendingTenures.length
       ? tenure.pendingTenures.join(", ")
       : "0";
+  const totalTenureLabel = formatTotalTenureLabel(customer, schedule.length);
   return {
     customerId: customer.customerId || "--",
     sealNumber: getSealNumber(customer),
@@ -409,6 +400,7 @@ export function buildCustomerDetailRow(customer, customerEntries) {
     currentTenureAmount: tenure.currentTenureAmount ? formatCurrency(tenure.currentTenureAmount) : "--",
     pendingTenures: tenure.pendingTenures,
     pendingTenuresLabel,
+    totalTenureLabel,
     balanceTenures: tenure.balanceTenures,
     balanceTenuresLabel: formatInstallmentNumberList(frequency, tenure.balanceTenures),
     unpaidInstallmentCount: tenure.unpaidInstallmentCount,

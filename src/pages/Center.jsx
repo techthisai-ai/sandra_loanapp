@@ -11,6 +11,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import CenterEmployeeTabs from "../components/center/CenterEmployeeTabs";
+import CustomerDetailLink from "../components/customer/CustomerDetailLink";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import {
   ADDITIONAL_CENTER_COLORS,
@@ -206,19 +207,18 @@ export default function Center() {
     return (
       <tr key={customer.customerId} className="transition hover:bg-blue-50/30">
         <td className="px-2 py-2.5 text-center text-xs font-semibold text-slate-400">{rowIndex}</td>
-        <td className="max-w-0 px-2 py-2.5">
-          <button
-            type="button"
-            onClick={() => navigate(`/dashboard/customer/${customer.customerId}`)}
-            className="flex min-w-0 items-center gap-2 text-left"
+        <td className="px-2 py-2.5">
+          <CustomerDetailLink
+            customerId={customer.customerId}
+            className="inline-flex max-w-full items-center gap-2 text-left no-underline hover:no-underline"
           >
             <CenterAvatar name={customer.customerName} />
-            <span className="truncate text-xs font-semibold text-slate-900 hover:text-blue-700">
+            <span className="truncate text-xs font-semibold text-slate-900 group-hover:text-blue-700">
               {customer.customerName || "Unnamed"}
             </span>
-          </button>
+          </CustomerDetailLink>
         </td>
-        <td className="truncate px-2 py-2.5 text-xs text-slate-600">{customer.mobileNumber || "--"}</td>
+        <td className="whitespace-nowrap px-2 py-2.5 text-xs tabular-nums text-slate-600">{customer.mobileNumber || "--"}</td>
         <td className="truncate px-2 py-2.5 text-right text-xs font-medium tabular-nums text-slate-700">
           {formatLoanAmount(customer.loanAmount)}
         </td>
@@ -262,14 +262,14 @@ export default function Center() {
         <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           <table className="w-full table-fixed text-sm">
             <colgroup>
-              <col style={{ width: "4%" }} />
-              <col style={{ width: "24%" }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "8%" }} />
+              <col style={{ width: "2.5rem" }} />
+              <col style={{ width: "11rem" }} />
+              <col style={{ width: "6.75rem" }} />
+              <col />
+              <col />
+              <col />
+              <col />
+              <col style={{ width: "3.25rem" }} />
             </colgroup>
             <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50/95 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-600">
               <tr>

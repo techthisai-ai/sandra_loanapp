@@ -10,6 +10,7 @@ import {
   History,
   LoaderCircle,
   MessageSquare,
+  RotateCw,
 } from "lucide-react";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import useAuth from "../hooks/useAuth";
@@ -225,10 +226,10 @@ export function NotificationsPanel() {
   const filterTabs = [
     { key: "all", label: "All" },
     { key: "unread", label: "Unread" },
-    { key: "approval_notification", label: "Approvals" },
-    { key: "payment_received_confirmation", label: "Payments" },
-    { key: "emi_due_reminder", label: "EMI Due" },
-    { key: "overdue_alert", label: "Overdue" },
+    { key: "approval_notification", label: "Appr" },
+    { key: "payment_received_confirmation", label: "Paid" },
+    { key: "emi_due_reminder", label: "EMI" },
+    { key: "overdue_alert", label: "Late" },
   ];
 
   const handleMarkRead = async (notificationId) => {
@@ -249,90 +250,103 @@ export function NotificationsPanel() {
     navigate(navPath);
   };
 
-  return (
-    <div className="app-grid-page grid w-full gap-5">
+  const pillBase =
+    "flex min-w-0 flex-1 items-center justify-center gap-0.5 rounded-lg border px-1 py-1 text-[10px] font-medium leading-none transition";
+  const pillCount = "text-[9px] font-bold tabular-nums";
 
-        {/* Summary */}
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="app-panel-muted rounded-[26px] p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Total</p>
-            <p className="mt-2 text-3xl font-semibold text-slate-950">{mergedNotifications.length}</p>
+  const statBox =
+    "flex flex-col rounded-2xl app-panel-muted px-3 py-2";
+
+  return (
+    <div className="app-grid-page grid w-full gap-3">
+        <div className="grid grid-cols-3 gap-2">
+          <div className={statBox}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Total</p>
+            <p className="mt-0.5 text-lg font-semibold leading-none text-slate-950">{mergedNotifications.length}</p>
           </div>
-          <div className="app-panel-muted rounded-[26px] p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Unread</p>
-            <p className="mt-2 text-3xl font-semibold text-blue-700">{unreadCount}</p>
+          <div className={statBox}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Unread</p>
+            <p className="mt-0.5 text-lg font-semibold leading-none text-blue-700">{unreadCount}</p>
           </div>
-          <div className="app-panel-muted rounded-[26px] p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">History</p>
-            <p className="mt-2 text-3xl font-semibold text-slate-500">{historyNotifications.length}</p>
+          <div className={statBox}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">History</p>
+            <p className="mt-0.5 text-lg font-semibold leading-none text-slate-500">{historyNotifications.length}</p>
           </div>
         </div>
 
-        {/* View toggle + filter tabs */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Current / History toggle */}
+        <div className="flex w-full min-w-0 items-stretch gap-0.5">
           <button
             type="button"
             onClick={() => setView("current")}
-            className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition ${
+            aria-label="Current notifications"
+            title="Current"
+            className={`${pillBase} ${
               view === "current" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
             }`}
           >
-            <Bell className="h-4 w-4" />
-            Current
+            <Bell className="h-3 w-3 shrink-0" />
+            <span className="hidden sm:inline">Now</span>
           </button>
           <button
             type="button"
             onClick={() => setView("history")}
-            className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition ${
+            aria-label="Notification history"
+            title="History"
+            className={`${pillBase} ${
               view === "history" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
             }`}
           >
-            <History className="h-4 w-4" />
-            History
-            {historyNotifications.length > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">
-                {historyNotifications.length}
-              </span>
-            )}
+            <History className="h-3 w-3 shrink-0" />
+            <span className="hidden sm:inline">Hist</span>
+            <span className={`${pillCount} ${view === "history" ? "text-white/80" : "text-slate-400"}`}>
+              {historyNotifications.length}
+            </span>
           </button>
 
-          <div className="h-6 w-px bg-slate-200" />
-
-          {/* Type filters */}
           {filterTabs.map((tab) => {
             const base = view === "history" ? historyNotifications : mergedNotifications;
             const count = tab.key === "all" ? base.length : tab.key === "unread" ? base.filter((n) => n.status !== "read").length : base.filter((n) => n.type === tab.key).length;
+            const active = filter === tab.key;
             return (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setFilter(tab.key)}
-                className={`inline-flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-sm font-medium transition ${
-                  filter === tab.key
+                title={tab.label}
+                className={`${pillBase} ${
+                  active
                     ? "border-blue-500 bg-blue-600 text-white shadow-sm"
                     : "border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50"
                 }`}
               >
-                {tab.label}
-                <span className={`flex h-5 min-w-5 items-center justify-center rounded-full text-xs font-bold ${filter === tab.key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
+                <span className="truncate">{tab.label}</span>
+                <span className={`${pillCount} ${active ? "text-white/80" : "text-slate-400"}`}>
                   {count}
                 </span>
               </button>
             );
           })}
 
-          <div className="ml-auto flex gap-2">
-            <button type="button" onClick={loadData} className="app-button-secondary rounded-2xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
-              Refresh
+          <button
+            type="button"
+            onClick={loadData}
+            aria-label="Refresh notifications"
+            title="Refresh"
+            className={`${pillBase} app-button-secondary text-slate-600 hover:bg-slate-50`}
+          >
+            <RotateCw className="h-3 w-3 shrink-0" />
+          </button>
+          {unreadCount > 0 ? (
+            <button
+              type="button"
+              onClick={handleMarkAllRead}
+              aria-label="Mark all read"
+              title="Mark all read"
+              className={`${pillBase} app-button-primary text-white`}
+            >
+              <CheckCheck className="h-3 w-3 shrink-0" />
             </button>
-            {unreadCount > 0 ? (
-              <button type="button" onClick={handleMarkAllRead} className="app-button-primary inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-medium">
-                <CheckCheck className="h-4 w-4" />
-                Mark all read
-              </button>
-            ) : null}
-          </div>
+          ) : null}
         </div>
 
         {loading ? (
@@ -348,12 +362,6 @@ export function NotificationsPanel() {
 
         {!loading && !error ? (
           <>
-            {view === "history" && (
-              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <History className="h-4 w-4 text-slate-400" />
-                <p className="text-sm text-slate-500">Read notifications history.</p>
-              </div>
-            )}
             <div className="grid gap-3">
               {filteredNotifications.length > 0 ? filteredNotifications.map((notification) => (
                 <NotificationCard

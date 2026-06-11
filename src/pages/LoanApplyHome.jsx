@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { CalendarDays, Search, UsersRound } from "lucide-react";
 import AdminLayout from "../components/dashboard/AdminLayout";
@@ -6,7 +6,6 @@ import CustomerApprovalsPanel from "../components/loan/CustomerApprovalsPanel";
 import LoanRequestsPanel from "../components/loan/LoanRequestsPanel";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import { DEFAULT_DAY_CENTERS, loadLoanCenters } from "../constants/dayCenters";
-import { listAllCustomerAmountEntries, listCustomers } from "../services/userAuth";
 import { isActiveCustomerRecord } from "../utils/recordFlags";
 
 const defaultCenters = DEFAULT_DAY_CENTERS;
@@ -114,7 +113,7 @@ function hasValidLoanApplied(customer) {
 export default function LoanApplyHome() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { customers, loanRequests } = useLoanDataSync();
+  const { customers, entries, loanRequests, loading } = useLoanDataSync();
   const tabParam = searchParams.get("tab");
   const mainTab =
     tabParam === "requests" ? "requests" : tabParam === "customers" ? "customers" : "apply";
@@ -140,26 +139,15 @@ export default function LoanApplyHome() {
     setSearchParams({ tab });
   };
   const [centers] = useState(() => loadCenters());
-  const [allCustomers, setAllCustomers] = useState([]);
 
   const activeCustomers = useMemo(
-    () => allCustomers.filter(isActiveCustomerRecord),
-    [allCustomers]
+    () => customers.filter(isActiveCustomerRecord),
+    [customers]
   );
-  const [amountEntries, setAmountEntries] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const amountEntries = entries;
   const [selectedDay, setSelectedDay] = useState(null);
   const [selectedCenter, setSelectedCenter] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-
-  useEffect(() => {
-    Promise.all([listCustomers(), listAllCustomerAmountEntries()])
-      .then(([customers, entries]) => {
-        setAllCustomers(customers);
-        setAmountEntries(entries);
-      })
-      .finally(() => setLoading(false));
-  }, []);
 
   const repaymentByCustomer = useMemo(() => {
     const grouped = new Map();
@@ -284,17 +272,17 @@ export default function LoanApplyHome() {
   }, [centerCustomers, searchTerm]);
 
   const goToLoanForm = (customerId) => {
-    const customer = allCustomers.find((item) => item.customerId === customerId);
+    const customer = customers.find((item) => item.customerId === customerId);
     if (!customer) return;
-    navigate(`/dashboard/loan-apply/${customer.customerId}`, { state: { customer } });
+    navigate(`/dashboard/loan-apply/${customer.customerId}`, { state: { applyLoan: true, customer } });
   };
 
   const recentLoanRows = useMemo(() => {
-    return allCustomers
+    return customers
       .filter((customer) => hasValidLoanApplied(customer))
       .sort((left, right) => {
-        const l = left.submittedAt || "";
-        const r = right.submittedAt || "";
+        const l = left.loanApprovedAt || left.submittedAt || "";
+        const r = right.loanApprovedAt || right.submittedAt || "";
         return r.localeCompare(l);
       })
       .slice(0, 25)
@@ -324,7 +312,7 @@ export default function LoanApplyHome() {
           profile,
         };
       });
-  }, [allCustomers, collectedAmountByCustomer]);
+  }, [customers, collectedAmountByCustomer]);
 
   const classicSheetRows = useMemo(() => {
     const sourceRows = selectedDay
@@ -408,22 +396,6 @@ export default function LoanApplyHome() {
             </button>
             <button
               type="button"
-              onClick={() => setMainTab("customers")}
-              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
-                mainTab === "customers"
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              Customer approval
-              {pendingCustomerCount > 0 ? (
-                <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">
-                  {pendingCustomerCount > 99 ? "99+" : pendingCustomerCount}
-                </span>
-              ) : null}
-            </button>
-            <button
-              type="button"
               onClick={() => setMainTab("requests")}
               className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
                 mainTab === "requests"
@@ -435,6 +407,22 @@ export default function LoanApplyHome() {
               {pendingRequestCount > 0 ? (
                 <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">
                   {pendingRequestCount > 99 ? "99+" : pendingRequestCount}
+                </span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("customers")}
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
+                mainTab === "customers"
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              Customer approval
+              {pendingCustomerCount > 0 ? (
+                <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">
+                  {pendingCustomerCount > 99 ? "99+" : pendingCustomerCount}
                 </span>
               ) : null}
             </button>

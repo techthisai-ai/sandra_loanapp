@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -10,24 +10,22 @@ import {
   ChevronDown,
   Download,
   Eye,
-  Landmark,
   Loader2,
   Pencil,
   Plus,
   Printer,
   ReceiptText,
-  RefreshCw,
   Save,
   Search,
+  Tag,
   Trash2,
   TrendingDown,
   TrendingUp,
   Wallet,
 } from "lucide-react";
 import AdminLayout from "../components/dashboard/AdminLayout";
-import PremiumKpiCard from "../components/dashboard/PremiumKpiCard";
 import EnterpriseReportPreview from "../components/reports/EnterpriseReportPreview.jsx";
-import { useLoanDataSync } from "../context/LoanDataSyncContext";
+import { ExportToolbar, ExportToolbarButton } from "../components/reports/ExportToolbar.jsx";
 import useAuth from "../hooks/useAuth";
 import useReportMeta from "../hooks/useReportMeta";
 import useWalletAvailable from "../hooks/useWalletAvailable";
@@ -38,7 +36,7 @@ import {
   TRANSACTION_CATEGORY_OTHERS_LABEL,
   TRANSACTION_CATEGORY_OTHERS_VALUE,
 } from "../utils/accountsTransactionCategory";
-import { isBookedLoanCustomer, sumInvestorDeposits } from "../utils/walletLedgerBalance";
+import { sumInvestorDeposits } from "../utils/walletLedgerBalance";
 import {
   buildPreviewColumnsPdfPayload,
   buildSimpleTablePdfPayload,
@@ -50,16 +48,13 @@ import {
   createAccountsTransaction,
   createSalaryRecord,
   deleteAccountsCategory,
-  deleteAccountsReportSnapshot,
   deleteAccountsTransaction,
   deleteSalaryRecord,
   ensureDefaultAccountsCategories,
   EXPENSE_CATEGORY_SEEDS,
   INCOME_SOURCE_SEEDS,
-  saveAccountsReportSnapshot,
   SALARY_PAYMENT_STATUSES,
   subscribeAccountsCategories,
-  subscribeAccountsReports,
   subscribeAccountsSalary,
   subscribeAccountsTransactions,
   TRANSACTION_PAYMENT_METHODS,
@@ -67,12 +62,12 @@ import {
   updateAccountsTransaction,
   updateSalaryRecord,
 } from "../services/accounts";
+import { listEmployees } from "../services/userAuth";
 
 const TABS = [
   { key: "overview", label: "Overview" },
   { key: "transactions", label: "Transactions" },
   { key: "salary", label: "Salary" },
-  { key: "reports", label: "Reports" },
 ];
 
 const VALID_TAB_KEYS = new Set(TABS.map((item) => item.key));
@@ -255,17 +250,6 @@ function getStatusTone(status) {
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
-function paginate(items, page, pageSize) {
-  const totalPages = Math.max(Math.ceil(items.length / pageSize), 1);
-  const safePage = Math.min(page, totalPages);
-  const start = (safePage - 1) * pageSize;
-  return {
-    totalPages,
-    page: safePage,
-    items: items.slice(start, start + pageSize),
-  };
-}
-
 function emptyTransactionForm(type = "expense", category = "", customCategory = "") {
   return {
     date: new Date().toISOString().slice(0, 10),
@@ -306,41 +290,37 @@ function emptyCategoryForm(type = "expense") {
   };
 }
 
-function StatCard({ icon: Icon, label, value, hint, tone = "text-slate-950" }) {
+function SummaryKpi({ label, value, compact = false, tone = "default" }) {
   return (
-    <div className="app-panel-muted rounded-[22px] p-3.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{label}</p>
-          <p className={`mt-1.5 text-xl font-semibold ${tone}`}>{value}</p>
-          {hint ? <p className="mt-1.5 text-xs leading-5 text-slate-500">{hint}</p> : null}
-        </div>
-        <div className="app-icon-shell flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/70">
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
+    <div className={`accounts-summary-kpi accounts-summary-kpi--${tone}${compact ? " accounts-summary-kpi--compact" : ""}`}>
+      <p className="accounts-summary-kpi-label">{label}</p>
+      <p className="accounts-summary-kpi-value">{value}</p>
     </div>
   );
 }
 
-function Panel({ title, eyebrow, actions, children, icon: Icon }) {
+function Panel({ title, eyebrow, actions, children, icon: Icon, compact = false }) {
   return (
-    <section className="app-panel rounded-[24px] p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
+    <section className={`app-panel rounded-[24px] ${compact ? "accounts-panel-compact p-3" : "p-4"}`}>
+      <div className={`flex flex-wrap items-start justify-between ${compact ? "gap-2" : "gap-3"}`}>
+        <div className="flex items-start gap-2.5">
           {Icon ? (
-            <div className="app-icon-shell flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/70">
-              <Icon className="h-5 w-5" />
+            <div
+              className={`app-icon-shell flex shrink-0 items-center justify-center rounded-2xl border border-white/70 ${
+                compact ? "h-9 w-9" : "h-11 w-11"
+              }`}
+            >
+              <Icon className={compact ? "h-4 w-4" : "h-5 w-5"} />
             </div>
           ) : null}
           <div className="min-w-0">
             {eyebrow ? <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-600">{eyebrow}</p> : null}
-            <h3 className={`text-lg font-semibold text-slate-950 ${eyebrow ? "mt-1" : ""}`}>{title}</h3>
+            <h3 className={`font-semibold text-slate-950 ${compact ? "text-base" : "text-lg"} ${eyebrow ? "mt-1" : ""}`}>{title}</h3>
           </div>
         </div>
-        {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+        {actions ? <div className="app-export-toolbar">{actions}</div> : null}
       </div>
-      <div className="mt-3">{children}</div>
+      <div className={compact ? "mt-2" : "mt-3"}>{children}</div>
     </section>
   );
 }
@@ -353,119 +333,36 @@ function StatusBadge({ value }) {
   );
 }
 
-function PaginationControls({ page, totalPages, onChange }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3">
-      <p className="text-xs text-slate-500">
-        Page {page} of {totalPages}
-      </p>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(page - 1, 1))}
-          disabled={page <= 1}
-          className="app-button-secondary rounded-xl px-3 py-2 text-xs font-medium disabled:opacity-50"
-        >
-          Previous
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange(Math.min(page + 1, totalPages))}
-          disabled={page >= totalPages}
-          className="app-button-secondary rounded-xl px-3 py-2 text-xs font-medium disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function EmptyState({ message }) {
   return <div className="app-empty-state">{message}</div>;
-}
-
-function TrendGraph({ data, compact = false }) {
-  if (data.length === 0) {
-    return <EmptyState message="Trend graph will appear after monthly data is available." />;
-  }
-  const values = data.map((item) => Number(item.value || 0));
-  const min = Math.min(...values, 0);
-  const max = Math.max(...values, 1);
-  const span = max - min || 1;
-  const points = data.map((item, index) => {
-    const x = data.length === 1 ? 50 : (index / (data.length - 1)) * 100;
-    const y = 100 - ((Number(item.value || 0) - min) / span) * 100;
-    return `${x},${y}`;
-  });
-
-  return (
-    <div className="space-y-3">
-      <div className="rounded-2xl border border-slate-100 bg-gradient-to-b from-slate-50/80 to-white p-4">
-        <svg viewBox="0 0 100 100" className={`w-full ${compact ? "h-32" : "h-40"}`}>
-          <polyline
-            fill="none"
-            stroke="url(#profitGradient)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            points={points.join(" ")}
-          />
-          <defs>
-            <linearGradient id="profitGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#2563eb" />
-              <stop offset="100%" stopColor="#14b8a6" />
-            </linearGradient>
-          </defs>
-        </svg>
-      </div>
-      {!compact ? (
-        <div className="grid gap-2 sm:grid-cols-3">
-          {data.map((item) => (
-            <div key={item.label} className="rounded-xl border border-slate-100 bg-white px-3 py-2 shadow-sm">
-              <p className="text-xs text-slate-500">{item.label}</p>
-              <p className={`mt-1 text-sm font-semibold ${item.value >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                {formatCurrency(item.value)}
-              </p>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 export default function Accounts() {
   const { user, profile } = useAuth();
   const accountsReportMeta = useReportMeta("RFS-ACC");
-  const { customers, entries } = useLoanDataSync();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const tab = tabParam && VALID_TAB_KEYS.has(tabParam) ? tabParam : "overview";
   const todayLabel = new Date().toISOString().slice(0, 10);
 
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [salaryRecords, setSalaryRecords] = useState([]);
-  const [reportSnapshots, setReportSnapshots] = useState([]);
-  const [ready, setReady] = useState({ transactions: false, categories: false, salary: false, reports: false });
+  const [employees, setEmployees] = useState([]);
+  const [employeesLoading, setEmployeesLoading] = useState(true);
+  const [ready, setReady] = useState({ transactions: false, categories: false, salary: false });
   const [loadError, setLoadError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [exportPdfLoading, setExportPdfLoading] = useState(false);
   const [exportExcelLoading, setExportExcelLoading] = useState(false);
   const [exportError, setExportError] = useState("");
-  const [accountsAnalyticsPreviewOpen, setAccountsAnalyticsPreviewOpen] = useState(false);
   const [salaryReportPreviewOpen, setSalaryReportPreviewOpen] = useState(false);
-  const [analyticsPreviewPdfLoading, setAnalyticsPreviewPdfLoading] = useState(false);
-  const [analyticsPreviewExcelLoading, setAnalyticsPreviewExcelLoading] = useState(false);
   const [salaryPreviewPdfLoading, setSalaryPreviewPdfLoading] = useState(false);
   const [salaryPreviewExcelLoading, setSalaryPreviewExcelLoading] = useState(false);
   const [accountsOverviewPreviewOpen, setAccountsOverviewPreviewOpen] = useState(false);
   const [overviewPreviewPdfLoading, setOverviewPreviewPdfLoading] = useState(false);
   const [overviewPreviewExcelLoading, setOverviewPreviewExcelLoading] = useState(false);
   const [overviewPrintLoading, setOverviewPrintLoading] = useState(false);
-  const [analyticsPrintLoading, setAnalyticsPrintLoading] = useState(false);
   const [salaryPrintLoading, setSalaryPrintLoading] = useState(false);
 
   const [transactionForm, setTransactionForm] = useState(emptyTransactionForm());
@@ -476,7 +373,6 @@ export default function Accounts() {
   const [transactionStatusFilter, setTransactionStatusFilter] = useState("all");
   const [transactionCategoryFilter, setTransactionCategoryFilter] = useState("all");
   const [transactionMonthFilter, setTransactionMonthFilter] = useState("all");
-  const [transactionPage, setTransactionPage] = useState(1);
 
   const [salaryForm, setSalaryForm] = useState(emptySalaryForm());
   const [editingSalaryId, setEditingSalaryId] = useState("");
@@ -484,15 +380,11 @@ export default function Accounts() {
   const [salarySearch, setSalarySearch] = useState("");
   const [salaryStatusFilter, setSalaryStatusFilter] = useState("all");
   const [salaryMonthFilter, setSalaryMonthFilter] = useState("all");
-  const [salaryPage, setSalaryPage] = useState(1);
 
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm());
   const [categoryError, setCategoryError] = useState("");
 
-  const [reportTypeFilter, setReportTypeFilter] = useState("all");
-  const [reportPage, setReportPage] = useState(1);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
-  const [snapshotsOpen, setSnapshotsOpen] = useState(false);
 
   /** Office-only reporting range (income / expense / salary / exports) — separate from loan module. */
   const [officeDatePreset, setOfficeDatePreset] = useState("this_month");
@@ -512,8 +404,27 @@ export default function Accounts() {
 
   useEffect(() => {
     if (!user?.uid) return undefined;
+    let active = true;
+    setEmployeesLoading(true);
+    listEmployees()
+      .then((items) => {
+        if (active) setEmployees(Array.isArray(items) ? items : []);
+      })
+      .catch(() => {
+        if (active) setEmployees([]);
+      })
+      .finally(() => {
+        if (active) setEmployeesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) return undefined;
     setLoadError("");
-    setReady({ transactions: false, categories: false, salary: false, reports: false });
+    setReady({ transactions: false, categories: false, salary: false });
 
     ensureDefaultAccountsCategories(actor).catch((error) => {
       setLoadError(error.message || "Unable to initialise accounts categories");
@@ -534,22 +445,45 @@ export default function Accounts() {
       setSalaryRecords(items);
       markReady("salary");
     }, onError);
-    const unsubReports = subscribeAccountsReports((items) => {
-      setReportSnapshots(items);
-      markReady("reports");
-    }, onError);
-
     return () => {
       unsubTransactions();
       unsubCategories();
       unsubSalary();
-      unsubReports();
     };
   }, [actor, user?.uid]);
 
-  const setTab = (nextTab) => {
+  const didInitialSectionScroll = useRef(false);
+
+  function scrollToAccountsSection(nextTab) {
     setSearchParams(nextTab === "overview" ? {} : { tab: nextTab });
-  };
+    window.requestAnimationFrame(() => {
+      if (nextTab === "overview") {
+        document.getElementById("accounts-overview")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      document.getElementById(`accounts-${nextTab}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function openAddExpenseCategory() {
+    setCategoryForm(emptyCategoryForm("expense"));
+    setCategoryError("");
+    setCategoriesOpen(true);
+    scrollToAccountsSection("transactions");
+    window.requestAnimationFrame(() => {
+      document.getElementById("accounts-categories")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  useEffect(() => {
+    if (didInitialSectionScroll.current) return;
+    if (!tabParam || tabParam === "overview" || !VALID_TAB_KEYS.has(tabParam)) return;
+    didInitialSectionScroll.current = true;
+    const timer = window.setTimeout(() => {
+      document.getElementById(`accounts-${tabParam}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [tabParam]);
 
   function applyOfficeDatePreset(presetKey) {
     setOfficeDatePreset(presetKey);
@@ -596,35 +530,6 @@ export default function Accounts() {
 
   const { balance: liveWalletBalance, opening: cashOpening, walletRows } = useWalletAvailable();
   const investorDepositsTotal = useMemo(() => sumInvestorDeposits(walletRows), [walletRows]);
-
-  /** Loan KPIs on Overview only — never mixed into office income/expense totals. */
-  const loanFinanceMetrics = useMemo(() => {
-    const activeLoans = customers.filter((customer) => isBookedLoanCustomer(customer));
-    const approvedCollections = entries.filter((entry) => entry.approvalStatus === "approved");
-    const approvedByCustomer = approvedCollections.reduce((acc, entry) => {
-      const customerId = entry.customerId || "unknown";
-      acc[customerId] = (acc[customerId] || 0) + Number(entry.amount || 0);
-      return acc;
-    }, {});
-    const totalPrincipal = activeLoans.reduce((sum, customer) => sum + Number(customer.loanAmount || 0), 0);
-    const pendingRecovery = activeLoans.reduce((sum, customer) => {
-      const collected = approvedByCustomer[customer.customerId] || 0;
-      return sum + Math.max(Number(customer.totalPayable || 0) - collected, 0);
-    }, 0);
-    return {
-      activeLoanCount: activeLoans.length,
-      totalPrincipalDisbursed: totalPrincipal,
-      pendingRecovery,
-    };
-  }, [customers, entries]);
-
-  const walletHealthLine = useMemo(() => {
-    const cashInHand = liveWalletBalance;
-    if (cashInHand < 0) return "Low liquidity · negative balance";
-    if (cashInHand === 0) return "Low liquidity · add capital";
-    if (cashInHand < loanFinanceMetrics.pendingRecovery * 0.15) return "Watch liquidity vs pending recovery";
-    return "Healthy wallet buffer";
-  }, [liveWalletBalance, loanFinanceMetrics.pendingRecovery]);
 
   const completeTransactions = transactions.filter((item) => item.status === "completed");
   const completeIncomeTransactions = completeTransactions.filter((item) => item.transaction_type === "income");
@@ -731,146 +636,6 @@ export default function Accounts() {
   const transactionCategoryOptions = transactionForm.transactionType === "income" ? categoriesByType.income : categoriesByType.expense;
   const transactionCategoryIsOthers = isTransactionOthersSelection(transactionForm.category);
 
-  const monthlyComparison = useMemo(() => {
-    const months = [];
-    const now = new Date();
-    for (let index = 5; index >= 0; index -= 1) {
-      const date = new Date(now.getFullYear(), now.getMonth() - index, 1);
-      const key = monthKey(date);
-      months.push({
-        key,
-        label: date.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
-        income: 0,
-        expense: 0,
-      });
-    }
-
-    const byKey = new Map(months.map((item) => [item.key, item]));
-    completeIncomeTransactions.forEach((item) => {
-      const bucket = byKey.get(monthKey(item.date));
-      if (bucket) bucket.income += Number(item.amount || 0);
-    });
-    completeExpenseTransactions.forEach((item) => {
-      const bucket = byKey.get(monthKey(item.date));
-      if (bucket) bucket.expense += Number(item.amount || 0);
-    });
-    paidSalaryRecords.forEach((item) => {
-      const bucket = byKey.get(monthKey(item.payment_date));
-      if (bucket) bucket.expense += Number(item.final_salary || 0);
-    });
-    return months;
-  }, [completeExpenseTransactions, completeIncomeTransactions, paidSalaryRecords]);
-
-  const profitTrendData = useMemo(
-    () =>
-      monthlyComparison.map((item) => ({
-        label: item.label,
-        value: item.income - item.expense,
-      })),
-    [monthlyComparison]
-  );
-
-  const reportRangeStart = officeAppliedBounds.start;
-  const reportRangeEnd = officeAppliedBounds.end;
-  /** Single source of truth for analytics CSV/PDF/snapshots — matches Office date strip. */
-  const officeReportPeriodLabel = officeAppliedBounds.label;
-
-  const reportTransactions = useMemo(() => {
-    return transactions.filter((item) => {
-      const date = getDateValue(item.date);
-      if (!date || !isDateInOfficeRange(date, reportRangeStart, reportRangeEnd)) return false;
-      if (reportTypeFilter !== "all" && item.transaction_type !== reportTypeFilter) return false;
-      return item.status === "completed";
-    });
-  }, [reportRangeEnd, reportRangeStart, reportTypeFilter, transactions, officeAppliedBounds]);
-
-  const reportIncomeTotal = useMemo(() => {
-    return reportTransactions.reduce((sum, item) => {
-      return item.transaction_type === "income" ? sum + Number(item.amount || 0) : sum;
-    }, 0);
-  }, [reportTransactions]);
-
-  const reportExpenseTotal = useMemo(() => {
-    const transactionExpense = reportTransactions.reduce((sum, item) => {
-      return item.transaction_type === "expense" ? sum + Number(item.amount || 0) : sum;
-    }, 0);
-    if (reportTypeFilter === "income") {
-      return transactionExpense;
-    }
-    const salaryExpense = paidSalaryRecords.reduce((sum, item) => {
-      const date = getDateValue(item.payment_date);
-      return date && isDateInOfficeRange(date, reportRangeStart, reportRangeEnd) ? sum + Number(item.final_salary || 0) : sum;
-    }, 0);
-    return transactionExpense + salaryExpense;
-  }, [paidSalaryRecords, reportRangeEnd, reportRangeStart, reportTransactions, reportTypeFilter]);
-
-  /** Office ledger only — never includes EMI, collections, or disbursements. */
-  const reportOfficeNet = reportIncomeTotal - reportExpenseTotal;
-
-  const reportCategoryRows = useMemo(() => {
-    const breakdown = new Map();
-    reportTransactions.forEach((item) => {
-      const key = `${item.transaction_type}:${item.category || "Uncategorised"}`;
-      breakdown.set(key, {
-        type: item.transaction_type,
-        category: item.category || "Uncategorised",
-        amount: (breakdown.get(key)?.amount || 0) + Number(item.amount || 0),
-      });
-    });
-    if (reportTypeFilter !== "income") {
-      paidSalaryRecords.forEach((item) => {
-        const date = getDateValue(item.payment_date);
-        if (!date || !isDateInOfficeRange(date, reportRangeStart, reportRangeEnd)) return;
-        const key = "expense:Employee Salary";
-        breakdown.set(key, {
-          type: "expense",
-          category: "Employee Salary",
-          amount: (breakdown.get(key)?.amount || 0) + Number(item.final_salary || 0),
-        });
-      });
-    }
-    return Array.from(breakdown.values()).sort((a, b) => b.amount - a.amount);
-  }, [paidSalaryRecords, reportRangeEnd, reportRangeStart, reportTransactions, reportTypeFilter]);
-
-  const accountsAnalyticsPreviewColumns = useMemo(
-    () => [
-      { key: "category", label: "Category" },
-      { key: "type", label: "Type", cellType: "status" },
-      { key: "amount", label: "Amount", cellType: "currency", align: "right" },
-    ],
-    []
-  );
-
-  const accountsAnalyticsPreviewRows = useMemo(
-    () =>
-      reportCategoryRows.map((item, i) => ({
-        __key: `${item.type}-${item.category}-${i}`,
-        category: item.category,
-        type: item.type,
-        amount: Number(item.amount || 0),
-      })),
-    [reportCategoryRows]
-  );
-
-  const accountsAnalyticsPreviewMetrics = useMemo(
-    () => [
-      { icon: TrendingUp, label: "Income", value: formatCurrency(reportIncomeTotal), note: "Completed office income in range" },
-      { icon: TrendingDown, label: "Expense", value: formatCurrency(reportExpenseTotal), note: "Books + paid payroll in range" },
-      { icon: Wallet, label: "Net profit / loss", value: formatCurrency(reportOfficeNet), note: "Office ledger only" },
-      { icon: BarChart3, label: "Split lines", value: String(reportCategoryRows.length), note: "Categories in this report" },
-    ],
-    [reportCategoryRows.length, reportExpenseTotal, reportIncomeTotal, reportOfficeNet]
-  );
-
-  const accountsAnalyticsPreviewFilterLines = useMemo(
-    () => [
-      `Range: ${officeReportPeriodLabel}`,
-      `Type filter: ${reportTypeFilter === "all" ? "All" : reportTypeFilter}`,
-      "Office ledger only — excludes loan disbursements and EMI/collections.",
-    ],
-    [officeReportPeriodLabel, reportTypeFilter]
-  );
-
   const filteredTransactions = useMemo(() => {
     const query = transactionSearch.trim().toLowerCase();
     const rangeStart = officeAppliedBounds.start;
@@ -915,9 +680,6 @@ export default function Accounts() {
     });
   }, [officeAppliedBounds, salaryMonthFilter, salaryRecords, salarySearch, salaryStatusFilter]);
 
-  const paginatedTransactions = paginate(filteredTransactions, transactionPage, 8);
-  const paginatedSalary = paginate(filteredSalaryRecords, salaryPage, 8);
-  const paginatedReports = paginate(reportSnapshots, reportPage, 6);
 
   const salaryPreviewColumns = useMemo(
     () => [
@@ -990,26 +752,6 @@ export default function Accounts() {
     });
   }, [salaryRecords, officeAppliedBounds]);
 
-  useEffect(() => {
-    setTransactionPage(1);
-  }, [
-    officeAppliedBounds.start,
-    officeAppliedBounds.end,
-    transactionSearch,
-    transactionTypeFilter,
-    transactionStatusFilter,
-    transactionCategoryFilter,
-    transactionMonthFilter,
-  ]);
-
-  useEffect(() => {
-    setSalaryPage(1);
-  }, [officeAppliedBounds.start, officeAppliedBounds.end, salarySearch, salaryStatusFilter, salaryMonthFilter]);
-
-  useEffect(() => {
-    setReportPage(1);
-  }, [officeAppliedBounds.start, officeAppliedBounds.end, officeReportPeriodLabel, reportTypeFilter]);
-
   const finalSalaryPreview = Math.max(
     Number(salaryForm.basicSalary || 0) + Number(salaryForm.bonus || 0) - Number(salaryForm.deduction || 0),
     0
@@ -1046,6 +788,54 @@ export default function Accounts() {
       .reduce((sum, item) => sum + Number(item.final_salary || 0), 0);
     return { paid, pending, monthVal, count: salaryRecords.length };
   }, [currentMonth, salaryRecords]);
+
+  const payrollPeriodStats = useMemo(() => {
+    const inRange = salaryRecordsForOfficeExport;
+    const totalEmployees = employees.length;
+    const paidEmployeeIds = new Set(
+      inRange
+        .filter((item) => String(item.payment_status).toLowerCase() === "paid")
+        .map((item) => String(item.employee_id || "").trim().toUpperCase())
+        .filter(Boolean)
+    );
+    const paid = paidEmployeeIds.size;
+    const pending = Math.max(totalEmployees - paid, 0);
+    return {
+      total: totalEmployees,
+      paid,
+      pending,
+      periodLabel: officeAppliedBounds.label,
+    };
+  }, [employees.length, salaryRecordsForOfficeExport, officeAppliedBounds.label]);
+
+  const monthlyNetProfit = overviewMetrics.monthlyIncome - overviewMetrics.monthlyExpense;
+
+  const pendingExpenseAmount = useMemo(
+    () =>
+      transactions
+        .filter((item) => item.transaction_type === "expense" && item.status === "pending")
+        .reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    [transactions]
+  );
+
+  const monthlyExpenseCategoryBreakdown = useMemo(() => {
+    const breakdown = new Map();
+    completeExpenseTransactions.forEach((item) => {
+      if (monthKey(item.date) !== currentMonth) return;
+      const category = item.category || "Uncategorised";
+      breakdown.set(category, (breakdown.get(category) || 0) + Number(item.amount || 0));
+    });
+    const salaryMonthTotal = paidSalaryRecords.reduce((sum, item) => {
+      return monthKey(item.payment_date) === currentMonth ? sum + Number(item.final_salary || 0) : sum;
+    }, 0);
+    if (salaryMonthTotal > 0) {
+      breakdown.set("Employee Salary", (breakdown.get("Employee Salary") || 0) + salaryMonthTotal);
+    }
+    const rows = Array.from(breakdown.entries()).map(([category, amount]) => ({ category, amount }));
+    rows.sort((left, right) => right.amount - left.amount);
+    const total = rows.reduce((sum, row) => sum + row.amount, 0);
+    return rows.map((row) => ({ ...row, percent: total > 0 ? (row.amount / total) * 100 : 0 }));
+  }, [completeExpenseTransactions, currentMonth, paidSalaryRecords]);
 
   const accountsOverviewBookIncome = useMemo(
     () => completeIncomeTransactions.reduce((sum, item) => sum + Number(item.amount || 0), 0),
@@ -1132,14 +922,13 @@ export default function Accounts() {
   );
 
   const accountsOverviewPreviewFilterLines = useMemo(() => {
-    const tabLabel = TABS.find((t) => t.key === tab)?.label || tab;
     return [
-      `Finance center · ${tabLabel}`,
+      "Finance center · Overview",
       `Snapshot date · ${todayLabel}`,
       `Office date range · ${officeAppliedBounds.label}`,
       "Office ledger only — wallet balance and loan given are on Overview.",
     ];
-  }, [officeAppliedBounds.label, tab, todayLabel]);
+  }, [officeAppliedBounds.label, todayLabel]);
 
   const accountsOverviewPreviewSectionChildren = useMemo(
     () => (
@@ -1250,7 +1039,7 @@ export default function Accounts() {
   }
 
   function handleEditTransaction(item) {
-    setTab("transactions");
+    scrollToAccountsSection("transactions");
     setTransactionError("");
     setEditingTransactionId(item.transaction_id);
     const type = item.transaction_type || "expense";
@@ -1327,7 +1116,7 @@ export default function Accounts() {
   }
 
   function handleEditSalary(item) {
-    setTab("salary");
+    scrollToAccountsSection("salary");
     setSalaryError("");
     setEditingSalaryId(item.salary_id);
     setSalaryForm({
@@ -1393,46 +1182,6 @@ export default function Accounts() {
       setStatusMessage("Category deleted.");
     } catch (error) {
       setCategoryError(error.message || "Unable to delete category");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleSaveReportSnapshot() {
-    setSaving(true);
-    setStatusMessage("");
-    try {
-      await saveAccountsReportSnapshot(
-        {
-          reportType: "office_analytics",
-          reportTitle: "Accounts analytics snapshot",
-          periodLabel: `${officeReportPeriodLabel} · office ledger`,
-          filters: { officePeriodLabel: officeReportPeriodLabel, officePreset: officeDatePreset, reportTypeFilter },
-          summary: {
-            income: reportIncomeTotal,
-            expense: reportExpenseTotal,
-            office_net: reportOfficeNet,
-            categories: reportCategoryRows,
-          },
-        },
-        actor
-      );
-      setStatusMessage("Report snapshot saved.");
-    } catch (error) {
-      setLoadError(error.message || "Unable to save report snapshot");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDeleteSnapshot(item) {
-    if (!window.confirm(`Delete report snapshot ${item.report_id}?`)) return;
-    setSaving(true);
-    try {
-      await deleteAccountsReportSnapshot(item.report_id, actor);
-      setStatusMessage("Report snapshot deleted.");
-    } catch (error) {
-      setLoadError(error.message || "Unable to delete report snapshot");
     } finally {
       setSaving(false);
     }
@@ -1512,57 +1261,6 @@ export default function Accounts() {
 
   function printSalaryReport() {
     void handleSalaryPreviewPrint();
-  }
-
-  function exportReportCsv() {
-    const stamp = accountsExportDateStamp();
-    const rows = [
-      ["Metric", "Value"],
-      ["Report range", officeReportPeriodLabel],
-      ["Filtered type", reportTypeFilter],
-      ["Income (office)", reportIncomeTotal],
-      ["Expense (office)", reportExpenseTotal],
-      ["Net profit / loss (office)", reportOfficeNet],
-      [],
-      ["Category Type", "Category", "Amount"],
-      ...reportCategoryRows.map((item) => [item.type, item.category, item.amount]),
-    ];
-    downloadTextFile(`accounts-analytics-${stamp}.csv`, rowsToCsv(rows));
-  }
-
-  function exportReportPeriodXlsx() {
-    const stamp = accountsExportDateStamp();
-    setExportError("");
-    try {
-      const wb = XLSX.utils.book_new();
-      const summary = XLSX.utils.aoa_to_sheet([
-        [ACCOUNTS_COMPANY_NAME],
-        [`Period analytics · ${officeReportPeriodLabel} · exported ${stamp}`],
-        [],
-        ["Metric", "Value"],
-        ["Income (office)", reportIncomeTotal],
-        ["Expense (office)", reportExpenseTotal],
-        ["Net profit / loss (office)", reportOfficeNet],
-      ]);
-      XLSX.utils.book_append_sheet(wb, summary, "Summary");
-
-      const catRows = [
-        ["Type", "Category", "Amount"],
-        ...reportCategoryRows.map((item) => [item.type, item.category, Number(item.amount || 0)]),
-      ];
-      const catSheet = XLSX.utils.aoa_to_sheet(catRows);
-      XLSX.utils.book_append_sheet(wb, catSheet, "Categories");
-
-      const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-      const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      downloadBlob(`accounts-analytics-${stamp}.xlsx`, blob);
-      setStatusMessage("Excel file downloaded.");
-      setTimeout(() => setStatusMessage(""), 3500);
-    } catch (err) {
-      console.error(err);
-      setExportError("Failed to generate report");
-      setTimeout(() => setExportError(""), 5000);
-    }
   }
 
   async function handleExportAccountsPdf() {
@@ -1903,85 +1601,6 @@ export default function Accounts() {
     }
   }
 
-  function printAnalyticsReport() {
-    void handleAnalyticsPreviewPrint();
-  }
-
-  async function handleAnalyticsPreviewPdfDownload() {
-    if (analyticsPreviewPdfLoading) return;
-    setAnalyticsPreviewPdfLoading(true);
-    setExportError("");
-    await Promise.resolve();
-    try {
-      const stamp = accountsExportDateStamp();
-      const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-      const margin = 14;
-      let y = margin;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
-      doc.setTextColor(15, 23, 42);
-      doc.text("Accounts analytics", margin, y);
-      y += 7;
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(71, 85, 105);
-      doc.text(`Range: ${officeReportPeriodLabel} · Type: ${reportTypeFilter} · ${stamp}`, margin, y);
-      y += 10;
-      doc.setTextColor(15, 23, 42);
-      const summaryBody = [
-        ["Income (office)", formatCurrency(reportIncomeTotal)],
-        ["Expense (office)", formatCurrency(reportExpenseTotal)],
-        ["Net profit / loss (office)", formatCurrency(reportOfficeNet)],
-      ];
-      autoTable(doc, {
-        startY: y,
-        head: [["Metric", "Value"]],
-        body: summaryBody,
-        theme: "striped",
-        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold", fontSize: 9 },
-        styles: { fontSize: 9, cellPadding: 2.5 },
-        columnStyles: { 1: { halign: "right" } },
-        margin: { left: margin, right: margin },
-      });
-      y = doc.lastAutoTable.finalY + 8;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.text("Categories", margin, y);
-      const catBody = reportCategoryRows.map((item) => [item.category, item.type, formatCurrency(item.amount)]);
-      autoTable(doc, {
-        startY: y + 4,
-        head: [["Category", "Type", "Amount"]],
-        body: catBody.length ? catBody : [["—", "—", "—"]],
-        theme: "striped",
-        headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: "bold", fontSize: 8 },
-        styles: { fontSize: 8, cellPadding: 1.8 },
-        columnStyles: { 2: { halign: "right" } },
-        margin: { left: margin, right: margin },
-      });
-      doc.save(`accounts-analytics-${stamp}.pdf`);
-      setStatusMessage("Analytics PDF downloaded.");
-      setTimeout(() => setStatusMessage(""), 3500);
-    } catch (err) {
-      console.error(err);
-      setExportError("Failed to generate analytics PDF");
-      setTimeout(() => setExportError(""), 5000);
-    } finally {
-      setAnalyticsPreviewPdfLoading(false);
-    }
-  }
-
-  async function handleAnalyticsPreviewExcelDownload() {
-    if (analyticsPreviewExcelLoading) return;
-    setAnalyticsPreviewExcelLoading(true);
-    setExportError("");
-    await Promise.resolve();
-    try {
-      exportReportPeriodXlsx();
-    } finally {
-      setAnalyticsPreviewExcelLoading(false);
-    }
-  }
-
   async function handleSalaryPreviewPdfDownload() {
     if (salaryPreviewPdfLoading) return;
     setSalaryPreviewPdfLoading(true);
@@ -2025,25 +1644,6 @@ export default function Accounts() {
     }
   }
 
-  async function handleAnalyticsPreviewPrint() {
-    setAnalyticsPrintLoading(true);
-    try {
-      await printEnterpriseTabularPdf(
-        buildPreviewColumnsPdfPayload({
-          title: "Accounts analytics",
-          subtitle: `${officeReportPeriodLabel} · ${reportTypeFilter === "all" ? "All types" : reportTypeFilter}`,
-          columns: accountsAnalyticsPreviewColumns,
-          rows: accountsAnalyticsPreviewRows,
-          filterLines: accountsAnalyticsPreviewFilterLines,
-          summaryCards: accountsAnalyticsPreviewMetrics.map((m) => ({ label: m.label, value: m.value, note: m.note })),
-          reportMeta: accountsReportMeta,
-        })
-      );
-    } finally {
-      setAnalyticsPrintLoading(false);
-    }
-  }
-
   async function handleSalaryPreviewExcelDownload() {
     if (salaryPreviewExcelLoading) return;
     setSalaryPreviewExcelLoading(true);
@@ -2058,230 +1658,133 @@ export default function Accounts() {
   return (
     <AdminLayout>
       <div className="app-grid-page grid gap-4">
-        <section className="rounded-[22px] border border-slate-100/80 bg-white/90 px-4 py-3.5 shadow-[0_2px_12px_rgba(15,23,42,0.04)] backdrop-blur-sm">
-          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setTab("transactions");
-                  setEditingTransactionId("");
-                  setTransactionError("");
-                  setTransactionForm(emptyTransactionForm("expense"));
-                }}
-                className="accounts-toolbar-btn accounts-toolbar-btn--expense"
-              >
-                <TrendingDown className="h-3.5 w-3.5 text-rose-600" />
-                Add expense
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setTab("transactions");
-                  setEditingTransactionId("");
-                  setTransactionError("");
-                  setTransactionForm(emptyTransactionForm("income"));
-                }}
-                className="accounts-toolbar-btn accounts-toolbar-btn--income"
-              >
-                <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />
-                Add income
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab("reports")}
-                className="accounts-toolbar-btn accounts-toolbar-btn--reports"
-              >
-                <BarChart3 className="h-3.5 w-3.5" />
-                Reports
-              </button>
-              <button
-                type="button"
-                disabled={!isReady || overviewPreviewPdfLoading || overviewPreviewExcelLoading}
-                onClick={() => setAccountsOverviewPreviewOpen(true)}
-                className="accounts-toolbar-btn accounts-toolbar-btn--view"
-              >
-                <Eye className="h-3.5 w-3.5 shrink-0 opacity-95" />
-                View Report
-              </button>
-              <button
-                type="button"
-                disabled={exportPdfLoading || exportExcelLoading || overviewPreviewPdfLoading || overviewPreviewExcelLoading}
-                onClick={() => void handleExportAccountsPdf()}
-                className="accounts-toolbar-btn accounts-toolbar-btn--pdf"
-              >
-                {exportPdfLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
-                {exportPdfLoading ? "Generating PDF…" : "Export PDF"}
-              </button>
-              <button
-                type="button"
-                disabled={exportPdfLoading || exportExcelLoading || overviewPreviewPdfLoading || overviewPreviewExcelLoading}
-                onClick={() => void handleExportAccountsExcel()}
-                className="accounts-toolbar-btn accounts-toolbar-btn--excel"
-              >
-                {exportExcelLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5 text-teal-700" />}
-                {exportExcelLoading ? "Generating…" : "Export Excel"}
-              </button>
+        <section id="accounts-overview" className="scroll-mt-20 space-y-4">
+          <div className="accounts-summary-kpi-grid">
+            <SummaryKpi label="Wallet balance" value={formatCurrency(Math.round(liveWalletBalance))} tone="wallet" />
+            <SummaryKpi label="Income" value={formatCurrency(Math.round(overviewMetrics.monthlyIncome))} tone="income" />
+            <SummaryKpi label="Expense" value={formatCurrency(Math.round(overviewMetrics.monthlyExpense))} tone="expense" />
+            <SummaryKpi
+              label="Net"
+              value={formatCurrency(Math.round(monthlyNetProfit))}
+              tone={monthlyNetProfit < 0 ? "net-negative" : monthlyNetProfit > 0 ? "net-positive" : "net-neutral"}
+            />
+          </div>
+
+          <div className="accounts-toolbar-card">
+            <div className="accounts-payroll-period-stats">
+              <div className="accounts-payroll-period-grid">
+                <div className="accounts-payroll-period-stat accounts-payroll-period-stat--total">
+                  <span className="accounts-payroll-period-stat-label">Total employees</span>
+                  <span className="accounts-payroll-period-stat-value">{employeesLoading ? "—" : payrollPeriodStats.total}</span>
+                </div>
+                <div className="accounts-payroll-period-stat accounts-payroll-period-stat--paid">
+                  <span className="accounts-payroll-period-stat-label">Paid</span>
+                  <span className="accounts-payroll-period-stat-value">{payrollPeriodStats.paid}</span>
+                </div>
+                <div className="accounts-payroll-period-stat accounts-payroll-period-stat--pending">
+                  <span className="accounts-payroll-period-stat-label">Pending</span>
+                  <span className="accounts-payroll-period-stat-value">{payrollPeriodStats.pending}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800">Admin only</span>
-              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700">Live sync</span>
+
+            <div className="accounts-toolbar-side">
+              <div className="accounts-toolbar-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    scrollToAccountsSection("transactions");
+                    setEditingTransactionId("");
+                    setTransactionError("");
+                    setTransactionForm(emptyTransactionForm("income"));
+                  }}
+                  className="accounts-dash-action-btn"
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  Add income
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    scrollToAccountsSection("transactions");
+                    setEditingTransactionId("");
+                    setTransactionError("");
+                    setTransactionForm(emptyTransactionForm("expense"));
+                  }}
+                  className="accounts-dash-action-btn"
+                >
+                  <TrendingDown className="h-4 w-4" />
+                  Add expense
+                </button>
+                <button type="button" onClick={openAddExpenseCategory} className="accounts-dash-action-btn">
+                  <Tag className="h-4 w-4" />
+                  Add category
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    scrollToAccountsSection("salary");
+                    setEditingSalaryId("");
+                    setSalaryError("");
+                    setSalaryForm(emptySalaryForm());
+                  }}
+                  className="accounts-dash-action-btn"
+                >
+                  <BriefcaseBusiness className="h-4 w-4" />
+                  Pay salary
+                </button>
+                <span className="accounts-toolbar-divider accounts-toolbar-divider--inline" aria-hidden />
+                <select
+                  value={officeDatePreset}
+                  onChange={(event) => applyOfficeDatePreset(event.target.value)}
+                  className="app-select accounts-office-period-select"
+                  aria-label="Payroll period"
+                >
+                  <option value="today">Today</option>
+                  <option value="yesterday">Yesterday</option>
+                  <option value="this_week">This week</option>
+                  <option value="this_month">This month</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+              {officeDatePreset === "custom" ? (
+                <div className="accounts-toolbar-custom-range flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">From</label>
+                    <input type="date" value={officeCustomFrom} onChange={(e) => setOfficeCustomFrom(e.target.value)} className="app-input h-10 min-w-[150px]" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">To</label>
+                    <input type="date" value={officeCustomTo} onChange={(e) => setOfficeCustomTo(e.target.value)} className="app-input h-10 min-w-[150px]" />
+                  </div>
+                  <button type="button" onClick={applyOfficeCustomRange} className="app-button-primary h-10 rounded-xl px-4 text-sm font-semibold">
+                    Apply
+                  </button>
+                  <button type="button" onClick={resetOfficeDateFilter} className="app-button-secondary h-10 rounded-xl px-4 text-sm font-semibold">
+                    Reset
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
 
-          {tab === "overview" ? (
-            <div className="mt-4 grid min-w-0 gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
-              <PremiumKpiCard
-                icon={Wallet}
-                label="Wallet balance"
-                amount={Math.round(liveWalletBalance)}
-                sub={`Deposits ${formatCurrency(Math.round(investorDepositsTotal))} · Opening ${formatCurrency(Math.round(cashOpening))}`}
-                accent="emerald"
-                amountTone={liveWalletBalance < 0 ? "negative" : liveWalletBalance === 0 ? "warning" : "positive"}
-                healthLine={walletHealthLine}
-                trendUp={liveWalletBalance > 0}
-              />
-              <PremiumKpiCard
-                icon={Landmark}
-                label="Loan given"
-                amount={Math.round(loanFinanceMetrics.totalPrincipalDisbursed)}
-                sub={`${loanFinanceMetrics.activeLoanCount} booked loan${loanFinanceMetrics.activeLoanCount === 1 ? "" : "s"} (approved)`}
-                accent="rose"
-                amountTone="neutral"
-                healthLine="Deployed principal · approved book"
-                trendUp={loanFinanceMetrics.totalPrincipalDisbursed > 0 ? true : undefined}
-              />
-              <PremiumKpiCard
-                icon={TrendingUp}
-                label="Today income"
-                amount={Math.round(overviewMetrics.todayIncome)}
-                sub={`Range ${formatCurrency(Math.round(overviewMetrics.periodIncome))} · ${officeAppliedBounds.label}`}
-                accent="emerald"
-                amountTone="positive"
-                healthLine="Completed office income for today"
-                trendUp={overviewMetrics.todayIncome > 0}
-              />
-              <PremiumKpiCard
-                icon={TrendingDown}
-                label="Today expense"
-                amount={Math.round(overviewMetrics.todayExpense)}
-                sub={`Range ${formatCurrency(Math.round(overviewMetrics.periodExpenseTotal))} · books & payroll`}
-                accent="rose"
-                amountTone="negative"
-                healthLine="Office expenses and paid salary for today"
-                trendUp={false}
-              />
-            </div>
-          ) : null}
           {statusMessage ? (
-            <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/90 px-3 py-2 text-sm text-emerald-900">{statusMessage}</div>
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50/90 px-3 py-2 text-sm text-emerald-900">{statusMessage}</div>
           ) : null}
           {loadError ? (
-            <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-800">{loadError}</div>
+            <div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-800">{loadError}</div>
           ) : null}
           {exportError ? (
-            <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-800">{exportError}</div>
+            <div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-800">{exportError}</div>
           ) : null}
         </section>
 
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
-          <div className="-mx-1 flex max-w-full flex-nowrap gap-1 overflow-x-auto rounded-2xl bg-slate-100/70 p-1 sm:mx-0 sm:justify-end">
-            {TABS.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setTab(item.key)}
-                className={`shrink-0 whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
-                  tab === item.key ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-white/90"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <section className="rounded-[22px] border border-slate-100/90 bg-gradient-to-br from-white via-slate-50/40 to-white px-4 py-4 shadow-[0_2px_14px_rgba(15,23,42,0.04)]">
-          <div className="flex flex-wrap justify-end gap-2">
-              {[
-                { key: "today", label: "Today" },
-                { key: "yesterday", label: "Yesterday" },
-                { key: "this_week", label: "This week" },
-                { key: "this_month", label: "This month" },
-                { key: "custom", label: "Custom" },
-              ].map((p) => (
-                <button
-                  key={p.key}
-                  type="button"
-                  onClick={() => applyOfficeDatePreset(p.key)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                    officeDatePreset === p.key ? "bg-slate-900 text-white shadow-sm" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-          </div>
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">From date</label>
-              <input
-                type="date"
-                value={officeCustomFrom}
-                onChange={(e) => setOfficeCustomFrom(e.target.value)}
-                className="app-input h-10 min-w-[150px]"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">To date</label>
-              <input
-                type="date"
-                value={officeCustomTo}
-                onChange={(e) => setOfficeCustomTo(e.target.value)}
-                className="app-input h-10 min-w-[150px]"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={applyOfficeCustomRange}
-              className="app-button-primary inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold"
-            >
-              Apply filter
-            </button>
-            <button
-              type="button"
-              onClick={resetOfficeDateFilter}
-              className="app-button-secondary inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold"
-            >
-              Reset filter
-            </button>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50/90 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
-              <TrendingUp className="h-3 w-3" aria-hidden />
-              Range income {formatCurrency(overviewMetrics.periodIncome)}
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-rose-100 bg-rose-50/90 px-2.5 py-1 text-[11px] font-semibold text-rose-800">
-              <TrendingDown className="h-3 w-3" aria-hidden />
-              Range expense {formatCurrency(overviewMetrics.periodExpenseTotal)}
-            </span>
-            <span
-              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                overviewMetrics.periodNet >= 0
-                  ? "border-emerald-100 bg-emerald-50/80 text-emerald-900"
-                  : "border-rose-100 bg-rose-50/80 text-rose-900"
-              }`}
-            >
-              Net {formatCurrency(overviewMetrics.periodNet)}
-            </span>
-          </div>
-        </section>
-
-        {tab === "transactions" ? (
-          <>
-            <section className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <div className="accounts-workspace scroll-mt-20">
+          <div id="accounts-transactions" className="accounts-workspace-col">
+            <div className="accounts-workspace-slot">
               <Panel
-                title={editingTransactionId ? "Edit entry" : "Record transaction"}
+                compact
+                title={editingTransactionId ? "Edit transaction" : "Recent transaction"}
                 icon={Plus}
                 actions={
                   editingTransactionId ? (
@@ -2428,18 +1931,141 @@ export default function Accounts() {
                   </div>
                 </form>
               </Panel>
+            </div>
 
-              <div className="rounded-[24px] border border-slate-100 bg-white p-4 shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
-                <button
-                  type="button"
-                  onClick={() => setCategoriesOpen((open) => !open)}
-                  className="flex w-full items-center justify-between gap-2 text-left"
-                >
-                  <div>
-                    <h3 className="text-base font-semibold text-slate-900">Categories</h3>
+            <div className="accounts-workspace-slot">
+              <Panel
+              compact
+              title="Transaction ledger"
+              icon={ReceiptText}
+              actions={
+                <>
+                  <ExportToolbarButton variant="excel" onClick={exportFilteredTransactionsXlsx}>
+                    Excel
+                  </ExportToolbarButton>
+                  <ExportToolbarButton variant="neutral" icon={Download} onClick={exportTransactionsCsv}>
+                    CSV
+                  </ExportToolbarButton>
+                  <ExportToolbarButton variant="print" onClick={printTransactionsReport}>
+                    Print
+                  </ExportToolbarButton>
+                </>
+              }
+            >
+              <div className="accounts-tx-filter-row">
+                <div className="relative min-w-0">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={transactionSearch}
+                    onChange={(event) => setTransactionSearch(event.target.value)}
+                    className="app-input h-9 w-full !pl-9 pr-3 text-sm"
+                    placeholder="Search…"
+                  />
+                </div>
+                <div className="accounts-tx-filter-controls">
+                  <select value={transactionTypeFilter} onChange={(event) => setTransactionTypeFilter(event.target.value)} className="app-select accounts-tx-filter-select">
+                    <option value="all">Types</option>
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                  </select>
+                  <select value={transactionStatusFilter} onChange={(event) => setTransactionStatusFilter(event.target.value)} className="app-select accounts-tx-filter-select">
+                    <option value="all">Status</option>
+                    {TRANSACTION_STATUSES.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                  <select value={transactionCategoryFilter} onChange={(event) => setTransactionCategoryFilter(event.target.value)} className="app-select accounts-tx-filter-select">
+                    <option value="all">Categories</option>
+                    {transactionCategoryOptionsForFilter.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                  <select value={transactionMonthFilter} onChange={(event) => setTransactionMonthFilter(event.target.value)} className="app-select accounts-tx-filter-select">
+                    <option value="all">Months</option>
+                    {transactionMonthOptions.map((item) => (
+                      <option key={item} value={item}>
+                        {formatMonthLabel(item)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="accounts-ledger-table-wrap app-table-wrap mt-2">
+                <table className="app-table accounts-ledger-table accounts-ledger-table--tx text-sm">
+                  <colgroup>
+                    <col className="accounts-ledger-col-date" />
+                    <col className="accounts-ledger-col-type" />
+                    <col className="accounts-ledger-col-category" />
+                    <col className="accounts-ledger-col-amount" />
+                    <col className="accounts-ledger-col-status" />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th className="accounts-ledger-col-date">Date</th>
+                      <th className="accounts-ledger-col-type">Type</th>
+                      <th className="accounts-ledger-col-category">Category</th>
+                      <th className="accounts-ledger-col-amount">Amount</th>
+                      <th className="accounts-ledger-col-status">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTransactions.length === 0 ? (
+                      <tr>
+                        <td colSpan={5}>
+                          <EmptyState message="No transactions match the selected filters." />
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredTransactions.map((item) => (
+                        <tr key={item.transaction_id}>
+                          <td className="accounts-ledger-col-date whitespace-nowrap text-slate-600">{formatDate(item.date)}</td>
+                          <td className="accounts-ledger-col-type capitalize text-slate-600">{item.transaction_type}</td>
+                          <td className="accounts-ledger-col-category truncate font-medium text-slate-900">{item.category || "—"}</td>
+                          <td className="accounts-ledger-col-amount font-semibold tabular-nums text-slate-950">{formatCurrency(item.amount)}</td>
+                          <td className="accounts-ledger-col-status">
+                            <StatusBadge value={item.status} />
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+            </div>
+
+
+            <div id="accounts-categories" className="accounts-workspace-slot scroll-mt-20">
+              <div className="app-panel flex flex-col rounded-[22px] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-base font-semibold text-slate-900">Categories</h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCategoryForm(emptyCategoryForm("expense"));
+                        setCategoryError("");
+                        setCategoriesOpen(true);
+                      }}
+                      className="accounts-dash-action-btn !min-h-8 px-2.5 py-1.5 text-xs"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add category
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCategoriesOpen((open) => !open)}
+                      className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50"
+                      aria-label={categoriesOpen ? "Collapse categories" : "Expand categories"}
+                    >
+                      <ChevronDown className={`h-4 w-4 transition-transform ${categoriesOpen ? "rotate-180" : ""}`} />
+                    </button>
                   </div>
-                  <ChevronDown className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${categoriesOpen ? "rotate-180" : ""}`} />
-                </button>
+                </div>
                 {categoriesOpen ? (
                   <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">
                     <form className="grid gap-2 sm:grid-cols-[120px_1fr_auto]" onSubmit={handleCategorySubmit}>
@@ -2454,7 +2080,7 @@ export default function Accounts() {
                       </button>
                     </form>
                     {categoryError ? <p className="text-sm text-rose-600">{categoryError}</p> : null}
-                    <div className="grid max-h-[min(52vh,420px)] gap-3 overflow-y-auto lg:grid-cols-2">
+                    <div className="grid gap-3 lg:grid-cols-2">
                       <div className="space-y-1.5">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Expense</p>
                         {(categoriesByType.expense.length > 0 ? categoriesByType.expense : EXPENSE_CATEGORY_SEEDS.map((name) => ({ category_id: name, name, is_default: true }))).map((item) => (
@@ -2488,562 +2114,235 @@ export default function Accounts() {
                         ))}
                       </div>
                     </div>
+                    {monthlyExpenseCategoryBreakdown.length > 0 ? (
+                      <div className="border-t border-slate-100 pt-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Expenses this month</p>
+                        <ul className="mt-2 space-y-1.5">
+                          {monthlyExpenseCategoryBreakdown.map((item) => (
+                            <li key={item.category} className="flex items-center justify-between gap-2 text-sm">
+                              <span className="truncate text-slate-700">{item.category}</span>
+                              <span className="shrink-0 font-medium text-slate-900">{formatCurrency(item.amount)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
-              </div>
-            </section>
-
-            <Panel
-              title="Recent transactions"
-              icon={ReceiptText}
-              actions={
-                <>
-                  <button type="button" onClick={exportFilteredTransactionsXlsx} className="app-button-secondary inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold">
-                    <Download className="h-3.5 w-3.5" />
-                    Excel
-                  </button>
-                  <button type="button" onClick={exportTransactionsCsv} className="app-button-secondary inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold">
-                    <Download className="h-3.5 w-3.5" />
-                    CSV
-                  </button>
-                  <button type="button" onClick={printTransactionsReport} className="app-button-primary inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold">
-                    <Printer className="h-3.5 w-3.5" />
-                    PDF
-                  </button>
-                </>
-              }
-            >
-              <div className="flex flex-wrap gap-2">
-                <div className="relative min-w-[180px] flex-1">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    value={transactionSearch}
-                    onChange={(event) => setTransactionSearch(event.target.value)}
-                    className="app-input h-10 w-full !pl-11 pr-4 text-sm"
-                    placeholder="Search…"
-                  />
-                </div>
-                <select value={transactionTypeFilter} onChange={(event) => setTransactionTypeFilter(event.target.value)} className="app-select h-10 min-w-[100px] text-sm">
-                  <option value="all">All types</option>
-                  <option value="income">Income</option>
-                  <option value="expense">Expense</option>
-                </select>
-                <select value={transactionStatusFilter} onChange={(event) => setTransactionStatusFilter(event.target.value)} className="app-select h-10 min-w-[110px] text-sm">
-                  <option value="all">All status</option>
-                  {TRANSACTION_STATUSES.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-                <select value={transactionCategoryFilter} onChange={(event) => setTransactionCategoryFilter(event.target.value)} className="app-select h-10 min-w-[120px] flex-1 text-sm">
-                  <option value="all">All categories</option>
-                  {transactionCategoryOptionsForFilter.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-                <select value={transactionMonthFilter} onChange={(event) => setTransactionMonthFilter(event.target.value)} className="app-select h-10 min-w-[120px] text-sm">
-                  <option value="all">All months</option>
-                  {transactionMonthOptions.map((item) => (
-                    <option key={item} value={item}>
-                      {formatMonthLabel(item)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="app-table-wrap mt-3">
-                <table className="app-table text-sm">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Type</th>
-                      <th>Category</th>
-                      <th>Amount</th>
-                      <th>Status</th>
-                      <th className="w-[88px]"> </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedTransactions.items.length === 0 ? (
-                      <tr>
-                        <td colSpan={6}>
-                          <EmptyState message="No transactions match the selected filters." />
-                        </td>
-                      </tr>
-                    ) : (
-                      paginatedTransactions.items.map((item) => (
-                        <tr key={item.transaction_id}>
-                          <td className="whitespace-nowrap text-slate-600">{formatDate(item.date)}</td>
-                          <td className="capitalize text-slate-600">{item.transaction_type}</td>
-                          <td className="max-w-[140px] truncate font-medium text-slate-900">{item.category || "—"}</td>
-                          <td className="font-semibold text-slate-950">{formatCurrency(item.amount)}</td>
-                          <td>
-                            <StatusBadge value={item.status} />
-                          </td>
-                          <td>
-                            <div className="flex justify-end gap-1">
-                              <button type="button" onClick={() => handleEditTransaction(item)} className="rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-slate-600 hover:bg-slate-100" title="Edit">
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <button type="button" onClick={() => handleDeleteTransaction(item)} className="rounded-lg border border-rose-100 bg-rose-50 p-1.5 text-rose-600 hover:bg-rose-100" title="Delete">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="mt-3">
-                <PaginationControls page={paginatedTransactions.page} totalPages={paginatedTransactions.totalPages} onChange={setTransactionPage} />
-              </div>
-            </Panel>
-          </>
-        ) : null}
-
-        {tab === "salary" ? (
-          <>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <div className="rounded-2xl border border-emerald-100/80 bg-gradient-to-br from-emerald-50/50 to-white px-4 py-3 text-center shadow-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Paid</p>
-                <p className="mt-1 text-lg font-bold text-emerald-800">{formatCurrency(payrollStrip.paid)}</p>
-              </div>
-              <div className="rounded-2xl border border-amber-100/80 bg-gradient-to-br from-amber-50/40 to-white px-4 py-3 text-center shadow-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Pending</p>
-                <p className="mt-1 text-lg font-bold text-amber-900">{formatCurrency(payrollStrip.pending)}</p>
-              </div>
-              <div className="rounded-2xl border border-blue-100/80 bg-gradient-to-br from-blue-50/40 to-white px-4 py-3 text-center shadow-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-700">This month</p>
-                <p className="mt-1 text-lg font-bold text-blue-900">{formatCurrency(payrollStrip.monthVal)}</p>
-                <p className="mt-0.5 text-[10px] text-slate-400">{payrollStrip.count} records</p>
               </div>
             </div>
 
-            <section className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-              <Panel title={editingSalaryId ? "Edit payroll" : "Payroll entry"}>
-                <form className="space-y-2.5" onSubmit={handleSalarySubmit}>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Employee</label>
-                      <input value={salaryForm.employeeName} onChange={(event) => setSalaryForm((current) => ({ ...current, employeeName: event.target.value }))} className="app-input h-10" placeholder="Full name" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Employee ID</label>
-                      <input value={salaryForm.employeeId} onChange={(event) => setSalaryForm((current) => ({ ...current, employeeId: event.target.value }))} className="app-input h-10" placeholder="ID" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Department</label>
-                      <input value={salaryForm.department} onChange={(event) => setSalaryForm((current) => ({ ...current, department: event.target.value }))} className="app-input h-10" placeholder="Team" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Salary month</label>
-                      <input type="month" value={salaryForm.salaryMonth} onChange={(event) => setSalaryForm((current) => ({ ...current, salaryMonth: event.target.value }))} className="app-input h-10" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Basic</label>
-                      <input type="number" min="0" value={salaryForm.basicSalary} onChange={(event) => setSalaryForm((current) => ({ ...current, basicSalary: event.target.value }))} className="app-input h-10" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Bonus</label>
-                      <input type="number" min="0" value={salaryForm.bonus} onChange={(event) => setSalaryForm((current) => ({ ...current, bonus: event.target.value }))} className="app-input h-10" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Deduction</label>
-                      <input type="number" min="0" value={salaryForm.deduction} onChange={(event) => setSalaryForm((current) => ({ ...current, deduction: event.target.value }))} className="app-input h-10" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Status</label>
-                      <select value={salaryForm.paymentStatus} onChange={(event) => setSalaryForm((current) => ({ ...current, paymentStatus: event.target.value }))} className="app-select h-10">
-                        {SALARY_PAYMENT_STATUSES.map((item) => (
-                          <option key={item} value={item}>
-                            {item}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1 sm:col-span-2">
-                      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Payment date</label>
-                      <input type="date" value={salaryForm.paymentDate} onChange={(event) => setSalaryForm((current) => ({ ...current, paymentDate: event.target.value }))} className="app-input h-10" />
-                    </div>
-                    <div className="rounded-xl border border-blue-100 bg-blue-50/80 px-3 py-2 sm:col-span-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600">Net pay</p>
-                      <p className="text-xl font-bold text-blue-900">{formatCurrency(finalSalaryPreview)}</p>
-                    </div>
+          </div>
+
+          <div id="accounts-salary" className="accounts-workspace-col">
+            <div className="accounts-workspace-slot">
+            <Panel compact title={editingSalaryId ? "Edit payroll" : "Payroll entry"} icon={BriefcaseBusiness}>
+              <form className="space-y-2.5" onSubmit={handleSalarySubmit}>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Employee</label>
+                    <input value={salaryForm.employeeName} onChange={(event) => setSalaryForm((current) => ({ ...current, employeeName: event.target.value }))} className="app-input h-10" placeholder="Full name" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Notes</label>
-                    <textarea value={salaryForm.description} onChange={(event) => setSalaryForm((current) => ({ ...current, description: event.target.value }))} className="app-textarea min-h-[64px] text-sm" placeholder="Optional" />
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Employee ID</label>
+                    <input value={salaryForm.employeeId} onChange={(event) => setSalaryForm((current) => ({ ...current, employeeId: event.target.value }))} className="app-input h-10" placeholder="ID" />
                   </div>
-                  {salaryError ? <p className="text-sm text-rose-600">{salaryError}</p> : null}
-                  <div className="flex flex-wrap gap-2">
-                    <button type="submit" disabled={saving} className="app-button-primary inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium disabled:opacity-60">
-                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                      {editingSalaryId ? "Update" : "Save"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingSalaryId("");
-                        setSalaryError("");
-                        setSalaryForm(emptySalaryForm());
-                      }}
-                      className="app-button-secondary rounded-xl px-4 py-2.5 text-sm font-medium"
-                    >
-                      Clear
-                    </button>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Department</label>
+                    <input value={salaryForm.department} onChange={(event) => setSalaryForm((current) => ({ ...current, department: event.target.value }))} className="app-input h-10" placeholder="Team" />
                   </div>
-                </form>
-              </Panel>
-
-              <div className="flex h-full flex-col rounded-[24px] border border-slate-100 bg-white p-4 shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-600">Activity</p>
-                    <h3 className="text-base font-semibold text-slate-900">Latest payroll</h3>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Salary month</label>
+                    <input type="month" value={salaryForm.salaryMonth} onChange={(event) => setSalaryForm((current) => ({ ...current, salaryMonth: event.target.value }))} className="app-input h-10" />
                   </div>
-                  <div className="flex shrink-0 gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setSalaryReportPreviewOpen(true)}
-                      className="rounded-lg border border-slate-200 bg-white p-1.5 text-blue-600 shadow-sm transition hover:bg-blue-50"
-                      title="View report"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </button>
-                    <button type="button" onClick={exportSalaryCsv} className="app-button-secondary rounded-lg px-2.5 py-1.5 text-xs font-semibold">
-                      <Download className="h-3.5 w-3.5" />
-                    </button>
-                    <button type="button" onClick={printSalaryReport} className="app-button-primary rounded-lg px-2.5 py-1.5 text-xs font-semibold">
-                      <Printer className="h-3.5 w-3.5" />
-                    </button>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Basic</label>
+                    <input type="number" min="0" value={salaryForm.basicSalary} onChange={(event) => setSalaryForm((current) => ({ ...current, basicSalary: event.target.value }))} className="app-input h-10" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Bonus</label>
+                    <input type="number" min="0" value={salaryForm.bonus} onChange={(event) => setSalaryForm((current) => ({ ...current, bonus: event.target.value }))} className="app-input h-10" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Deduction</label>
+                    <input type="number" min="0" value={salaryForm.deduction} onChange={(event) => setSalaryForm((current) => ({ ...current, deduction: event.target.value }))} className="app-input h-10" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Status</label>
+                    <select value={salaryForm.paymentStatus} onChange={(event) => setSalaryForm((current) => ({ ...current, paymentStatus: event.target.value }))} className="app-select h-10">
+                      {SALARY_PAYMENT_STATUSES.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Payment date</label>
+                    <input type="date" value={salaryForm.paymentDate} onChange={(event) => setSalaryForm((current) => ({ ...current, paymentDate: event.target.value }))} className="app-input h-10" />
+                  </div>
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/80 px-3 py-2 sm:col-span-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600">Net pay</p>
+                    <p className="text-lg font-bold text-blue-900">{formatCurrency(finalSalaryPreview)}</p>
                   </div>
                 </div>
-                <div className="mt-3 flex-1 space-y-2 overflow-y-auto">
-                  {salaryRecords.slice(0, 6).length === 0 ? (
-                    <EmptyState message="Saved payroll appears here." />
-                  ) : (
-                    salaryRecords.slice(0, 6).map((item) => (
-                      <div key={item.salary_id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-slate-900">{item.employee_name}</p>
-                          <p className="text-[11px] text-slate-500">{formatMonthLabel(item.salary_month)}</p>
-                        </div>
-                        <div className="flex shrink-0 flex-col items-end gap-1">
-                          <p className="text-sm font-semibold text-slate-900">{formatCurrency(item.final_salary)}</p>
-                          <StatusBadge value={item.payment_status} />
-                        </div>
-                      </div>
-                    ))
-                  )}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Notes</label>
+                  <textarea value={salaryForm.description} onChange={(event) => setSalaryForm((current) => ({ ...current, description: event.target.value }))} className="app-textarea min-h-[56px] text-sm" placeholder="Optional" />
                 </div>
-              </div>
-            </section>
-
-            <Panel title="Payroll register">
-              <div className="flex flex-wrap gap-2">
-                <div className="relative min-w-[180px] flex-1">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    value={salarySearch}
-                    onChange={(event) => setSalarySearch(event.target.value)}
-                    className="app-input h-10 w-full !pl-11 pr-4 text-sm"
-                    placeholder="Search…"
-                  />
-                </div>
-                <select value={salaryStatusFilter} onChange={(event) => setSalaryStatusFilter(event.target.value)} className="app-select h-10 min-w-[120px] text-sm">
-                  <option value="all">All status</option>
-                  {SALARY_PAYMENT_STATUSES.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-                <select value={salaryMonthFilter} onChange={(event) => setSalaryMonthFilter(event.target.value)} className="app-select h-10 min-w-[120px] text-sm">
-                  <option value="all">All months</option>
-                  {salaryMonthOptions.map((item) => (
-                    <option key={item} value={item}>
-                      {formatMonthLabel(item)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="app-table-wrap mt-3">
-                <table className="app-table text-sm">
-                  <thead>
-                    <tr>
-                      <th>Month</th>
-                      <th>Employee</th>
-                      <th>Net</th>
-                      <th>Status</th>
-                      <th>Paid</th>
-                      <th className="w-[88px]"> </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedSalary.items.length === 0 ? (
-                      <tr>
-                        <td colSpan={6}>
-                          <EmptyState message="No salary history matches the selected filters." />
-                        </td>
-                      </tr>
-                    ) : (
-                      paginatedSalary.items.map((item) => (
-                        <tr key={item.salary_id}>
-                          <td className="whitespace-nowrap text-slate-600">{formatMonthLabel(item.salary_month)}</td>
-                          <td>
-                            <p className="font-medium text-slate-900">{item.employee_name}</p>
-                            <p className="text-[11px] text-slate-500">{item.employee_id}</p>
-                          </td>
-                          <td className="font-semibold text-slate-950">{formatCurrency(item.final_salary)}</td>
-                          <td>
-                            <StatusBadge value={item.payment_status} />
-                          </td>
-                          <td className="text-slate-600">{formatDate(item.payment_date)}</td>
-                          <td>
-                            <div className="flex justify-end gap-1">
-                              <button type="button" onClick={() => handleEditSalary(item)} className="rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-slate-600 hover:bg-slate-100">
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <button type="button" onClick={() => handleDeleteSalary(item)} className="rounded-lg border border-rose-100 bg-rose-50 p-1.5 text-rose-600 hover:bg-rose-100">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="mt-3">
-                <PaginationControls page={paginatedSalary.page} totalPages={paginatedSalary.totalPages} onChange={setSalaryPage} />
-              </div>
-            </Panel>
-          </>
-        ) : null}
-
-        {tab === "reports" ? (
-          <>
-            <Panel
-              title="Reports"
-              icon={BarChart3}
-              actions={
-                <>
+                {salaryError ? <p className="text-sm text-rose-600">{salaryError}</p> : null}
+                <div className="flex flex-wrap gap-2">
+                  <button type="submit" disabled={saving} className="app-button-primary inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-60">
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    {editingSalaryId ? "Update" : "Save"}
+                  </button>
                   <button
                     type="button"
-                    onClick={() => setAccountsAnalyticsPreviewOpen(true)}
-                    className="group inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-blue-200 hover:bg-blue-50/70 hover:text-blue-900"
+                    onClick={() => {
+                      setEditingSalaryId("");
+                      setSalaryError("");
+                      setSalaryForm(emptySalaryForm());
+                    }}
+                    className="app-button-secondary rounded-xl px-4 py-2 text-sm font-medium"
                   >
-                    <Eye className="h-4 w-4 shrink-0 text-blue-600 transition group-hover:scale-105" aria-hidden />
-                    View Report
+                    Clear
                   </button>
-                  <button type="button" onClick={exportReportPeriodXlsx} className="app-button-secondary inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium">
-                    <Download className="h-4 w-4" />
-                    Excel
-                  </button>
-                  <button type="button" onClick={exportReportCsv} className="app-button-secondary inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium">
-                    <Download className="h-4 w-4" />
-                    CSV
-                  </button>
-                  <button type="button" onClick={printAnalyticsReport} className="app-button-secondary inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium">
-                    <Printer className="h-4 w-4" />
-                    Print / PDF
-                  </button>
-                  <button type="button" onClick={handleSaveReportSnapshot} disabled={saving} className="app-button-primary inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium disabled:opacity-60">
-                    <Save className="h-4 w-4" />
-                    Save snapshot
-                  </button>
-                </>
-              }
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <select value={reportTypeFilter} onChange={(event) => setReportTypeFilter(event.target.value)} className="app-select h-10 min-w-[160px]">
-                  <option value="all">All types</option>
-                  <option value="income">Income only</option>
-                  <option value="expense">Expense only</option>
-                </select>
-                <button type="button" onClick={() => setReportTypeFilter("all")} className="app-button-secondary inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2 text-sm font-medium">
-                  <RefreshCw className="h-4 w-4" />
-                  Reset type filter
-                </button>
-              </div>
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <StatCard icon={TrendingUp} label="Income" value={formatCurrency(reportIncomeTotal)} tone="text-emerald-700" />
-                <StatCard icon={TrendingDown} label="Expense" value={formatCurrency(reportExpenseTotal)} tone="text-rose-700" />
-                <StatCard
-                  icon={Wallet}
-                  label="Net profit / loss"
-                  value={formatCurrency(reportOfficeNet)}
-                  tone={reportOfficeNet >= 0 ? "text-emerald-700" : "text-rose-700"}
-                />
-              </div>
-
-              <div className="mt-6 grid gap-5 lg:grid-cols-2">
-                <div className="rounded-[22px] border border-slate-100 bg-white p-4 shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
-                  <h4 className="text-base font-semibold text-slate-900">Net trend</h4>
-                  <div className="mt-3">
-                    <TrendGraph data={profitTrendData} compact />
-                  </div>
                 </div>
-                <div className="rounded-[22px] border border-slate-100 bg-white p-4 shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
-                  <h4 className="text-base font-semibold text-slate-900">Income & expense mix</h4>
-                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">Income</p>
-                      <div className="app-table-wrap mt-2 max-h-52 overflow-auto rounded-xl border border-emerald-100/80">
-                        <table className="app-table text-sm">
-                          <thead>
-                            <tr>
-                              <th>Category</th>
-                              <th className="text-right">Amount</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {reportCategoryRows.filter((row) => row.type === "income").length === 0 ? (
-                              <tr>
-                                <td colSpan={2}>
-                                  <EmptyState message="No income categories this period." />
-                                </td>
-                              </tr>
-                            ) : (
-                              reportCategoryRows
-                                .filter((row) => row.type === "income")
-                                .map((item, idx) => (
-                                  <tr key={`inc-${item.category}-${idx}`}>
-                                    <td className="font-medium text-slate-900">{item.category}</td>
-                                    <td className="text-right font-semibold text-emerald-700">{formatCurrency(item.amount)}</td>
-                                  </tr>
-                                ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-rose-700">Expense</p>
-                      <div className="app-table-wrap mt-2 max-h-52 overflow-auto rounded-xl border border-rose-100/80">
-                        <table className="app-table text-sm">
-                          <thead>
-                            <tr>
-                              <th>Category</th>
-                              <th className="text-right">Amount</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {reportCategoryRows.filter((row) => row.type === "expense").length === 0 ? (
-                              <tr>
-                                <td colSpan={2}>
-                                  <EmptyState message="No expense categories this period." />
-                                </td>
-                              </tr>
-                            ) : (
-                              reportCategoryRows
-                                .filter((row) => row.type === "expense")
-                                .map((item, idx) => (
-                                  <tr key={`exp-${item.category}-${idx}`}>
-                                    <td className="font-medium text-slate-900">{item.category}</td>
-                                    <td className="text-right font-semibold text-rose-700">{formatCurrency(item.amount)}</td>
-                                  </tr>
-                                ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 overflow-hidden rounded-[22px] border border-slate-100 bg-slate-50/60">
-                <button
-                  type="button"
-                  onClick={() => setSnapshotsOpen((open) => !open)}
-                  className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left text-sm font-semibold text-slate-900 transition hover:bg-white/60"
-                >
-                  <span className="flex items-center gap-2">
-                    <Download className="h-4 w-4 text-slate-500" />
-                    Saved statements
-                    <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-xs font-medium text-slate-600">{reportSnapshots.length}</span>
-                  </span>
-                  <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${snapshotsOpen ? "rotate-180" : ""}`} />
-                </button>
-                {snapshotsOpen ? (
-                  <div className="border-t border-slate-100 bg-white px-2 pb-4 pt-2">
-                    <div className="app-table-wrap">
-                      <table className="app-table">
-                        <thead>
-                          <tr>
-                            <th>Report ID</th>
-                            <th>Title</th>
-                            <th>Type</th>
-                            <th>Period</th>
-                            <th>Saved</th>
-                            <th>By</th>
-                            <th className="text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {paginatedReports.items.length === 0 ? (
-                            <tr>
-                              <td colSpan={7}>
-                                <EmptyState message="Save a snapshot to keep downloadable statements here." />
-                              </td>
-                            </tr>
-                          ) : (
-                            paginatedReports.items.map((item) => (
-                              <tr key={item.report_id}>
-                                <td className="font-medium text-slate-900">{item.report_id}</td>
-                                <td>{item.report_title || "—"}</td>
-                                <td className="capitalize">{item.report_type || "—"}</td>
-                                <td>{item.period_label || "—"}</td>
-                                <td>{formatDate(item.created_label)}</td>
-                                <td>{item.created_by_name || "—"}</td>
-                                <td className="text-right">
-                                  <div className="flex justify-end gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        openPrintableReport({
-                                          title: item.report_title || "Accounts snapshot",
-                                          subtitle: item.period_label || "Saved report snapshot",
-                                          columns: ["Metric", "Value"],
-                                          rows: Object.entries(item.summary || {}).map(([key, value]) => [
-                                            key,
-                                            typeof value === "number" ? formatCurrency(value) : JSON.stringify(value),
-                                          ]),
-                                          reportMeta: accountsReportMeta,
-                                        })
-                                      }
-                                      className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-600 hover:bg-slate-100"
-                                      title="Print / PDF"
-                                    >
-                                      <Printer className="h-3.5 w-3.5" />
-                                    </button>
-                                    <button type="button" onClick={() => handleDeleteSnapshot(item)} className="rounded-xl border border-rose-200 bg-rose-50 p-2 text-rose-600 hover:bg-rose-100" title="Delete">
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="mt-3 px-2">
-                      <PaginationControls page={paginatedReports.page} totalPages={paginatedReports.totalPages} onChange={setReportPage} />
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+              </form>
             </Panel>
-          </>
-        ) : null}
+            </div>
+
+            <div className="accounts-workspace-slot">
+              <Panel compact title="Payroll register" icon={BriefcaseBusiness}>
+                <div className="accounts-payroll-filter-row">
+                  <div className="relative min-w-0">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={salarySearch}
+                      onChange={(event) => setSalarySearch(event.target.value)}
+                      className="app-input h-9 w-full !pl-9 pr-3 text-sm"
+                      placeholder="Search…"
+                    />
+                  </div>
+                  <div className="accounts-payroll-filter-controls">
+                    <select value={salaryStatusFilter} onChange={(event) => setSalaryStatusFilter(event.target.value)} className="app-select accounts-payroll-filter-select">
+                      <option value="all">Status</option>
+                      {SALARY_PAYMENT_STATUSES.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                    <select value={salaryMonthFilter} onChange={(event) => setSalaryMonthFilter(event.target.value)} className="app-select accounts-payroll-filter-select">
+                      <option value="all">Months</option>
+                      {salaryMonthOptions.map((item) => (
+                        <option key={item} value={item}>
+                          {formatMonthLabel(item)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="accounts-ledger-table-wrap app-table-wrap mt-2">
+                  <table className="app-table accounts-ledger-table accounts-ledger-table--payroll text-sm">
+                    <colgroup>
+                      <col className="accounts-ledger-col-date" />
+                      <col className="accounts-ledger-col-employee" />
+                      <col className="accounts-ledger-col-amount" />
+                      <col className="accounts-ledger-col-status" />
+                      <col className="accounts-ledger-col-paid" />
+                      <col className="accounts-ledger-col-actions" />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th className="accounts-ledger-col-date">Month</th>
+                        <th className="accounts-ledger-col-employee">Employee</th>
+                        <th className="accounts-ledger-col-amount">Net</th>
+                        <th className="accounts-ledger-col-status">Status</th>
+                        <th className="accounts-ledger-col-paid">Paid</th>
+                        <th className="accounts-ledger-col-actions">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSalaryRecords.length === 0 ? (
+                        <tr>
+                          <td colSpan={6}>
+                            <EmptyState message="No salary history matches the selected filters." />
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredSalaryRecords.map((item) => (
+                          <tr key={item.salary_id}>
+                            <td className="accounts-ledger-col-date whitespace-nowrap text-slate-600">{formatMonthLabel(item.salary_month)}</td>
+                            <td className="accounts-ledger-col-employee">
+                              <p className="truncate font-medium text-slate-900">{item.employee_name}</p>
+                              <p className="truncate text-[11px] text-slate-500">{item.employee_id}</p>
+                            </td>
+                            <td className="accounts-ledger-col-amount font-semibold tabular-nums text-slate-950">{formatCurrency(item.final_salary)}</td>
+                            <td className="accounts-ledger-col-status">
+                              <StatusBadge value={item.payment_status} />
+                            </td>
+                            <td className="accounts-ledger-col-paid whitespace-nowrap text-slate-600">{formatDate(item.payment_date)}</td>
+                            <td className="accounts-ledger-col-actions">
+                              <div className="accounts-ledger-row-actions">
+                                <button type="button" onClick={() => handleEditSalary(item)} className="rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-slate-600 hover:bg-slate-100">
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button type="button" onClick={() => handleDeleteSalary(item)} className="rounded-lg border border-rose-100 bg-rose-50 p-1.5 text-rose-600 hover:bg-rose-100">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Panel>
+            </div>
+
+            <div className="accounts-workspace-slot">
+            <div className="accounts-latest-payroll flex flex-col rounded-[20px] border border-slate-100 bg-white p-3 shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-600">Activity</p>
+                  <h3 className="text-base font-semibold text-slate-900">Last payroll</h3>
+                </div>
+                <ExportToolbar>
+                  <ExportToolbarButton variant="view" title="View report" onClick={() => setSalaryReportPreviewOpen(true)}>
+                    View
+                  </ExportToolbarButton>
+                  <ExportToolbarButton variant="neutral" icon={Download} onClick={exportSalaryCsv}>
+                    CSV
+                  </ExportToolbarButton>
+                  <ExportToolbarButton variant="print" onClick={printSalaryReport}>
+                    Print
+                  </ExportToolbarButton>
+                </ExportToolbar>
+              </div>
+              <div className="mt-2 space-y-2">
+                {salaryRecords.slice(0, 6).length === 0 ? (
+                  <EmptyState message="Saved payroll appears here." />
+                ) : (
+                  salaryRecords.slice(0, 6).map((item) => (
+                    <div key={item.salary_id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-900">{item.employee_name}</p>
+                        <p className="text-[11px] text-slate-500">{formatMonthLabel(item.salary_month)}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <p className="text-sm font-semibold text-slate-900">{formatCurrency(item.final_salary)}</p>
+                        <StatusBadge value={item.payment_status} />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            </div>
+          </div>
+        </div>
 
         {!isReady ? (
           <div className="rounded-[28px] border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
@@ -3073,27 +2372,6 @@ export default function Accounts() {
       >
         {accountsOverviewPreviewSectionChildren}
       </EnterpriseReportPreview>
-
-      <EnterpriseReportPreview
-        open={accountsAnalyticsPreviewOpen}
-        onClose={() => setAccountsAnalyticsPreviewOpen(false)}
-        title="Accounts analytics"
-        subtitle={`Office analytics · ${officeReportPeriodLabel} · ${reportTypeFilter === "all" ? "All types" : reportTypeFilter}`}
-        generatedAt={accountsReportMeta.generatedLabel}
-        filterLines={accountsAnalyticsPreviewFilterLines}
-        metrics={accountsAnalyticsPreviewMetrics}
-        columns={accountsAnalyticsPreviewColumns}
-        rows={accountsAnalyticsPreviewRows}
-        pageSize={12}
-        reportMeta={accountsReportMeta}
-        pdfLoading={analyticsPreviewPdfLoading}
-        excelLoading={analyticsPreviewExcelLoading}
-        printLoading={analyticsPrintLoading}
-        onDownloadPdf={handleAnalyticsPreviewPdfDownload}
-        onDownloadExcel={handleAnalyticsPreviewExcelDownload}
-        onPrint={handleAnalyticsPreviewPrint}
-        shareTitle="Accounts analytics — Ruthra"
-      />
 
       <EnterpriseReportPreview
         open={salaryReportPreviewOpen}

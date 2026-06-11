@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, Clock3, Wallet } from "lucide-react";
+import CustomerDetailLink from "../components/customer/CustomerDetailLink";
 import useEmployeeCenterScope from "../hooks/useEmployeeCenterScope";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 
@@ -116,13 +117,21 @@ export default function EmployeeCollectionSummary() {
         ) : (
           filteredRows.map((e) => {
             const approved = normalizeApprovalStatus(e) === "approved";
+            const customer = customers.find((c) => c.customerId === e.customerId);
             return (
               <li
                 key={e.entryId || `${e.customerId}-${e.submittedAt}`}
                 className="app-panel-muted flex flex-col gap-1 rounded-2xl px-3 py-2.5 sm:px-3.5"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <span className="min-w-0 truncate text-sm font-semibold text-slate-950 sm:text-base">{e.customerName || e.customerId}</span>
+                  <CustomerDetailLink
+                    customerId={e.customerId}
+                    variant="employee"
+                    selectedDay={customer?.selectedDay}
+                    className="min-w-0 truncate text-sm font-semibold text-slate-950 no-underline sm:text-base"
+                  >
+                    {e.customerName || e.customerId}
+                  </CustomerDetailLink>
                   <span
                     className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold uppercase ${
                       approved ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"

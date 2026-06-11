@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
@@ -15,6 +16,7 @@ import {
   FileText,
   History,
   LoaderCircle,
+  Pencil,
   Printer,
   RotateCcw,
   Search,
@@ -25,12 +27,13 @@ import {
 } from "lucide-react";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import BrandLogo from "../components/BrandLogo";
+import CustomerDetailLink from "../components/customer/CustomerDetailLink";
 import EnterpriseReportPreview from "../components/reports/EnterpriseReportPreview.jsx";
+import { ExportToolbar, ExportToolbarButton } from "../components/reports/ExportToolbar.jsx";
 import { downloadCollectionReportXlsx, downloadEmployeeLoanReportXlsx } from "../utils/collectionReportExports.js";
 import { downloadEmployeeLoanReportPdf, printEmployeeLoanReportPdf } from "../utils/employeeLoanReportPdf.js";
-import { downloadLoanCollectionReportPdf } from "../utils/loanCollectionReportPdf.js";
+import { downloadLoanCollectionReportPdf, printLoanCollectionReportPdf } from "../utils/loanCollectionReportPdf.js";
 import { reportDateStamp } from "../utils/reportFilenames.js";
-import { buildPreviewColumnsPdfPayload, printEnterpriseTabularPdf } from "../utils/enterpriseTabularReportPdf.js";
 import useReportMeta from "../hooks/useReportMeta.js";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import { DEFAULT_DAY_CENTERS, loadLoanCenters } from "../constants/dayCenters";
@@ -40,6 +43,12 @@ import {
   NO_SUB_CENTER_LABEL,
   resolveCustomerCenterDisplay,
 } from "../utils/centerDisplay.js";
+import {
+  getCurrentTenureDueStatus,
+  hasCurrentTenurePendingApproval,
+  isCurrentTenureCollected,
+  isCurrentTenurePartiallyPaid,
+} from "../utils/employeeCollectionDetails.js";
 
 function formatCurrency(value) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
@@ -220,6 +229,51 @@ function safeDate(value) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Loan amount still due — uses totalPayable when set, otherwise loan principal. */
+function getRepaymentTarget(source) {
+  const totalPayable = Number(source?.totalPayable || 0);
+  const loanAmount = Number(source?.loanAmount || 0);
+  return totalPayable > 0 ? totalPayable : loanAmount;
+}
+
+function getOutstandingBalance(source, paidAmount) {
+  const paid = Number(paidAmount || 0);
+  const target = getRepaymentTarget(source);
+  return target > 0 ? Math.max(target - paid, 0) : 0;
+}
+
+/** Align portfolio status with employee collection list (current tenure + due date). */
+function classifyPortfolioCustomerStatus(customer, customerEntries, { periodCollected = 0, outstanding = 0 } = {}) {
+  const repaymentTarget = getRepaymentTarget(customer);
+  if (repaymentTarget > 0 && outstanding <= 0) return "collected";
+  if (isCurrentTenureCollected(customer, customerEntries)) return "collected";
+  if (Number(periodCollected) > 0) return "collected";
+  if (isCurrentTenurePartiallyPaid(customer, customerEntries)) return "pending";
+  if (hasCurrentTenurePendingApproval(customer, customerEntries)) return "pending";
+  if (getCurrentTenureDueStatus(customer, customerEntries).key === "overdue") return "overdue";
+  return "pending";
+}
+
+/** Collection portfolio row bucket: pending | collected | overdue */
+function classifyDetailRowFilter(row) {
+  return row.portfolioFilterKey || "pending";
+}
+
+function collectionStatusLabel(filterKey) {
+  if (filterKey === "collected") return "Collected";
+  if (filterKey === "overdue") return "Overdue";
+  return "Pending";
+}
+
+function CollectionStatusBadge({ row }) {
+  const filterKey = classifyDetailRowFilter(row);
+  return (
+    <span className={`reports-status-badge reports-status-badge--${filterKey}`}>
+      {collectionStatusLabel(filterKey)}
+    </span>
+  );
 }
 
 function isOnTimeCollection(dueDateValue, collectionDateValue) {
@@ -711,9 +765,8 @@ function computeReports(rangeBounds, customers, entries, centers) {
       if (!dueDate) return false;
       const dt = startOfDay(dueDate).getTime();
       if (dt < startMs || dt > endMs) return false;
-      const target = Number(customer.totalPayable || 0);
       const paid = Number(approvedCollectedByCustomer[customer.customerId] || 0);
-      return target - paid > 0;
+      return getOutstandingBalance(customer, paid) > 0;
     }).length;
   }
 
@@ -729,20 +782,33 @@ function computeReports(rangeBounds, customers, entries, centers) {
 
   const currentTotalOutstanding = activeLoans.reduce((sum, customer) => {
     const paid = Number(approvedCollectedByCustomer[customer.customerId] || 0);
-    const totalPayable = Number(customer.totalPayable || 0);
-    return sum + Math.max(totalPayable - paid, 0);
+    return sum + getOutstandingBalance(customer, paid);
   }, 0);
 
   const netCashApprox = totalCollectedAmount - newLoansInRangeAmount;
 
+  const entriesByCustomerId = entries.reduce((map, entry) => {
+    if (!entry.customerId) return map;
+    if (!map.has(entry.customerId)) map.set(entry.customerId, []);
+    map.get(entry.customerId).push(entry);
+    return map;
+  }, new Map());
+
   const detailRows = activeCustomers.map((customer) => {
     const paid = Number(approvedCollectedByCustomer[customer.customerId] || 0);
     const totalPayable = Number(customer.totalPayable || 0);
-    const outstanding = Math.max(totalPayable - paid, 0);
+    const outstanding = getOutstandingBalance(customer, paid);
+    const customerEntries = entriesByCustomerId.get(customer.customerId) || [];
+    const customerPeriodEntries = periodApprovedEntries.filter((entry) => entry.customerId === customer.customerId);
+    const periodCollected = customerPeriodEntries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
     const { dayCenter, subCenter } = resolveCustomerCenterDisplay(customer, centers);
-    const latestEntry = entries
-      .filter((entry) => entry.customerId === customer.customerId)
+    const latestEntry = customerEntries
+      .slice()
       .sort((a, b) => String(b.collectionDate || b.submittedAt || "").localeCompare(String(a.collectionDate || a.submittedAt || "")))[0];
+    const portfolioFilterKey = classifyPortfolioCustomerStatus(customer, customerEntries, {
+      periodCollected,
+      outstanding,
+    });
     return {
       customerId: customer.customerId || "",
       loanId: customer.applicationId || customer.customerId || "",
@@ -753,8 +819,10 @@ function computeReports(rangeBounds, customers, entries, centers) {
       loanAmount: Number(customer.loanAmount || 0),
       totalPayable,
       totalCollected: paid,
+      periodCollected,
       outstanding,
       dueDate: customer.dueDate || "",
+      portfolioFilterKey,
       latestStatus: latestEntry?.collectionStatus || "Pending",
       onTime: isOnTimeCollection(customer.dueDate, latestEntry?.collectionDate || latestEntry?.submittedAt),
     };
@@ -821,24 +889,22 @@ function ReportCard({ icon: Icon, label, value, accent = "blue" }) {
   const valueText = String(value ?? "");
   const amountClass =
     valueText.length >= 13
-      ? "text-sm sm:text-base"
+      ? "text-base sm:text-lg"
       : valueText.length >= 10
-        ? "text-base sm:text-lg"
-        : "text-lg sm:text-xl";
+        ? "text-lg sm:text-xl"
+        : "text-xl sm:text-2xl";
 
   return (
-    <div className={`min-w-0 rounded-xl border px-2.5 py-2 shadow-sm sm:px-3 sm:py-2.5 ${tone.card}`}>
-      <div className="flex items-start justify-between gap-1.5">
-        <p className={`min-w-0 text-[9px] font-semibold uppercase leading-tight tracking-[0.12em] sm:text-[10px] sm:tracking-[0.14em] ${tone.label}`}>
+    <div className={`reports-summary-card min-w-0 rounded-2xl border px-4 py-3.5 shadow-sm sm:px-5 sm:py-4 ${tone.card}`}>
+      <div className="flex items-start justify-between gap-3">
+        <p className={`min-w-0 text-[10px] font-semibold uppercase leading-snug tracking-[0.14em] sm:text-[11px] ${tone.label}`}>
           {label}
         </p>
-        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg sm:h-8 sm:w-8 ${tone.icon}`}>
-          <Icon className="h-3.5 w-3.5" />
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10 ${tone.icon}`}>
+          <Icon className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
         </div>
       </div>
-      <p
-        className={`mt-1.5 min-w-0 overflow-hidden text-center whitespace-nowrap text-ellipsis font-semibold leading-tight tracking-tight text-slate-950 tabular-nums ${amountClass}`}
-      >
+      <p className={`reports-summary-card-value mt-3 min-w-0 font-bold leading-tight tracking-tight text-slate-950 tabular-nums ${amountClass}`}>
         {valueText}
       </p>
     </div>
@@ -988,7 +1054,7 @@ export default function Reports() {
     typeof persistedRange?.appliedCustomTo === "string" ? persistedRange.appliedCustomTo : ""
   );
   const [detailFilter, setDetailFilter] = useState("all");
-  const [detailSearch, setDetailSearch] = useState("");
+  const [customerSearch, setCustomerSearch] = useState("");
   const [centerFilter, setCenterFilter] = useState("All");
   const [subCenterFilter, setSubCenterFilter] = useState("All");
   const [centers, setCenters] = useState(() => loadCenters());
@@ -1129,59 +1195,101 @@ export default function Reports() {
   }, []);
 
   const detailRowsScoped = useMemo(() => {
-    const query = detailSearch.trim().toLowerCase();
+    const searchQuery = customerSearch.trim().toLowerCase();
     return report.detailRows
       .filter((row) => {
-        if (!query) return true;
-        return row.customerName.toLowerCase().includes(query) || String(row.phoneNumber || "").toLowerCase().includes(query);
+        if (!searchQuery) return true;
+        const name = String(row.customerName || "").toLowerCase();
+        const phone = String(row.phoneNumber || "").toLowerCase();
+        return name.includes(searchQuery) || phone.includes(searchQuery);
       })
       .filter((row) => {
         const matchesCenter = centerFilter === "All" || row.dayCenter === centerFilter;
         const matchesSub = subCenterFilter === "All" || row.subCenter === subCenterFilter;
         return matchesCenter && matchesSub;
       });
-  }, [centerFilter, detailSearch, report.detailRows, subCenterFilter]);
+  }, [centerFilter, customerSearch, report.detailRows, subCenterFilter]);
 
-  const detailStatusCounts = useMemo(() => {
-    const today = startOfDay(new Date());
-    let pending = 0;
-    let due = 0;
-    let overdue = 0;
-    detailRowsScoped.forEach((row) => {
-      const outstanding = Number(row.outstanding || 0);
-      const dueDate = safeDate(row.dueDate);
-      if (outstanding > 0) pending += 1;
-      if (dueDate && startOfDay(dueDate).getTime() === today.getTime()) due += 1;
-      if (dueDate && startOfDay(dueDate) < today && outstanding > 0) overdue += 1;
-    });
-    return { all: detailRowsScoped.length, pending, due, overdue };
-  }, [detailRowsScoped]);
+  const todayCollectionAmount = useMemo(() => {
+    const todayKey = getTodayKey();
+    return entries
+      .filter((entry) => entry.approvalStatus === "approved")
+      .filter((entry) => collectionDateKey(entry) === todayKey)
+      .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  }, [entries]);
+
+  const totalCustomersCount = useMemo(
+    () => customers.filter((customer) => !customer.isArchived && !customer.isDeleted).length,
+    [customers]
+  );
+
+  const dashboardSummaryCards = useMemo(
+    () => [
+      {
+        icon: UserRound,
+        label: "Total Customers",
+        value: String(totalCustomersCount),
+        accent: "blue",
+      },
+      {
+        icon: Clock3,
+        label: "Pending Collections",
+        value: String(report.metrics.pendingCollection),
+        accent: "orange",
+      },
+      {
+        icon: CheckCircle2,
+        label: "Collected",
+        value: formatCurrency(report.metrics.totalCollectedAmount),
+        accent: "green",
+      },
+      {
+        icon: CircleDollarSign,
+        label: "Outstanding Amount",
+        value: formatCurrency(report.metrics.currentTotalOutstanding),
+        accent: "rose",
+      },
+      {
+        icon: Wallet,
+        label: "Today's Collection",
+        value: formatCurrency(todayCollectionAmount),
+        accent: "blue",
+      },
+    ],
+    [report.metrics, todayCollectionAmount, totalCustomersCount]
+  );
+
+  const openCustomerReport = useCallback((customerId) => {
+    if (!customerId) return;
+    setReportDateFrom("");
+    setReportDateTo("");
+    setReportMonthFilter("all");
+    setReportYearFilter("all");
+    setReportStatusFilter("all");
+    setPaymentSearch("");
+    setModalDetailCenterFilter("All");
+    setTxnSearch("");
+    setTxnApprovalFilter("all");
+    setTxnCollectionFilter("all");
+    setTxnPage(1);
+    setSelectedCustomerId(customerId);
+  }, []);
 
   const filteredDetailRows = useMemo(() => {
     if (detailFilter === "all") return detailRowsScoped;
-    const today = startOfDay(new Date());
-    return detailRowsScoped.filter((row) => {
-      const outstanding = Number(row.outstanding || 0);
-      const due = safeDate(row.dueDate);
-      if (detailFilter === "pending") return outstanding > 0;
-      if (detailFilter === "due") return due && startOfDay(due).getTime() === today.getTime();
-      if (detailFilter === "overdue") return due && startOfDay(due) < today && outstanding > 0;
-      return true;
-    });
+    return detailRowsScoped.filter((row) => classifyDetailRowFilter(row) === detailFilter);
   }, [detailFilter, detailRowsScoped]);
 
   const collectionPreviewColumns = useMemo(
     () => [
-      { key: "center", label: "Center" },
-      { key: "customerName", label: "Customer" },
+      { key: "customerName", label: "Customer name" },
+      { key: "customerId", label: "CUSID" },
       { key: "phone", label: "Phone" },
       { key: "loanAmount", label: "Loan amount", cellType: "currency" },
-      { key: "totalPayable", label: "Total payable", cellType: "currency" },
-      { key: "collected", label: "Collected", cellType: "currency" },
-      { key: "outstanding", label: "Outstanding", cellType: "currency" },
+      { key: "collected", label: "Collected amount", cellType: "currency" },
+      { key: "balance", label: "Balance amount", cellType: "currency" },
       { key: "dueDate", label: "Due date" },
-      { key: "onTime", label: "On time", cellType: "status" },
-      { key: "latestStatus", label: "Latest status", cellType: "status" },
+      { key: "status", label: "Status", cellType: "status" },
     ],
     []
   );
@@ -1189,21 +1297,17 @@ export default function Reports() {
   const collectionPreviewRows = useMemo(
     () =>
       filteredDetailRows.map((row, i) => {
-        const sub =
-          row.subCenter && row.subCenter !== NO_SUB_CENTER_LABEL ? row.subCenter : "";
-        const center = [row.dayCenter, sub].filter(Boolean).join(" · ") || "—";
+        const filterKey = classifyDetailRowFilter(row);
         return {
           __key: `${row.customerId || row.customerName}-${i}`,
-          center,
           customerName: row.customerName,
+          customerId: row.customerId || row.loanId || "—",
           phone: row.phoneNumber || "—",
           loanAmount: Number(row.loanAmount || 0),
-          totalPayable: Number(row.totalPayable || 0),
           collected: Number(row.totalCollected || 0),
-          outstanding: Number(row.outstanding || 0),
-          dueDate: row.dueDate || "—",
-          onTime: row.onTime || "—",
-          latestStatus: String(row.latestStatus || "—"),
+          balance: getOutstandingBalance(row, row.totalCollected),
+          dueDate: formatDate(row.dueDate),
+          status: collectionStatusLabel(filterKey),
         };
       }),
     [filteredDetailRows]
@@ -1214,67 +1318,21 @@ export default function Reports() {
     const lines = [
       `Generated: ${gen}`,
       `Period: ${report.periodLabel}`,
-      `Row filter: ${detailFilter === "all" ? "All" : detailFilter}`,
+      `Row filter: ${detailFilter === "all" ? "All" : detailFilter.charAt(0).toUpperCase() + detailFilter.slice(1)}`,
     ];
     if (centerFilter !== "All") lines.push(`Center: ${centerFilter}`);
     if (subCenterFilter !== "All") lines.push(`Sub-center: ${subCenterFilter}`);
-    if (detailSearch.trim()) lines.push(`Search: "${detailSearch.trim()}"`);
+    if (customerSearch.trim()) lines.push(`Search: "${customerSearch.trim()}"`);
     return lines;
-  }, [report.periodLabel, detailFilter, centerFilter, subCenterFilter, detailSearch]);
+  }, [report.periodLabel, detailFilter, centerFilter, subCenterFilter, customerSearch]);
 
   const collectionPreviewMetrics = useMemo(
-    () => [
-      {
-        icon: Wallet,
-        label: "Total collected",
-        value: formatCurrency(report.metrics.totalCollectedAmount),
-        note: "Approved entries in range",
-        accent: "blue",
-      },
-      {
-        icon: CheckCircle2,
-        label: "Successful",
-        value: String(report.metrics.successfulCollections),
-        note: "Collected status",
-        accent: "green",
-      },
-      {
-        icon: Clock3,
-        label: "Pending dues",
-        value: String(report.metrics.pendingCollection),
-        note: report.isSingleDayRange ? "Due that day, not yet collected" : "Due in range with balance",
-        accent: "orange",
-      },
-      {
-        icon: TrendingUp,
-        label: "Skipped",
-        value: String(report.metrics.skippedCollections),
-        note: "Entries marked skipped in range",
-        accent: "slate",
-      },
-      {
-        icon: Building2,
-        label: "New loans",
-        value: String(report.metrics.newLoansInRangeCount),
-        note: `${formatCurrency(report.metrics.newLoansInRangeAmount)} booked in range`,
-        accent: "violet",
-      },
-      {
-        icon: CircleDollarSign,
-        label: "Outstanding",
-        value: formatCurrency(report.metrics.currentTotalOutstanding),
-        note: "Current open book (all active)",
-        accent: "rose",
-      },
-      {
-        icon: BarChart3,
-        label: "Net (approx.)",
-        value: formatCurrency(report.metrics.netCashApprox),
-        note: "Collections − new loan principal in range",
-        accent: "purple",
-      },
-    ],
-    [report.metrics, report.isSingleDayRange]
+    () =>
+      dashboardSummaryCards.map((card) => ({
+        ...card,
+        note: report.periodLabel,
+      })),
+    [dashboardSummaryCards, report.periodLabel]
   );
 
   const handleCollectionPdfDownload = useCallback(async () => {
@@ -1310,39 +1368,24 @@ export default function Reports() {
     }
   }, [filteredDetailRows, report.periodLabel, collectionPreviewFilterLines]);
 
-  const collectionDetailPdfPayload = useMemo(
-    () =>
-      buildPreviewColumnsPdfPayload({
-        title: "Collection report",
-        subtitle: `Portfolio · ${report.periodLabel}`,
-        columns: collectionPreviewColumns,
-        rows: collectionPreviewRows,
-        filterLines: collectionPreviewFilterLines,
-        summaryCards: collectionPreviewMetrics.map((m) => ({ label: m.label, value: m.value, note: m.note })),
-        reportMeta: collectionReportMeta,
-        orientation: "landscape",
-      }),
-    [
-      collectionPreviewColumns,
-      collectionPreviewFilterLines,
-      collectionPreviewMetrics,
-      collectionPreviewRows,
-      collectionReportMeta,
-      report.periodLabel,
-    ]
-  );
-
   const handleCollectionPrint = useCallback(async () => {
     setCollectionPrintLoading(true);
     try {
-      await printEnterpriseTabularPdf(collectionDetailPdfPayload);
+      await printLoanCollectionReportPdf(
+        { ...report, detailRows: filteredDetailRows },
+        {
+          origin: typeof window !== "undefined" ? window.location.origin : "",
+          extraMetaLines: collectionPreviewFilterLines,
+          generatedLabel: new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "medium" }),
+        }
+      );
     } catch (err) {
       console.error(err);
       window.alert("Could not open print dialog. Try downloading the PDF instead.");
     } finally {
       setCollectionPrintLoading(false);
     }
-  }, [collectionDetailPdfPayload]);
+  }, [report, filteredDetailRows, collectionPreviewFilterLines]);
 
   const selectedCustomerReport = useMemo(() => {
     if (!selectedCustomerId) return null;
@@ -1615,309 +1658,226 @@ export default function Reports() {
 
         {!loading && !error ? (
           <>
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-2 text-xs font-medium text-emerald-800">
-              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              <span>
-                Data synced successfully · {customers.filter((c) => !c.isArchived && !c.isDeleted).length} active customers · live Firestore
-              </span>
-            </div>
-            <section className="app-panel min-w-0 space-y-3 p-4 sm:space-y-4 sm:p-5">
-              <div className="w-full min-w-0 space-y-3">
-                <div className="flex w-full min-w-0 flex-wrap gap-1.5 rounded-2xl border border-slate-200/90 bg-slate-50/40 p-1.5 sm:gap-2 sm:p-2">
-                  {RANGE_PRESETS.map((p) => (
-                    <button
-                      key={p.key}
-                      type="button"
-                      onClick={() => selectRangePreset(p.key)}
-                      className={`inline-flex min-h-[38px] shrink-0 items-center justify-center rounded-xl px-2.5 py-1.5 text-center text-[11px] font-semibold transition sm:min-h-[40px] sm:px-3 sm:text-xs ${
-                        rangePreset === p.key
-                          ? "bg-blue-600 text-white shadow-sm"
-                          : "border border-transparent bg-white text-slate-600 hover:border-blue-100 hover:bg-blue-50/80 hover:text-blue-900"
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+            <section className="reports-dashboard app-panel min-w-0 space-y-4 p-4 sm:space-y-5 sm:p-5 lg:p-6">
+              <div className="reports-summary-grid">
+                {dashboardSummaryCards.map((m) => (
+                  <ReportCard key={m.label} icon={m.icon} label={m.label} value={m.value} accent={m.accent} />
+                ))}
+              </div>
+
+              {rangePreset === "custom" ? (
+                <div className="grid w-full gap-2 rounded-2xl border border-slate-200/90 bg-slate-50/30 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] sm:items-end sm:gap-3">
+                  <label className="block min-w-0 space-y-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">From date</span>
+                    <input
+                      type="date"
+                      value={customFromDraft}
+                      onChange={(e) => setCustomFromDraft(e.target.value)}
+                      className="app-input h-10 w-full min-w-0 rounded-xl border-slate-200 bg-white text-sm"
+                    />
+                  </label>
+                  <label className="block min-w-0 space-y-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">To date</span>
+                    <input
+                      type="date"
+                      value={customToDraft}
+                      onChange={(e) => setCustomToDraft(e.target.value)}
+                      className="app-input h-10 w-full min-w-0 rounded-xl border-slate-200 bg-white text-sm"
+                    />
+                  </label>
                   <button
                     type="button"
-                    onClick={() => selectRangePreset("custom")}
-                    className={`inline-flex min-h-[38px] shrink-0 items-center justify-center gap-1.5 rounded-xl px-2.5 py-1.5 text-center text-[11px] font-semibold transition sm:min-h-[40px] sm:px-3 sm:text-xs ${
-                      rangePreset === "custom"
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "border border-transparent bg-white text-slate-600 hover:border-blue-100 hover:bg-blue-50/80 hover:text-blue-900"
-                    }`}
+                    onClick={applyCustomRange}
+                    className="app-button-primary inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold"
                   >
-                    <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-                    Custom
+                    Apply
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetReportRange}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    <RotateCcw className="h-4 w-4" aria-hidden />
+                    Reset
                   </button>
                 </div>
-                {rangePreset === "custom" ? (
-                  <div className="grid w-full gap-2 rounded-2xl border border-slate-200/90 bg-slate-50/30 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] sm:items-end sm:gap-3">
-                    <label className="block min-w-0 space-y-1">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">From date</span>
+              ) : null}
+
+              <div className="reports-detail-toolbar rounded-2xl border border-slate-200/80 bg-white px-3 py-3 shadow-sm sm:px-4 sm:py-4">
+                <div className="reports-dash-filters reports-dash-filters--row">
+                  <div className="reports-dash-filter-field reports-dash-filter-field--search">
+                    <div className="relative min-w-0">
+                      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                       <input
-                        type="date"
-                        value={customFromDraft}
-                        onChange={(e) => setCustomFromDraft(e.target.value)}
-                        className="app-input h-10 w-full min-w-0 rounded-xl border-slate-200 bg-white text-sm"
+                        value={customerSearch}
+                        onChange={(e) => setCustomerSearch(e.target.value)}
+                        placeholder="Name or phone"
+                        aria-label="Search by customer name or phone number"
+                        className="app-input reports-detail-toolbar-filter-control reports-detail-toolbar-search w-full rounded-xl border-blue-100 bg-white text-xs"
                       />
-                    </label>
-                    <label className="block min-w-0 space-y-1">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">To date</span>
-                      <input
-                        type="date"
-                        value={customToDraft}
-                        onChange={(e) => setCustomToDraft(e.target.value)}
-                        className="app-input h-10 w-full min-w-0 rounded-xl border-slate-200 bg-white text-sm"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={applyCustomRange}
-                      className="app-button-primary inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold"
-                    >
-                      Apply
-                    </button>
-                    <button
-                      type="button"
-                      onClick={resetReportRange}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                    >
-                      <RotateCcw className="h-4 w-4" aria-hidden />
-                      Reset
-                    </button>
+                    </div>
                   </div>
-                ) : null}
-              </div>
 
-              <div className="reports-summary-scroll min-w-0 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
-                <div className="reports-summary-grid grid min-w-[52rem] grid-cols-7 gap-2 xl:min-w-0">
-                  {collectionPreviewMetrics.map((m) => (
-                    <ReportCard key={m.label} icon={m.icon} label={m.label} value={m.value} accent={m.accent} />
-                  ))}
-                </div>
-              </div>
-
-              <div className="reports-detail-toolbar min-w-0 rounded-2xl border border-slate-200/80 bg-slate-50/50 px-2.5 py-2 sm:px-3">
-                <div className="reports-detail-toolbar-row flex w-full min-w-0 flex-wrap items-end gap-2">
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setCollectionPreviewOpen(true)}
-                      title="View report"
-                      className="group inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-800 transition hover:border-blue-200 hover:bg-blue-50/70"
+                  <div className="reports-dash-filter-field reports-dash-filter-field--center">
+                    <select
+                      value={centerFilter}
+                      onChange={(e) => {
+                        setCenterFilter(e.target.value);
+                        setSubCenterFilter("All");
+                      }}
+                      title="Center filter"
+                      aria-label="Center filter"
+                      className="app-select reports-detail-toolbar-filter-control w-full rounded-xl border-blue-100 bg-white text-xs"
                     >
-                      <Eye className="h-3.5 w-3.5 shrink-0 text-blue-600" aria-hidden />
+                      <option value="All">Centers</option>
+                      {dayCenters.map((label) => (
+                        <option key={label} value={label}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="reports-dash-filter-field reports-dash-filter-field--status">
+                    <select
+                      value={detailFilter}
+                      onChange={(e) => setDetailFilter(e.target.value)}
+                      aria-label="Status filter"
+                      className="app-select reports-detail-toolbar-filter-control reports-dash-status-select w-full rounded-xl border-blue-100 bg-white text-xs"
+                    >
+                      <option value="all">All</option>
+                      <option value="pending">Pending</option>
+                      <option value="collected">Collected</option>
+                      <option value="overdue">Overdue</option>
+                    </select>
+                  </div>
+
+                  <div className="reports-dash-filter-field reports-dash-filter-field--period">
+                    <select
+                      value={rangePreset}
+                      onChange={(event) => selectRangePreset(event.target.value)}
+                      className="app-select reports-detail-toolbar-filter-control reports-toolbar-period-select w-full rounded-xl border-blue-100 bg-white text-xs"
+                      aria-label="Report period"
+                    >
+                      {RANGE_PRESETS.map((p) => (
+                        <option key={p.key} value={p.key}>
+                          {p.label}
+                        </option>
+                      ))}
+                      <option value="custom">Custom</option>
+                    </select>
+                  </div>
+
+                  <span className="reports-toolbar-divider" aria-hidden />
+
+                  <ExportToolbar className="reports-dash-export-actions--inline">
+                    <ExportToolbarButton variant="view" title="View report" onClick={() => setCollectionPreviewOpen(true)}>
                       View
-                    </button>
-                    <button
-                      type="button"
+                    </ExportToolbarButton>
+                    <ExportToolbarButton
+                      variant="excel"
+                      title="Export Excel"
+                      loading={collectionExcelLoading}
                       disabled={collectionExcelLoading}
                       onClick={handleCollectionExcelDownload}
-                      title="Export Excel"
-                      className="app-button-primary inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium transition disabled:pointer-events-none disabled:opacity-60"
                     >
-                      {collectionExcelLoading ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
                       Excel
-                    </button>
-                    <button
-                      type="button"
+                    </ExportToolbarButton>
+                    <ExportToolbarButton
+                      variant="pdf"
+                      title="Export PDF"
+                      loading={collectionPdfLoading}
                       disabled={collectionPdfLoading}
                       onClick={handleCollectionPdfDownload}
-                      title="Export PDF"
-                      className="app-button-secondary inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium transition disabled:pointer-events-none disabled:opacity-60"
                     >
-                      {collectionPdfLoading ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
                       PDF
-                    </button>
+                    </ExportToolbarButton>
+                    <ExportToolbarButton
+                      variant="print"
+                      title="Print report"
+                      loading={collectionPrintLoading}
+                      disabled={collectionPrintLoading}
+                      onClick={handleCollectionPrint}
+                    >
+                      Print
+                    </ExportToolbarButton>
                     <span
-                      className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50/90 px-2 text-[11px] font-semibold text-emerald-900"
+                      className="reports-dash-live-badge inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50/90 px-2 text-[10px] font-semibold text-emerald-900"
                       title="Live sync"
                     >
                       <span className="relative flex h-1.5 w-1.5">
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
                         <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
                       </span>
-                      Sync
+                      Live
                     </span>
-                  </div>
-
-                  <div className="reports-detail-toolbar-filters grid min-w-0 flex-1 grid-cols-3 gap-2">
-                    <div className="min-w-0">
-                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                        Search
-                      </label>
-                      <div className="relative min-w-0">
-                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                        <input
-                          value={detailSearch}
-                          onChange={(e) => setDetailSearch(e.target.value)}
-                          placeholder="Search"
-                          className="app-input reports-detail-toolbar-filter-control reports-detail-toolbar-search w-full rounded-xl bg-white text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="min-w-0">
-                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                        Main center
-                      </label>
-                      <select
-                        value={centerFilter}
-                        onChange={(e) => {
-                          setCenterFilter(e.target.value);
-                          setSubCenterFilter("All");
-                        }}
-                        title="Center filter"
-                        className="app-select reports-detail-toolbar-filter-control w-full rounded-xl bg-white text-xs"
-                      >
-                        <option value="All">All centers</option>
-                        {dayCenters.map((label) => (
-                          <option key={label} value={label}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="min-w-0">
-                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                        Sub center
-                      </label>
-                      <select
-                        value={subCenterFilter}
-                        onChange={(e) => setSubCenterFilter(e.target.value)}
-                        title="Sub-center filter"
-                        className="app-select reports-detail-toolbar-filter-control w-full rounded-xl bg-white text-xs"
-                        disabled={centerFilter === "All"}
-                      >
-                        <option value="All">
-                          {centerFilter === "All" ? "Select center first" : "All sub-centers"}
-                        </option>
-                        <option value={NO_SUB_CENTER_LABEL}>{NO_SUB_CENTER_LABEL}</option>
-                        {(subCentersByDay.get(centerFilter) || []).map((label) => (
-                          <option key={label} value={label}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="app-segmented shrink-0">
-                    {[
-                      { key: "all", label: "All", count: detailStatusCounts.all },
-                      { key: "pending", label: "Pend", count: detailStatusCounts.pending },
-                      { key: "due", label: "Due", count: detailStatusCounts.due },
-                      { key: "overdue", label: "Over", count: detailStatusCounts.overdue },
-                    ].map((item) => (
-                      <button
-                        key={item.key}
-                        type="button"
-                        onClick={() => setDetailFilter(item.key)}
-                        className={`inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-xl px-2 text-[11px] font-medium transition sm:text-xs ${
-                          detailFilter === item.key
-                            ? "bg-blue-600 text-white shadow-sm"
-                            : "text-slate-600 hover:bg-slate-50"
-                        }`}
-                      >
-                        <span>{item.label}</span>
-                        <span
-                          className={`tabular-nums text-[10px] font-semibold ${
-                            detailFilter === item.key ? "text-white/85" : "text-slate-400"
-                          }`}
-                        >
-                          {item.count}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                  </ExportToolbar>
                 </div>
               </div>
 
-              <div className="app-table-wrap min-w-0 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white">
-                <table className="app-table text-left">
-                  <thead className="bg-slate-50/95 backdrop-blur-sm">
+              <div className="reports-dash-table-wrap app-table-wrap min-w-0 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+                <table className="app-table reports-dash-table text-left">
+                  <thead className="bg-slate-50/95">
                     <tr>
-                      <th>Center</th>
-                      <th>Sub-center</th>
-                      <th>Customer</th>
-                      <th>Phone</th>
-                      <th>Loan Amount</th>
-                      <th>Collected</th>
-                      <th>Outstanding</th>
-                      <th>Due Date</th>
-                      <th>On Time</th>
-                      <th>Latest Status</th>
-                      <th>Action</th>
+                      <th className="reports-dash-col-name">Customer</th>
+                      <th className="reports-dash-col-cusid">CUSID</th>
+                      <th className="reports-dash-col-phone">Phone</th>
+                      <th className="reports-dash-col-amount">Loan Amount</th>
+                      <th className="reports-dash-col-amount">Collected Amount</th>
+                      <th className="reports-dash-col-amount">Balance Amount</th>
+                      <th className="reports-dash-col-date">Due Date</th>
+                      <th className="reports-dash-col-status">Status</th>
+                      <th className="reports-dash-col-actions">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredDetailRows.length > 0 ? filteredDetailRows.map((row) => (
-                      <tr
-                        key={row.customerId || `${row.customerName}-${row.phoneNumber}`}
-                        onClick={() => {
-                          setReportDateFrom("");
-                          setReportDateTo("");
-                          setReportMonthFilter("all");
-                          setReportYearFilter("all");
-                          setReportStatusFilter("all");
-                          setPaymentSearch("");
-                          setModalDetailCenterFilter("All");
-                          setTxnSearch("");
-                          setTxnApprovalFilter("all");
-                          setTxnCollectionFilter("all");
-                          setTxnPage(1);
-                          setSelectedCustomerId(row.customerId);
-                        }}
-                        className="cursor-pointer transition hover:bg-slate-50/90"
-                      >
-                        <td className="text-slate-700">{row.dayCenter || NO_CENTER_LABEL}</td>
-                        <td>
-                          <span className="inline-flex max-w-[180px] truncate rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-                            {row.subCenter || NO_SUB_CENTER_LABEL}
-                          </span>
-                        </td>
-                        <td className="font-semibold text-slate-950">{row.customerName}</td>
-                        <td className="text-slate-700">{row.phoneNumber || "--"}</td>
-                        <td className="text-slate-700">{formatCurrency(row.loanAmount)}</td>
-                        <td className="text-emerald-700">{formatCurrency(row.totalCollected)}</td>
-                        <td className="text-amber-700">{formatCurrency(row.outstanding)}</td>
-                        <td className="text-slate-700">{row.dueDate || "--"}</td>
-                        <td>
-                          <span className={`app-chip ${row.onTime === "Yes" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
-                            {row.onTime}
-                          </span>
-                        </td>
-                        <td className="text-slate-700">{row.latestStatus}</td>
-                        <td>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setReportDateFrom("");
-                              setReportDateTo("");
-                              setReportMonthFilter("all");
-                              setReportYearFilter("all");
-                              setReportStatusFilter("all");
-                              setPaymentSearch("");
-                              setModalDetailCenterFilter("All");
-                              setTxnSearch("");
-                              setTxnApprovalFilter("all");
-                              setTxnCollectionFilter("all");
-                              setTxnPage(1);
-                              setSelectedCustomerId(row.customerId);
-                            }}
-                            className="app-button-secondary inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            View
-                          </button>
-                        </td>
-                      </tr>
-                    )) : (
+                    {filteredDetailRows.length > 0 ? (
+                      filteredDetailRows.map((row) => (
+                        <tr key={row.customerId || `${row.customerName}-${row.phoneNumber}`} className="transition hover:bg-blue-50/40">
+                          <td className="reports-dash-col-name">
+                            <CustomerDetailLink customerId={row.customerId} className="block truncate font-semibold text-slate-950 no-underline">
+                              {row.customerName}
+                            </CustomerDetailLink>
+                          </td>
+                          <td className="reports-dash-col-cusid truncate text-slate-600">{row.customerId || row.loanId || "--"}</td>
+                          <td className="reports-dash-col-phone text-slate-700">{row.phoneNumber || "--"}</td>
+                          <td className="reports-dash-col-amount tabular-nums text-slate-800">{formatCurrency(row.loanAmount)}</td>
+                          <td className="reports-dash-col-amount tabular-nums font-medium text-emerald-700">{formatCurrency(row.totalCollected)}</td>
+                          <td className="reports-dash-col-amount tabular-nums font-medium text-amber-700">{formatCurrency(row.outstanding)}</td>
+                          <td className="reports-dash-col-date whitespace-nowrap text-slate-700">{formatDate(row.dueDate)}</td>
+                          <td className="reports-dash-col-status">
+                            <CollectionStatusBadge row={row} />
+                          </td>
+                          <td className="reports-dash-col-actions">
+                            <div className="reports-dash-actions">
+                              <button
+                                type="button"
+                                onClick={() => openCustomerReport(row.customerId)}
+                                className="reports-dash-icon-btn"
+                                title="View details"
+                                aria-label="View details"
+                              >
+                                <Eye className="h-3.5 w-3.5 text-blue-600" />
+                              </button>
+                              {row.customerId ? (
+                                <Link
+                                  to={`/dashboard/customer/${encodeURIComponent(row.customerId)}`}
+                                  className="reports-dash-icon-btn reports-dash-icon-btn--edit"
+                                  title="Edit customer"
+                                  aria-label="Edit customer"
+                                >
+                                  <Pencil className="h-3.5 w-3.5 text-blue-600" />
+                                </Link>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
                       <tr>
-                        <td colSpan="11" className="py-8 text-center text-sm text-slate-500">No rows.</td>
+                        <td colSpan={9} className="py-10 text-center text-sm text-slate-500">
+                          No customers match the selected filters.
+                        </td>
                       </tr>
                     )}
                   </tbody>
@@ -2015,50 +1975,34 @@ export default function Reports() {
                     </div>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEmployeePreviewOpen(true)}
-                    className="group inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-blue-200 hover:bg-blue-50/70 hover:text-blue-900"
-                  >
-                    <Eye className="h-4 w-4 shrink-0 text-blue-600 transition group-hover:scale-105" aria-hidden />
-                    View Report
-                  </button>
-                  <button
-                    type="button"
+                <ExportToolbar>
+                  <ExportToolbarButton variant="view" onClick={() => setEmployeePreviewOpen(true)}>
+                    View
+                  </ExportToolbarButton>
+                  <ExportToolbarButton
+                    variant="excel"
+                    loading={employeeExcelLoading}
                     disabled={employeeExcelLoading}
                     onClick={handleEmployeeExcelDownload}
-                    className="app-button-primary inline-flex items-center gap-2 rounded-2xl px-3.5 py-2 text-sm font-medium disabled:pointer-events-none disabled:opacity-60"
                   >
-                    {employeeExcelLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
                     Excel
-                  </button>
-                  <button
-                    type="button"
+                  </ExportToolbarButton>
+                  <ExportToolbarButton
+                    variant="pdf"
+                    loading={employeePdfLoading}
                     disabled={employeePdfLoading}
                     onClick={handleEmployeePdfDownload}
-                    className="app-button-secondary inline-flex items-center gap-2 rounded-2xl px-3.5 py-2 text-sm font-medium disabled:pointer-events-none disabled:opacity-60"
                   >
-                    {employeePdfLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                     PDF
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await printEmployeeLoanReportPdf(selectedCustomerReport, filteredModalSchedule, {
-                          generatedAt: new Date(),
-                        });
-                      } catch (err) {
-                        console.error(err);
-                        window.alert("Could not open print view. Allow pop-ups or use Save as PDF.");
-                      }
-                    }}
-                    className="app-button-secondary inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-medium"
+                  </ExportToolbarButton>
+                  <ExportToolbarButton
+                    variant="print"
+                    loading={employeePrintLoading}
+                    disabled={employeePrintLoading}
+                    onClick={handleEmployeePrint}
                   >
-                    <Printer className="h-4 w-4" />
-                    Print Employee Report
-                  </button>
+                    Print
+                  </ExportToolbarButton>
                   <button
                     type="button"
                     aria-label="Close employee loan details"
@@ -2067,7 +2011,7 @@ export default function Reports() {
                   >
                     <X className="h-4 w-4" />
                   </button>
-                </div>
+                </ExportToolbar>
               </div>
             </div>
 

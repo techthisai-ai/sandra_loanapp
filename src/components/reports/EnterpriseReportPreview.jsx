@@ -12,6 +12,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import BrandLogo from "../BrandLogo";
+import { formatCurrencyForPrint, toPrintCurrencyText } from "../../utils/formatCurrency.js";
+import { ExportToolbar, ExportToolbarButton } from "./ExportToolbar.jsx";
 
 /**
  * @typedef {Object} PreviewMetric
@@ -83,7 +85,7 @@ function parseSortableValue(cellType, val) {
 
 function formatCellDisplay(cellType, val) {
   if (val == null || val === "") return "—";
-  if (cellType === "currency" && typeof val === "number") return `₹${Number(val).toLocaleString("en-IN")}`;
+  if (cellType === "currency" && typeof val === "number") return formatCurrencyForPrint(val);
   if (cellType === "date") {
     if (val instanceof Date && !Number.isNaN(val.getTime())) return val.toLocaleDateString("en-GB");
     const d = new Date(val);
@@ -104,7 +106,7 @@ function buildPremiumPrintHtml({ title, subtitle, generatedAt, filterLines, repo
     ? `<div class="metrics">${metrics
         .map(
           (m) =>
-            `<div class="metric"><div class="ml">${escapeHtml(m.label)}</div><div class="mv">${escapeHtml(m.value)}</div>${m.note ? `<div class="mn">${escapeHtml(m.note)}</div>` : ""}</div>`
+            `<div class="metric"><div class="ml">${escapeHtml(m.label)}</div><div class="mv">${escapeHtml(toPrintCurrencyText(m.value))}</div>${m.note ? `<div class="mn">${escapeHtml(toPrintCurrencyText(m.note))}</div>` : ""}</div>`
         )
         .join("")}</div>`
     : "";
@@ -132,10 +134,11 @@ function buildPremiumPrintHtml({ title, subtitle, generatedAt, filterLines, repo
     .join("");
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${escapeHtml(title)}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" />
 <style>
   @page { size: A4 landscape; margin: 12mm; }
   * { box-sizing: border-box; }
-  body { font-family: "Segoe UI", system-ui, sans-serif; color: #0f172a; margin: 0; padding: 0; font-size: 10px; }
+  body { font-family: "Noto Sans Tamil", "Segoe UI", system-ui, sans-serif; color: #0f172a; margin: 0; padding: 0; font-size: 10px; font-variant-numeric: normal; letter-spacing: normal; }
   .wrap { padding: 0; }
   .band { background: linear-gradient(135deg, #f0f9ff 0%, #f8fafc 50%, #fff 100%); border-bottom: 2px solid #0d9488; padding: 14px 16px 12px; margin-bottom: 14px; }
   .brand { font-size: 9px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: #0369a1; margin: 0 0 4px; }
@@ -364,58 +367,31 @@ export default function EnterpriseReportPreview({
         </div>
 
         <div className="relative flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-teal-50/50 px-3 py-2.5 sm:px-4 print:hidden">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <ExportToolbar className="min-w-0 flex-wrap">
             {onDownloadPdf ? (
-              <button
-                type="button"
-                disabled={pdfLoading}
-                onClick={() => void handlePdfClick()}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-800 shadow-sm transition hover:border-blue-300 hover:bg-blue-50/80 disabled:opacity-50"
-              >
-                {pdfLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+              <ExportToolbarButton variant="pdf" loading={pdfLoading} disabled={pdfLoading} onClick={() => void handlePdfClick()}>
                 PDF
-              </button>
+              </ExportToolbarButton>
             ) : null}
             {onDownloadExcel ? (
-              <button
-                type="button"
-                disabled={excelLoading}
-                onClick={() => void handleExcelClick()}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-emerald-800 shadow-sm transition hover:bg-emerald-50/80 disabled:opacity-50"
-              >
-                {excelLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              <ExportToolbarButton variant="excel" loading={excelLoading} disabled={excelLoading} onClick={() => void handleExcelClick()}>
                 Excel
-              </button>
+              </ExportToolbarButton>
             ) : null}
-            <button
-              type="button"
-              disabled={printLoading}
-              onClick={handlePrintInternal}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
-            >
-              {printLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
+            <ExportToolbarButton variant="print" loading={printLoading} disabled={printLoading} onClick={handlePrintInternal}>
               Print
-            </button>
-            <button
-              type="button"
+            </ExportToolbarButton>
+            <ExportToolbarButton
+              variant="neutral"
               onClick={() => setPrintPreviewMode((v) => !v)}
-              className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold shadow-sm transition ${
-                printPreviewMode
-                  ? "border-teal-300 bg-teal-50 text-teal-900"
-                  : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
-              }`}
+              className={printPreviewMode ? "border-teal-300 bg-teal-50 text-teal-900" : ""}
             >
               {printPreviewMode ? "Paged view" : "Print preview"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleShare()}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
-            >
-              <Share2 className="h-3.5 w-3.5" />
+            </ExportToolbarButton>
+            <ExportToolbarButton variant="neutral" icon={Share2} onClick={() => void handleShare()}>
               Share
-            </button>
-          </div>
+            </ExportToolbarButton>
+          </ExportToolbar>
           <button
             type="button"
             onClick={onClose}

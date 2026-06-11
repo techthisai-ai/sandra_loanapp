@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Bell, FilePlus2, Send } from "lucide-react";
+import { ArrowLeft, FilePlus2, Send } from "lucide-react";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import useAuth from "../hooks/useAuth";
 import useEmployeeCenterScope from "../hooks/useEmployeeCenterScope";
-import { createLoanRequest, listNotifications } from "../services/userAuth";
+import { createLoanRequest } from "../services/userAuth";
 import { isEmployeeVisibleCustomer } from "../utils/employeeScope";
 
 const FREQUENCY_OPTIONS = ["Daily", "Weekly", "Monthly"];
@@ -50,30 +50,6 @@ export default function EmployeeLoanRequest() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [notifications, setNotifications] = useState([]);
-  const [notificationsLoading, setNotificationsLoading] = useState(true);
-
-  const loadNotifications = useCallback(async () => {
-    setNotificationsLoading(true);
-    try {
-      const items = await listNotifications();
-      setNotifications(
-        items.filter(
-          (item) =>
-            !item.audienceRole || item.audienceRole === "employee" || item.audienceRole === "all"
-        )
-      );
-    } catch {
-      setNotifications([]);
-    } finally {
-      setNotificationsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
-
   useEffect(() => {
     const preselect = location.state?.customerId;
     if (preselect) {
@@ -102,14 +78,6 @@ export default function EmployeeLoanRequest() {
         String(right.submittedAt || "").localeCompare(String(left.submittedAt || ""))
       ),
     [loanRequests]
-  );
-
-  const recentNotifications = useMemo(
-    () =>
-      [...notifications]
-        .sort((left, right) => String(right.submittedAt || "").localeCompare(String(left.submittedAt || "")))
-        .slice(0, 8),
-    [notifications]
   );
 
   const handleSubmit = async (event) => {
@@ -339,36 +307,6 @@ export default function EmployeeLoanRequest() {
                 >
                   {normalizeStatusLabel(row.status)}
                 </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="app-panel mt-3 rounded-2xl p-4 sm:rounded-[22px] sm:p-5">
-        <div className="mb-3 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
-            <Bell className="h-4 w-4" />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-slate-950">Notifications</h2>
-            <p className="text-xs text-slate-500">Updates on customers and loan requests.</p>
-          </div>
-        </div>
-
-        {notificationsLoading ? (
-          <p className="py-4 text-center text-sm text-slate-500">Loading notifications…</p>
-        ) : recentNotifications.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-4 text-center text-sm text-slate-600">
-            No notifications yet.
-          </p>
-        ) : (
-          <ul className="flex flex-col divide-y divide-slate-200/70">
-            {recentNotifications.map((item) => (
-              <li key={item.notificationId || item.id} className="py-3 first:pt-0 last:pb-0">
-                <p className="text-sm font-semibold text-slate-950">{item.title || "Notification"}</p>
-                <p className="mt-0.5 text-xs leading-relaxed text-slate-600">{item.message || "—"}</p>
-                <p className="mt-1 text-[11px] text-slate-500">{formatDate(item.submittedAt)}</p>
               </li>
             ))}
           </ul>

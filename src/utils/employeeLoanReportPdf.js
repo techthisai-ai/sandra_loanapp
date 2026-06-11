@@ -1,11 +1,13 @@
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
+import { ensurePdfUnicodeFont } from "./pdfUnicodeFont.js";
 import {
   RFS_PALETTE as PALETTE,
   distributeColumnWidths,
   drawAllReportFooters,
   fmtDatePdf as fmtDate,
   fmtInrPdf as fmtInr,
+  fmtPdfText,
   getPageLayout,
   loadLogoDataUrl,
 } from "./pdfReportLayout";
@@ -53,7 +55,7 @@ function truncateLines(doc, text, maxWidth, maxLines = 2) {
   return [...lines.slice(0, maxLines - 1), `${lines[maxLines - 1]}…`];
 }
 
-async function drawPremiumHeader(doc, layout, origin, generatedLabel, reportTitle) {
+async function drawPremiumHeader(doc, layout, origin, generatedLabel, reportTitle, pdfFont) {
   const { margin, pageWidth } = layout;
   const bandH = 26;
 
@@ -78,7 +80,7 @@ async function drawPremiumHeader(doc, layout, origin, generatedLabel, reportTitl
     }
   }
 
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfFont, "bold");
   doc.setFontSize(15);
   doc.setTextColor(...PALETTE.ink);
   doc.text("Ruthra Financial Solutions", textX, 12);
@@ -87,7 +89,7 @@ async function drawPremiumHeader(doc, layout, origin, generatedLabel, reportTitl
   doc.setTextColor(...PALETTE.accent);
   doc.text(reportTitle, textX, 18.5);
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(8);
   doc.setTextColor(...PALETTE.muted);
   doc.text(`Generated  ·  ${generatedLabel}`, textX, 23.5);
@@ -95,13 +97,13 @@ async function drawPremiumHeader(doc, layout, origin, generatedLabel, reportTitl
   return bandH + 5;
 }
 
-function drawBorrowerSummary(doc, report, layout, startY) {
+function drawBorrowerSummary(doc, report, layout, startY, pdfFont) {
   const { margin, contentW } = layout;
   const loanStatus = report.loanDisplayStatus || report.loanStatus || "—";
   const pairs = [
-    ["Employee name", report.customerName || "—"],
-    ["Customer ID", report.customerId || "—"],
-    ["Phone", report.phoneNumber || "—"],
+    ["Employee name", fmtPdfText(report.customerName || "-")],
+    ["Customer ID", fmtPdfText(report.customerId || "-")],
+    ["Phone", fmtPdfText(report.phoneNumber || "-")],
     ["Loan amount", fmtInr(report.loanAmount)],
     ["Loan status", loanStatus],
     ["Loan start", fmtDate(report.loanStartDate)],
@@ -120,7 +122,7 @@ function drawBorrowerSummary(doc, report, layout, startY) {
   doc.setLineWidth(0.25);
   doc.roundedRect(margin, startY, contentW, panelH, 2.5, 2.5, "FD");
 
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfFont, "bold");
   doc.setFontSize(8.5);
   doc.setTextColor(...PALETTE.accent);
   doc.text("BORROWER SUMMARY", margin + pad, startY + pad + 5);
@@ -132,11 +134,11 @@ function drawBorrowerSummary(doc, report, layout, startY) {
   const drawCol = (items, x0) => {
     let yy = baseY;
     items.forEach(([label, value]) => {
-      doc.setFont("helvetica", "normal");
+      doc.setFont(pdfFont, "normal");
       doc.setFontSize(7);
       doc.setTextColor(...PALETTE.muted);
       doc.text(label.toUpperCase(), x0, yy);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(pdfFont, "bold");
       doc.setFontSize(9.5);
       doc.setTextColor(...PALETTE.ink);
       doc.text(truncateLines(doc, value, colW - 1), x0, yy + 4.2);
@@ -151,7 +153,7 @@ function drawBorrowerSummary(doc, report, layout, startY) {
 }
 
 /** Four KPI cards across full page width. */
-function drawLoanSummaryCards(doc, report, layout, startY) {
+function drawLoanSummaryCards(doc, report, layout, startY, pdfFont) {
   const { margin, contentW } = layout;
   const cards = [
     { label: "Total payable", value: fmtInr(report.totalPayable), note: "Principal + interest" },
@@ -175,17 +177,17 @@ function drawLoanSummaryCards(doc, report, layout, startY) {
     doc.setLineWidth(0.2);
     doc.roundedRect(x, startY, cardW, cardH, 2, 2, "FD");
 
-    doc.setFont("helvetica", "normal");
+    doc.setFont(pdfFont, "normal");
     doc.setFontSize(7);
     doc.setTextColor(...PALETTE.muted);
     doc.text(card.label.toUpperCase(), x + 3.5, startY + 5.5);
 
-    doc.setFont("helvetica", "bold");
+    doc.setFont(pdfFont, "bold");
     doc.setFontSize(11);
     doc.setTextColor(...PALETTE.ink);
     doc.text(truncateLines(doc, card.value, cardW - 7, 1), x + 3.5, startY + 11.5);
 
-    doc.setFont("helvetica", "normal");
+    doc.setFont(pdfFont, "normal");
     doc.setFontSize(6.5);
     doc.setTextColor(...PALETTE.inkSoft);
     doc.text(card.note, x + 3.5, startY + 15.5);
@@ -205,11 +207,12 @@ export async function buildEmployeeLoanReportPdf(report, scheduleRows, options =
   const origin = options.origin ?? (typeof window !== "undefined" ? window.location.origin : "");
 
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const pdfFont = await ensurePdfUnicodeFont(doc, origin);
   const layout = getPageLayout(doc, { margin: MARGIN, footerReserve: FOOTER_RESERVE });
 
-  let y = await drawPremiumHeader(doc, layout, origin, generatedLabel, "Employee Loan Report");
-  y = drawBorrowerSummary(doc, report, layout, y);
-  y = drawLoanSummaryCards(doc, report, layout, y);
+  let y = await drawPremiumHeader(doc, layout, origin, generatedLabel, "Employee Loan Report", pdfFont);
+  y = drawBorrowerSummary(doc, report, layout, y, pdfFont);
+  y = drawLoanSummaryCards(doc, report, layout, y, pdfFont);
 
   const head = [
     [
@@ -239,9 +242,9 @@ export async function buildEmployeeLoanReportPdf(report, scheduleRows, options =
             fmtInr(item.paidAmount),
             fmtInr(item.pendingAmount),
             fmtDate(item.paymentDate),
-            String(item.status || "—"),
-            String(item.collectedBy || "—"),
-            buildRemarks(item),
+            fmtPdfText(item.status || "-"),
+            fmtPdfText(item.collectedBy || "-"),
+            fmtPdfText(buildRemarks(item)),
           ];
         })
       : [
@@ -283,6 +286,7 @@ export async function buildEmployeeLoanReportPdf(report, scheduleRows, options =
     tableLineWidth: 0.15,
     tableLineColor: PALETTE.line,
     styles: {
+      font: pdfFont,
       fontSize: 8.5,
       cellPadding: { top: 2.8, right: 2, bottom: 2.8, left: 2 },
       textColor: PALETTE.ink,
@@ -292,6 +296,7 @@ export async function buildEmployeeLoanReportPdf(report, scheduleRows, options =
       overflow: "linebreak",
     },
     headStyles: {
+      font: pdfFont,
       fillColor: PALETTE.headBg,
       textColor: PALETTE.headText,
       fontStyle: "bold",

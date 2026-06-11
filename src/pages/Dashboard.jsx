@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import FirebaseSyncAlert from "../components/FirebaseSyncAlert";
 import AdminLayout from "../components/dashboard/AdminLayout";
+import AdminDashboardToolbar from "../components/dashboard/AdminDashboardToolbar";
 import PremiumKpiCard from "../components/dashboard/PremiumKpiCard";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import useAuth from "../hooks/useAuth";
@@ -322,6 +323,10 @@ export default function Dashboard() {
   const [cashDraft, setCashDraft] = useState("");
   const [cashSaving, setCashSaving] = useState(false);
   const [cashError, setCashError] = useState("");
+  const [emiEditOpen, setEmiEditOpen] = useState(false);
+  const [emiDraft, setEmiDraft] = useState("");
+  const [emiSaving, setEmiSaving] = useState(false);
+  const [emiError, setEmiError] = useState("");
   const [investorOpen, setInvestorOpen] = useState(false);
   const [invName, setInvName] = useState("");
   const [invAmount, setInvAmount] = useState("");
@@ -503,6 +508,8 @@ export default function Dashboard() {
   }, [customers, entries]);
 
   const investorDepositsTotal = useMemo(() => sumInvestorDeposits(walletRows), [walletRows]);
+  const emiCollectedOpening = Number(profile?.preferences?.emiCollectedOpening ?? 0) || 0;
+  const displayEmiCollected = Math.round(metrics.totalCollected + emiCollectedOpening);
 
   const filteredWalletTimeline = useMemo(() => {
     const q = txSearch.trim().toLowerCase();
@@ -539,8 +546,8 @@ export default function Dashboard() {
   }, [walletTransactionTimeline]);
 
   const recoveryPercent = useMemo(
-    () => (metrics.totalPayable > 0 ? Math.min(Math.round((metrics.totalCollected / metrics.totalPayable) * 100), 100) : 0),
-    [metrics.totalCollected, metrics.totalPayable]
+    () => (metrics.totalPayable > 0 ? Math.min(Math.round((displayEmiCollected / metrics.totalPayable) * 100), 100) : 0),
+    [displayEmiCollected, metrics.totalPayable]
   );
 
   const todayVsMonthRatio = useMemo(() => {
@@ -620,6 +627,26 @@ export default function Dashboard() {
       setCashError(err.message || "Could not save opening balance.");
     } finally {
       setCashSaving(false);
+    }
+  }
+
+  async function handleSaveEmiOpening() {
+    if (!user?.uid) return;
+    const parsed = Number(String(emiDraft).replace(/,/g, "").trim());
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setEmiError("Enter a valid amount (0 or more).");
+      return;
+    }
+    setEmiSaving(true);
+    setEmiError("");
+    try {
+      const updated = await updateUserSettings(user.uid, { emiCollectedOpening: Math.round(parsed) });
+      if (updated) setProfile(updated);
+      setEmiEditOpen(false);
+    } catch (err) {
+      setEmiError(err.message || "Could not save opening EMI collected.");
+    } finally {
+      setEmiSaving(false);
     }
   }
 
@@ -723,20 +750,22 @@ export default function Dashboard() {
       title="Dashboard"
       description=""
       action={
-        <div className="flex items-center gap-2">
+        <AdminDashboardToolbar>
           <button
             type="button"
             onClick={() => navigate("/settings?tab=notifications")}
-            className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/90 p-0 shadow-sm backdrop-blur-sm transition hover:border-blue-200 hover:bg-white hover:shadow-md"
+            className="admin-toolbar-btn relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/90 p-0 text-slate-600 shadow-sm backdrop-blur-sm transition hover:border-blue-200 hover:bg-white hover:text-slate-900 hover:shadow-md"
+            aria-label="Notifications"
+            title="Notifications"
           >
-            <Bell className="h-5 w-5 text-slate-600" strokeWidth={1.75} />
+            <Bell className="h-5 w-5" strokeWidth={1.75} />
             {unreadCount > 0 ? (
               <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             ) : null}
           </button>
-        </div>
+        </AdminDashboardToolbar>
       }
     >
       <div className="app-grid-page dash-premium grid w-full min-w-0 gap-4 md:gap-5">
@@ -796,8 +825,8 @@ export default function Dashboard() {
             <PremiumKpiCard
               icon={ReceiptText}
               label="EMI collected"
-              amount={Math.round(metrics.totalCollected)}
-              sub="Approved on ledger"
+              amount={displayEmiCollected}
+              sub={emiCollectedOpening > 0 ? `Ledger ${formatCurrency(Math.round(metrics.totalCollected))} · Opening ${formatCurrency(Math.round(emiCollectedOpening))}` : "Approved on ledger"}
               accent="sky"
               amountTone="info"
               healthLine={recoveryHealthLine}
@@ -862,7 +891,7 @@ export default function Dashboard() {
         </div>
 
         <section className="grid min-w-0 items-stretch gap-4 xl:grid-cols-[minmax(200px,0.62fr)_minmax(0,1.38fr)]">
-          <CompactProgressCard collected={metrics.totalCollected} target={metrics.totalPayable} />
+          <CompactProgressCard collected={displayEmiCollected} target={metrics.totalPayable} />
 
           <div className="dash-glass-panel relative z-10 flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl p-4 sm:p-5 transition-all duration-300 ease hover:scale-[1.01]">
             <div className="pointer-events-none absolute -right-12 top-0 h-44 w-44 rounded-full bg-blue-500/[0.07] blur-3xl" />
@@ -894,7 +923,7 @@ export default function Dashboard() {
                 </span>
                 <span className="text-slate-300">→</span>
                 <span className="rounded-lg bg-sky-100/90 px-1.5 py-0.5 text-sky-950 ring-1 ring-sky-200/50 sm:px-2 sm:py-1">
-                  +EMI {formatCurrency(Math.round(metrics.totalCollected))}
+                  +EMI {formatCurrency(displayEmiCollected)}
                 </span>
               </div>
             </div>
@@ -911,6 +940,8 @@ export default function Dashboard() {
                       type="button"
                       onClick={() => {
                         setCashError("");
+                        setEmiEditOpen(false);
+                        setEmiError("");
                         setCashDraft(String(Math.round(cashOpening)));
                         setCashEditOpen((o) => !o);
                       }}
@@ -972,8 +1003,69 @@ export default function Dashboard() {
                 <p className="font-mono text-sm font-bold tabular-nums leading-tight text-rose-900">{formatCurrency(metrics.totalPrincipal)}</p>
               </div>
               <div className="rounded-xl bg-sky-50/50 px-2 py-2 ring-1 ring-sky-200/40">
-                <p className="text-[9px] font-medium text-sky-900">EMI in</p>
-                <p className="font-mono text-sm font-bold tabular-nums leading-tight text-sky-950">{formatCurrency(metrics.totalCollected)}</p>
+                <div className="flex items-start justify-between gap-1">
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-medium text-sky-900">EMI in</p>
+                    <p className="break-all font-mono text-xs font-bold tabular-nums leading-tight text-sky-950 sm:text-sm">{formatCurrency(displayEmiCollected)}</p>
+                  </div>
+                  {user?.uid ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmiError("");
+                        setCashEditOpen(false);
+                        setCashError("");
+                        setEmiDraft(String(Math.round(emiCollectedOpening)));
+                        setEmiEditOpen((o) => !o);
+                      }}
+                      className="shrink-0 rounded-lg bg-sky-100/90 p-1 text-sky-800 ring-1 ring-sky-200/60 transition hover:bg-sky-200/90"
+                      title="Edit opening EMI collected"
+                      aria-label="Edit opening EMI collected"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
+                </div>
+                {emiEditOpen ? (
+                  <div className="mt-2 space-y-2 border-t border-sky-100/80 pt-2">
+                    <label className="block text-[10px] font-medium text-sky-900" htmlFor="emi-opening-input">
+                      Opening EMI collected
+                    </label>
+                    <input
+                      id="emi-opening-input"
+                      type="text"
+                      inputMode="numeric"
+                      value={emiDraft}
+                      onChange={(e) => setEmiDraft(e.target.value.replace(/[^\d]/g, ""))}
+                      className="app-input h-8 w-full text-xs"
+                      placeholder="e.g. 36500"
+                    />
+                    {emiError ? <p className="text-[10px] text-rose-600">{emiError}</p> : null}
+                    <div className="flex flex-wrap gap-1">
+                      <button
+                        type="button"
+                        disabled={emiSaving}
+                        onClick={handleSaveEmiOpening}
+                        className="app-button-primary inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold"
+                      >
+                        <Check className="h-3 w-3" />
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        disabled={emiSaving}
+                        onClick={() => {
+                          setEmiEditOpen(false);
+                          setEmiError("");
+                        }}
+                        className="app-button-secondary inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold"
+                      >
+                        <X className="h-3 w-3" />
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
               <div className="rounded-xl bg-amber-50/50 px-2 py-2 ring-1 ring-amber-200/40">
                 <p className="text-[9px] font-medium text-amber-900">Outstanding</p>

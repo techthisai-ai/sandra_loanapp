@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Clock3, Loader2, XCircle } from "lucide-react";
+import CustomerDetailLink from "../customer/CustomerDetailLink";
 
 function formatCurrency(value) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
@@ -337,9 +338,13 @@ export default function CollectionApprovalTable({
                         </td>
                       ) : null}
                       <td className="overflow-hidden border-r border-slate-100 px-3 py-3 align-middle text-xs font-semibold text-slate-900">
-                        <span className="block truncate" title={row.customerName}>
+                        <CustomerDetailLink
+                          customerId={row.customerId}
+                          className="block truncate font-semibold text-slate-900"
+                          title={row.customerName}
+                        >
                           {row.customerName}
-                        </span>
+                        </CustomerDetailLink>
                       </td>
                       <td className="overflow-hidden border-r border-slate-100 px-3 py-3 align-middle text-xs text-slate-700">
                         <span className="block truncate font-mono text-[11px]" title={row.customerId}>

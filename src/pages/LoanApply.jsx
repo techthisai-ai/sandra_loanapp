@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -172,6 +172,41 @@ function loanFieldClassName(invalid) {
   return invalid ? `${loanFieldClass} ${loanFieldInvalidClass}` : loanFieldClass;
 }
 
+function loanApplyIntentKey(customerId) {
+  return `loan-apply-intent:${customerId}`;
+}
+
+function markLoanApplyIntent(customerId) {
+  if (!customerId) return;
+  try {
+    sessionStorage.setItem(loanApplyIntentKey(customerId), "1");
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function hasLoanApplyIntent(customerId) {
+  if (!customerId) return false;
+  try {
+    return sessionStorage.getItem(loanApplyIntentKey(customerId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function clearLoanApplyIntent(customerId) {
+  if (!customerId) return;
+  try {
+    sessionStorage.removeItem(loanApplyIntentKey(customerId));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function hasExplicitLoanApplyState(state) {
+  return state?.applyLoan === true || Boolean(state?.customer);
+}
+
 export default function LoanApply() {
   const { customerId } = useParams();
   const location = useLocation();
@@ -219,6 +254,7 @@ export default function LoanApply() {
   const [appFormLoading, setAppFormLoading] = useState(false);
   const [appFormMessage, setAppFormMessage] = useState("");
   const [appFormError, setAppFormError] = useState("");
+  const [applyFlowReady, setApplyFlowReady] = useState(() => hasExplicitLoanApplyState(location.state) || hasLoanApplyIntent(customerId));
 
   const matchedPreset = findLoanPreset(loanSettings.loanPresets, loanAmount, loanWeeks);
   const selectedPreset = loanSettings.loanPresets.find((item) => item.id === selectedPresetId) || null;
@@ -308,6 +344,24 @@ export default function LoanApply() {
       activePreset,
     ]
   );
+
+  useLayoutEffect(() => {
+    if (!customerId) return;
+    if (hasExplicitLoanApplyState(location.state)) {
+      markLoanApplyIntent(customerId);
+      setApplyFlowReady(true);
+      return;
+    }
+    if (hasLoanApplyIntent(customerId)) {
+      setApplyFlowReady(true);
+      return;
+    }
+    setApplyFlowReady(false);
+    navigate(`/dashboard/customer/${encodeURIComponent(customerId)}/profile`, {
+      replace: true,
+      state: { viewOnly: true, customerId },
+    });
+  }, [customerId, location.state, navigate]);
 
   useEffect(() => {
     if (!customer) {
@@ -686,6 +740,8 @@ export default function LoanApply() {
 
       const loanIssueDate = resolveLoanIssueDate(new Date());
 
+      clearLoanApplyIntent(customer.customerId);
+
       setResult({
         loanId,
         emiAmount,
@@ -704,6 +760,14 @@ export default function LoanApply() {
       setLoading(false);
     }
   };
+
+  if (!applyFlowReady) {
+    return (
+      <AdminLayout title="Customer profile" description="">
+        <div className="app-empty-state py-10">Opening customer profile…</div>
+      </AdminLayout>
+    );
+  }
 
   if (result) {
     return (
@@ -963,7 +1027,10 @@ export default function LoanApply() {
               <div className="flex gap-2 border-t border-slate-100 pt-2">
                 <button
                   type="button"
-                  onClick={() => navigate("/dashboard/loan-apply")}
+                  onClick={() => {
+                    clearLoanApplyIntent(customerId);
+                    navigate("/dashboard/loan-apply");
+                  }}
                   className="loan-apply-hint inline-flex !min-h-0 shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" /> Back

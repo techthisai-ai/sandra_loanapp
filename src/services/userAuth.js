@@ -1731,6 +1731,8 @@ export async function updateUserSettings(userId, settings) {
       weeklySummary: settings.weeklySummary ?? existingPrefs.weeklySummary ?? false,
       /** Opening cash on hand (user-editable). Dashboard shows: this − total loan principal out + approved collections. */
       cashInHandOpening: Number(settings.cashInHandOpening ?? existingPrefs.cashInHandOpening ?? 0) || 0,
+      /** Opening EMI collected (user-editable). Added to approved ledger collections on the dashboard. */
+      emiCollectedOpening: Number(settings.emiCollectedOpening ?? existingPrefs.emiCollectedOpening ?? 0) || 0,
     },
   };
 

@@ -85,22 +85,15 @@ const APPROVAL_STAT_ACCENTS = {
   },
 };
 
-function ApprovalStats({ label, value, icon: Icon, accent = "blue" }) {
+function ApprovalStats({ label, value, accent = "blue" }) {
   const tone = APPROVAL_STAT_ACCENTS[accent] || APPROVAL_STAT_ACCENTS.blue;
 
   return (
-    <div className={`rounded-xl border px-3 py-2.5 shadow-sm ${tone.card}`}>
-      <div className="flex items-start justify-between gap-2">
-        <p className={`min-w-0 text-[10px] font-semibold uppercase leading-tight tracking-[0.14em] ${tone.label}`}>
-          {label}
-        </p>
-        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tone.icon}`}>
-          <Icon className="h-4 w-4" />
-        </div>
-      </div>
-      <p className="mt-1.5 text-center text-lg font-semibold tabular-nums leading-tight tracking-tight text-slate-950 sm:text-xl">
-        {value}
+    <div className={`approval-register-stat flex min-h-[4.75rem] min-w-0 flex-col justify-between rounded-2xl border px-3.5 py-3 shadow-sm ${tone.card}`}>
+      <p className={`min-w-0 text-[10px] font-semibold uppercase leading-snug tracking-[0.14em] ${tone.label}`}>
+        {label}
       </p>
+      <p className="mt-2 text-center text-xl font-semibold tabular-nums tracking-tight text-slate-950">{value}</p>
     </div>
   );
 }
@@ -348,71 +341,72 @@ export function ApprovalRegisterPanel() {
 
   return (
     <section className="app-panel min-w-0 max-w-full p-5 md:p-6">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <ApprovalStats
-              icon={Wallet}
-              label="Total entries"
-              value={String(entries.length)}
-              accent="blue"
-            />
-            <ApprovalStats
-              icon={Clock3}
-              label="Pending"
-              value={String(pendingEntries.length)}
-              accent="orange"
-            />
-            <ApprovalStats
-              icon={CheckCircle2}
-              label="Approved"
-              value={String(approvedEntries.length)}
-              accent="green"
-            />
-            <ApprovalStats
-              icon={Download}
-              label="Filtered total"
-              value={formatCurrency(totals.totalAmount)}
-              accent="purple"
-            />
-          </div>
+          <div className="approval-register-toolbar flex flex-col gap-2">
+            <div className="approval-register-toolbar-row flex min-w-0 flex-wrap items-start gap-2.5 lg:flex-nowrap lg:gap-3">
+              <div className="min-w-0 w-full lg:min-w-0 lg:flex-1">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                  <ApprovalStats
+                    label="Total entries"
+                    value={String(entries.length)}
+                    accent="blue"
+                  />
+                  <ApprovalStats
+                    label="Pending"
+                    value={String(pendingEntries.length)}
+                    accent="orange"
+                  />
+                  <ApprovalStats
+                    label="Approved"
+                    value={String(approvedEntries.length)}
+                    accent="green"
+                  />
+                  <ApprovalStats
+                    label="Filtered total"
+                    value={formatCurrency(totals.totalAmount)}
+                    accent="purple"
+                  />
+                </div>
+              </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2.5">
-            <div className="relative w-full max-w-xs sm:w-56 md:w-64">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search customer, center, collector..."
-                className="app-input w-full !min-h-[40px] !py-2 !pl-10 !pr-3 text-sm bg-slate-50"
-              />
+              <div className="approval-register-toolbar-side flex min-w-0 flex-col gap-2 lg:shrink-0 lg:border-l lg:border-slate-200/80 lg:pl-3">
+                <div className="relative w-full">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search customer, center, collector..."
+                    className="app-input w-full !min-h-[40px] !py-2 !pl-10 !pr-3 text-sm bg-slate-50"
+                  />
+                </div>
+                <div className="approval-register-toolbar-actions">
+                  <div className="app-segmented approval-register-view-toggle shrink-0">
+                    {VIEW_OPTIONS.map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => setView(option.key)}
+                        className={`approval-register-toolbar-btn rounded-xl px-3 text-xs font-semibold transition ${
+                          view === option.key ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewOpen(true)}
+                    className="app-button-primary approval-register-toolbar-btn inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-semibold shadow-sm"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    Report
+                  </button>
+                  <span className="approval-register-live-sync shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-800">
+                    Live sync
+                  </span>
+                </div>
+              </div>
             </div>
-
-            <div className="app-segmented w-full sm:w-auto">
-              {VIEW_OPTIONS.map((option) => (
-                <button
-                  key={option.key}
-                  type="button"
-                  onClick={() => setView(option.key)}
-                  className={`min-h-[40px] rounded-xl px-4 py-2 text-sm font-medium transition ${
-                    view === option.key ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  {option.label} View
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setPreviewOpen(true)}
-              className="app-button-primary inline-flex min-h-[40px] items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold shadow-sm"
-            >
-              <FileText className="h-4 w-4" />
-              Report &amp; export
-            </button>
-
-            <span className="ml-auto shrink-0 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800">
-              Live sync
-            </span>
           </div>
 
           {error ? (

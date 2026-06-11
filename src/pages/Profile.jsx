@@ -6,11 +6,9 @@ import {
   Phone,
   Save,
   ShieldCheck,
-  UserCircle2,
   UserRound,
 } from "lucide-react";
 import AdminLayout from "../components/dashboard/AdminLayout";
-import FeatureShell from "../components/dashboard/FeatureShell";
 import useAuth from "../hooks/useAuth";
 import { updateUserProfile } from "../services/userAuth";
 import { normalizePhoneNumber, normalizeText } from "../utils/customerValidation";
@@ -58,7 +56,7 @@ export function ProfilePanel() {
     lastSyncedKey.current = key;
     setForm({
       displayName: normalizeText(profile?.displayName || ""),
-      phone: normalizeText(profile?.phone || ""),
+      phone: normalizePhoneNumber(profile?.phone || ""),
       location: normalizeText(profile?.location || ""),
     });
   }, [profile, dirty]);
@@ -67,14 +65,18 @@ export function ProfilePanel() {
     setDirty(true);
     setStatus("");
     setError("");
-    setForm((current) => ({ ...current, [field]: event.target.value }));
+    let value = event.target.value;
+    if (field === "phone") {
+      value = value.replace(/\D/g, "").slice(0, 10);
+    }
+    setForm((current) => ({ ...current, [field]: value }));
   };
 
   const handleSave = async () => {
     if (!user) return;
 
     const displayName = normalizeText(form.displayName);
-    const phone = normalizeText(form.phone);
+    const phone = normalizePhoneNumber(form.phone);
     const location = normalizeText(form.location);
 
     if (!displayName) {
@@ -98,7 +100,7 @@ export function ProfilePanel() {
       setProfile(updatedProfile);
       setForm({
         displayName: normalizeText(updatedProfile?.displayName || ""),
-        phone: normalizeText(updatedProfile?.phone || ""),
+        phone: normalizePhoneNumber(updatedProfile?.phone || ""),
         location: normalizeText(updatedProfile?.location || ""),
       });
       lastSyncedKey.current = [
@@ -126,28 +128,10 @@ export function ProfilePanel() {
   ];
 
   return (
-    <FeatureShell
-      eyebrow="User profile"
-      title="Account profile"
-      description="Update current user record."
-      icon={UserCircle2}
-    >
+    <div className="app-panel app-content-wrap w-full rounded-[26px] p-4 md:p-5">
       <div className="grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
           <div className="app-subsection p-6">
-            <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-900 text-white">
-                <UserCircle2 className="h-8 w-8" />
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.28em] text-blue-600">Database profile</p>
-                <h4 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
-                  {profile?.displayName || "Account user"}
-                </h4>
-                <p className="mt-1 text-sm text-slate-600">Keep profile info up to date.</p>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-4">
+            <div className="grid gap-4">
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">Display name</span>
                 <input
@@ -163,8 +147,9 @@ export function ProfilePanel() {
                   value={form.phone}
                   onChange={updateField("phone")}
                   inputMode="numeric"
+                  maxLength={10}
                   className="app-input"
-                  placeholder="Enter contact number"
+                  placeholder="10 digits"
                 />
               </label>
 
@@ -221,13 +206,13 @@ export function ProfilePanel() {
             })}
           </div>
       </div>
-    </FeatureShell>
+    </div>
   );
 }
 
 export default function Profile() {
   return (
-    <AdminLayout title="Profile" description="Manage account details.">
+    <AdminLayout>
       <ProfilePanel />
     </AdminLayout>
   );

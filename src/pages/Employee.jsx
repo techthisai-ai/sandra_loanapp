@@ -65,10 +65,12 @@ function SummaryCard({ label, value, accent }) {
 
   return (
     <div
-      className={`flex min-h-[5.5rem] flex-col rounded-2xl border border-slate-200/90 border-l-4 bg-white px-4 py-3 shadow-sm ${accentClass}`}
+      className={`flex min-h-0 flex-col justify-center rounded-xl border border-slate-200/90 border-l-[3px] bg-white px-2.5 py-2 shadow-sm sm:px-3 sm:py-2.5 ${accentClass}`}
     >
-      <p className="text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="flex flex-1 items-center justify-center text-2xl font-bold tabular-nums text-slate-950">{value}</p>
+      <p className="truncate text-center text-[9px] font-semibold uppercase tracking-wide text-slate-500 sm:text-[10px]">
+        {label}
+      </p>
+      <p className="mt-0.5 text-center text-lg font-bold leading-tight tabular-nums text-slate-950 sm:text-xl">{value}</p>
     </div>
   );
 }
@@ -384,14 +386,20 @@ export default function EmployeePage() {
       <CenterEmployeeTabs />
       <div className="flex h-[calc(100vh-5.5rem)] min-w-0 flex-col gap-4 overflow-hidden">
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-sm md:p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <div className="grid min-w-0 flex-1 grid-cols-2 gap-2 lg:grid-cols-4">
+              <SummaryCard label="Total Employees" value={String(stats.totalEmployees)} accent="blue" />
+              <SummaryCard label="Active Employees" value={String(stats.activeEmployees)} accent="green" />
+              <SummaryCard label="Assigned Customers" value={String(stats.totalAssignedCustomers)} accent="purple" />
+              <SummaryCard label="Total Collections" value={formatRupee(stats.totalCollections)} accent="amber" />
+            </div>
             <button
               type="button"
               onClick={() => {
                 setFormError("");
                 setFormModal({ mode: "add", row: null });
               }}
-              className="app-button-primary inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
+              className="app-button-primary inline-flex shrink-0 items-center justify-center gap-2 self-end rounded-xl px-4 py-2.5 text-sm font-semibold sm:self-auto"
             >
               <Plus className="h-4 w-4" />
               Add Employee
@@ -400,13 +408,6 @@ export default function EmployeePage() {
 
           {statusMessage ? <div className="app-alert-success mb-4">{statusMessage}</div> : null}
           {formError && !formModal ? <div className="app-alert-error mb-4">{formError}</div> : null}
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard label="Total Employees" value={String(stats.totalEmployees)} accent="blue" />
-            <SummaryCard label="Active Employees" value={String(stats.activeEmployees)} accent="green" />
-            <SummaryCard label="Assigned Customers" value={String(stats.totalAssignedCustomers)} accent="purple" />
-            <SummaryCard label="Total Collections" value={formatRupee(stats.totalCollections)} accent="amber" />
-          </div>
 
           <div className="mt-4 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
             <div className="relative">

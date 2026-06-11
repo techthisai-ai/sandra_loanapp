@@ -1,5 +1,7 @@
 /** Shared layout helpers for jsPDF + jspdf-autotable finance reports. */
 
+import { formatCurrencyForPrint } from "./formatCurrency.js";
+
 export const RFS_PALETTE = {
   ink: [15, 23, 42],
   inkSoft: [51, 65, 85],
@@ -71,10 +73,11 @@ export function drawReportFooter(doc, pageIndex, totalPages, generatedLabel, mar
   doc.setLineWidth(0.25);
   doc.line(margin, footerY - 2, pageWidth - margin, footerY - 2);
 
-  doc.setFont("helvetica", "normal");
+  const footerFont = doc.getFont().fontName || "helvetica";
+  doc.setFont(footerFont, "normal");
   doc.setFontSize(7.2);
   doc.setTextColor(...RFS_PALETTE.muted);
-  doc.text("Ruthra Financial Solutions — confidential", margin, footerY + 1.5);
+  doc.text("Ruthra Financial Solutions - confidential", margin, footerY + 1.5);
 
   doc.setTextColor(...RFS_PALETTE.inkSoft);
   doc.text(`Page ${pageIndex} of ${totalPages}`, pageWidth / 2, footerY + 1.5, { align: "center" });
@@ -93,12 +96,18 @@ export function drawAllReportFooters(doc, generatedLabel, margin = 10) {
 }
 
 export function fmtInrPdf(n) {
-  return `₹${Math.round(Number(n || 0)).toLocaleString("en-IN")}`;
+  return formatCurrencyForPrint(n);
 }
 
 export function fmtDatePdf(value) {
-  if (!value) return "—";
+  if (!value) return "-";
   const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleDateString("en-GB");
+}
+
+/** Plain text for PDF table cells (Tamil names need Unicode font; avoid special punctuation). */
+export function fmtPdfText(value) {
+  if (value == null || value === "") return "-";
+  return String(value).replace(/\u2014/g, "-").replace(/\u2013/g, "-");
 }

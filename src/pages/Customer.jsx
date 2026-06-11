@@ -301,7 +301,7 @@ export default function Customer() {
   const handleViewDetails = useCallback(
     (customer) => {
       navigate(`/dashboard/customer/${customer.customerId}/profile`, {
-        state: { customerId: customer.customerId },
+        state: { viewOnly: true, customerId: customer.customerId },
       });
     },
     [navigate]
@@ -309,7 +309,7 @@ export default function Customer() {
 
   const handleApplyLoan = useCallback(
     (customer) => {
-      navigate(`/dashboard/loan-apply/${customer.customerId}`, { state: { customer } });
+      navigate(`/dashboard/loan-apply/${customer.customerId}`, { state: { applyLoan: true, customer } });
     },
     [navigate]
   );
@@ -447,88 +447,7 @@ export default function Customer() {
 
         <div className="grid min-h-0 min-w-0 w-full max-w-full flex-1 gap-3 overflow-hidden grid-cols-1">
           <div className="customer-module-panel flex min-h-0 min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-200/70 bg-white/80 shadow-sm shadow-slate-900/5 ring-1 ring-slate-100/80">
-            <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-100/80 bg-white px-3 py-2">
-              <div className="flex min-w-0 shrink-0 flex-wrap gap-4">
-                <button
-                  type="button"
-                  onClick={() => setStatusFilter("Active")}
-                  className={`inline-flex items-center gap-1.5 border-b-2 pb-2 text-sm font-semibold transition ${
-                    statusFilter === "Active"
-                      ? "border-blue-600 text-blue-600"
-                      : "border-transparent text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  Active
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStatusFilter("Favourite")}
-                  className={`inline-flex items-center gap-1.5 border-b-2 pb-2 text-sm font-semibold transition ${
-                    statusFilter === "Favourite"
-                      ? "border-violet-500 text-violet-700"
-                      : "border-transparent text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  <Star className={`h-3.5 w-3.5 ${statusFilter === "Favourite" ? "fill-current" : ""}`} />
-                  Favourites
-                  <span
-                    className={`rounded-full px-1.5 text-[10px] font-bold ${
-                      statusFilter === "Favourite" ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500"
-                    }`}
-                  >
-                    {favoriteCount}
-                  </span>
-                </button>
-                {isAdmin ? (
-                  <button
-                    type="button"
-                    onClick={() => setStatusFilter("Deleted")}
-                    className={`inline-flex items-center gap-1.5 border-b-2 pb-2 text-sm font-semibold transition ${
-                      statusFilter === "Deleted"
-                        ? "border-rose-500 text-rose-700"
-                        : "border-transparent text-slate-500 hover:text-slate-700"
-                    }`}
-                  >
-                    Deleted
-                    <span
-                      className={`rounded-full px-1.5 text-[10px] font-bold ${
-                        statusFilter === "Deleted" ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-500"
-                      }`}
-                    >
-                      {deletedCount}
-                    </span>
-                  </button>
-                ) : null}
-                {isAdmin && statusFilter === "Deleted" && deletedCustomers.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={handleRestoreAllDeleted}
-                    disabled={restoringAll}
-                    className="app-button-primary ml-auto rounded-xl px-3 py-2 text-xs font-semibold"
-                  >
-                    {restoringAll ? "Restoring…" : `Restore all (${deletedCustomers.length})`}
-                  </button>
-                ) : null}
-              </div>
-
-              <select
-                value=""
-                onChange={(e) => {
-                  const id = e.target.value;
-                  if (id) navigate(`/dashboard/customer/${id}`, { state: { customerId: id } });
-                }}
-                className="app-select w-full max-w-[min(220px,100%)] shrink-0 py-2 text-xs sm:max-w-xs"
-              >
-                <option value="">Jump to customer…</option>
-                {scopedCustomers.map((c) => (
-                  <option key={c.customerId} value={c.customerId}>
-                    {c.customerName || "Unnamed"} — {c.mobileNumber || c.customerId}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex min-w-0 gap-2 overflow-x-auto overscroll-x-contain border-b border-slate-100 px-3 py-2 [-webkit-overflow-scrolling:touch]">
+            <div className="customer-day-filter-row flex min-w-0 gap-1.5 overflow-x-auto overscroll-x-contain border-b border-slate-100 px-3 py-1.5 [-webkit-overflow-scrolling:touch]">
               {DAY_FILTERS.map((day) => {
                 const active = dayFilter === day;
                 const count = dayCount[day] ?? 0;
@@ -556,19 +475,100 @@ export default function Customer() {
               })}
             </div>
 
-            <div className="shrink-0 border-b border-slate-100 px-3 py-2">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <div className="customer-module-toolbar shrink-0 border-b border-slate-100 px-3 py-2">
+              <div className="customer-module-toolbar-row flex min-w-0 flex-wrap items-center gap-2">
+                <div className="relative min-w-0 flex-1 basis-[10rem]">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search name, phone, or ID..."
-                    className="app-input w-full rounded-2xl bg-white py-2.5 text-sm shadow-sm shadow-slate-900/5 ring-1 ring-slate-100/80"
-                    style={{ paddingLeft: "3rem", paddingRight: "1rem" }}
+                    className="app-input w-full rounded-xl py-2 text-sm shadow-sm shadow-slate-900/5 ring-1 ring-slate-100/80"
+                    style={{ paddingLeft: "2.25rem", paddingRight: "0.75rem" }}
                     aria-label="Search customers"
                   />
                 </div>
+
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    if (id) navigate(`/dashboard/customer/${id}`, { state: { customerId: id } });
+                  }}
+                  className="app-select customer-module-jump-select w-auto min-w-[9.5rem] max-w-[13rem] shrink-0 py-2 text-xs"
+                  aria-label="Jump to customer"
+                >
+                  <option value="">Jump to customer…</option>
+                  {scopedCustomers.map((c) => (
+                    <option key={c.customerId} value={c.customerId}>
+                      {c.customerName || "Unnamed"} — {c.mobileNumber || c.customerId}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="customer-module-status-tabs flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter("Active")}
+                    className={`inline-flex h-9 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold transition ${
+                      statusFilter === "Active"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    Active
+                  </button>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("Deleted")}
+                      className={`inline-flex h-9 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold transition ${
+                        statusFilter === "Deleted"
+                          ? "bg-rose-600 text-white shadow-sm"
+                          : "text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      Deleted
+                      <span
+                        className={`rounded-full px-1.5 text-[10px] font-bold ${
+                          statusFilter === "Deleted" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {deletedCount}
+                      </span>
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter("Favourite")}
+                    className={`inline-flex h-9 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold transition ${
+                      statusFilter === "Favourite"
+                        ? "bg-violet-600 text-white shadow-sm"
+                        : "text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <Star className={`h-3 w-3 ${statusFilter === "Favourite" ? "fill-current" : ""}`} />
+                    Favourites
+                    <span
+                      className={`rounded-full px-1.5 text-[10px] font-bold ${
+                        statusFilter === "Favourite" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {favoriteCount}
+                    </span>
+                  </button>
+                </div>
+
+                {isAdmin && statusFilter === "Deleted" && deletedCustomers.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleRestoreAllDeleted}
+                    disabled={restoringAll}
+                    className="app-button-primary shrink-0 rounded-xl px-3 py-2 text-xs font-semibold"
+                  >
+                    {restoringAll ? "Restoring…" : `Restore all (${deletedCustomers.length})`}
+                  </button>
+                ) : null}
 
                 <div className="relative shrink-0" ref={filterRef}>
                   <button
@@ -709,8 +709,8 @@ export default function Customer() {
                               <div className="flex min-w-0 items-center gap-2">
                                 <Avatar name={customer.customerName} size="sm" />
                                 <Link
-                                  to={`/dashboard/customer/${customer.customerId}`}
-                                  state={{ customerId: customer.customerId }}
+                                  to={`/dashboard/customer/${customer.customerId}/profile`}
+                                  state={{ viewOnly: true, customerId: customer.customerId }}
                                   className="min-w-0 truncate text-sm font-semibold text-slate-900 hover:text-blue-700 hover:underline"
                                 >
                                   {customer.customerName || "Unnamed"}

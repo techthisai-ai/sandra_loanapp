@@ -1,6 +1,11 @@
+import { useEffect } from "react";
 import Sidebar from "./Sidebar";
+import { applyAdminTheme, getAdminTheme } from "../../utils/adminTheme";
 
 export default function AdminLayout({ title, description, children, action, eyebrow = "Admin" }) {
+  useEffect(() => {
+    applyAdminTheme(getAdminTheme());
+  }, []);
   return (
     <div className="app-shell min-h-screen overflow-x-hidden text-slate-900">
       <div className="flex min-h-screen w-full min-w-0">

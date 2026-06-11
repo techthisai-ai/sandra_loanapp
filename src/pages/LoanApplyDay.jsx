@@ -292,7 +292,7 @@ export default function LoanApplyDay() {
                     <button
                       key={customer.customerId}
                       type="button"
-                      onClick={() => navigate(`/dashboard/loan-apply/${customer.customerId}`, { state: { customer } })}
+                      onClick={() => navigate(`/dashboard/loan-apply/${customer.customerId}`, { state: { applyLoan: true, customer } })}
                       className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50"
                     >
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-sm font-bold text-white">

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CheckCircle2, Clock3, FilePlus2, IndianRupee, UserPlus, UsersRound } from "lucide-react";
+import CustomerDetailLink from "../components/customer/CustomerDetailLink";
 import EmployeeAddCustomerModal from "../components/employee/EmployeeAddCustomerModal";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import useEmployeeCenterScope from "../hooks/useEmployeeCenterScope";
@@ -198,11 +199,15 @@ export default function EmployeeHome() {
       return tb - ta;
     });
 
+    const dayById = new Map(scoped.map((c) => [c.customerId, c.selectedDay]));
+
     return paid.slice(0, 12).map((e) => {
       const collector = String(e.collectorName || "").trim();
       const isAdminEntry = collector.toLowerCase() === "admin" || String(e.entrySource || "").includes("admin");
       return {
         key: e.entryId || `${e.customerId}-${e.collectionDate}-${e.submittedAt}`,
+        customerId: e.customerId,
+        selectedDay: dayById.get(e.customerId),
         name: e.customerName || nameById.get(e.customerId) || e.customerId,
         amount: Number(e.amount || 0),
         status: isAdminEntry ? `Admin · ${e.collectionStatus || "Collected"}` : e.collectionStatus || "Collected",
@@ -304,7 +309,14 @@ export default function EmployeeHome() {
             {recentPaid.map((row) => (
               <li key={row.key} className="flex items-start justify-between gap-3 py-2 first:pt-0 last:pb-0">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-950">{row.name}</p>
+                  <CustomerDetailLink
+                    customerId={row.customerId}
+                    variant="employee"
+                    selectedDay={row.selectedDay}
+                    className="block truncate text-sm font-semibold text-slate-950 no-underline"
+                  >
+                    {row.name}
+                  </CustomerDetailLink>
                   <p className="mt-0.5 text-xs text-slate-600">{row.whenLabel}</p>
                 </div>
                 <div className="shrink-0 text-right">

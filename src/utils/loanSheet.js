@@ -1,3 +1,4 @@
+import { formatCurrencyForPrint } from "./formatCurrency.js";
 import { resolveLoanTimelineDates } from "./loanTimelineDates";
 
 function toNumber(value) {
@@ -115,8 +116,8 @@ export function buildLoanSheetHtml(data) {
         <tr>
           <td class="center">${row.installment}</td>
           <td class="center">${escapeHtml(row.emiDate)}</td>
-          <td class="amount">${escapeHtml(formatCurrency(row.amount))}</td>
-          <td class="amount">${escapeHtml(formatCurrency(row.balanceAmount))}</td>
+          <td class="amount">${escapeHtml(formatCurrencyForPrint(row.amount))}</td>
+          <td class="amount">${escapeHtml(formatCurrencyForPrint(row.balanceAmount))}</td>
           <td class="sign">${escapeHtml(row.sign)}</td>
         </tr>`
     )
@@ -130,7 +131,7 @@ export function buildLoanSheetHtml(data) {
     },
     {
       label: "Loan amt / Tenure",
-      value: formatCurrency(loanAmount),
+      value: formatCurrencyForPrint(loanAmount),
       secondary: `${tenure} weeks`,
     },
     {

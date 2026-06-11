@@ -1,10 +1,13 @@
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
+import { toPrintCurrencyText } from "./formatCurrency.js";
+import { ensurePdfUnicodeFont } from "./pdfUnicodeFont.js";
 import {
   RFS_PALETTE as PALETTE,
   distributeColumnWidths,
   drawAllReportFooters,
   fmtInrPdf,
+  fmtPdfText,
   getPageLayout,
   loadLogoDataUrl,
 } from "./pdfReportLayout";
@@ -29,7 +32,7 @@ function truncateLines(doc, text, maxWidth, maxLines = 2) {
   return [...lines.slice(0, maxLines - 1), `${lines[maxLines - 1]}…`];
 }
 
-async function drawPremiumHeader(doc, layout, origin, meta) {
+async function drawPremiumHeader(doc, layout, origin, meta, pdfFont) {
   const { margin, pageWidth } = layout;
   const bandH = 28;
 
@@ -54,7 +57,7 @@ async function drawPremiumHeader(doc, layout, origin, meta) {
     }
   }
 
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfFont, "bold");
   doc.setFontSize(14);
   doc.setTextColor(...PALETTE.ink);
   doc.text("Ruthra Financial Solutions", textX, 12);
@@ -63,7 +66,7 @@ async function drawPremiumHeader(doc, layout, origin, meta) {
   doc.setTextColor(...PALETTE.accent);
   doc.text(meta.title || "Report", textX, 18);
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...PALETTE.muted);
   const rightX = pageWidth - margin;
@@ -77,7 +80,7 @@ async function drawPremiumHeader(doc, layout, origin, meta) {
   return bandH + 4;
 }
 
-function drawMetaStrip(doc, layout, startY, filterLines, branch) {
+function drawMetaStrip(doc, layout, startY, filterLines, branch, pdfFont) {
   const { margin, contentW } = layout;
   const lines = [...(filterLines || [])];
   if (branch) lines.unshift(`Center / branch: ${branch}`);
@@ -93,19 +96,19 @@ function drawMetaStrip(doc, layout, startY, filterLines, branch) {
   doc.setLineWidth(0.2);
   doc.roundedRect(margin, startY, contentW, panelH, 2, 2, "FD");
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...PALETTE.inkSoft);
   let y = startY + pad + 3;
   lines.forEach((line) => {
-    doc.text(String(line), margin + pad, y);
+    doc.text(fmtPdfText(line), margin + pad, y);
     y += lineH;
   });
 
   return startY + panelH + 3;
 }
 
-function drawKpiCards(doc, layout, startY, cards) {
+function drawKpiCards(doc, layout, startY, cards, pdfFont) {
   const { margin, contentW } = layout;
   const items = (cards || []).slice(0, 6);
   if (!items.length) return startY;
@@ -122,21 +125,21 @@ function drawKpiCards(doc, layout, startY, cards) {
     doc.setLineWidth(0.2);
     doc.roundedRect(x, startY, cardW, cardH, 2, 2, "FD");
 
-    doc.setFont("helvetica", "normal");
+    doc.setFont(pdfFont, "normal");
     doc.setFontSize(6.8);
     doc.setTextColor(...PALETTE.muted);
     doc.text(String(card.label || "").toUpperCase(), x + 3, startY + 5);
 
-    doc.setFont("helvetica", "bold");
+    doc.setFont(pdfFont, "bold");
     doc.setFontSize(10);
     doc.setTextColor(...PALETTE.ink);
-    doc.text(truncateLines(doc, card.value ?? "—", cardW - 6, 1), x + 3, startY + 11);
+    doc.text(truncateLines(doc, toPrintCurrencyText(card.value ?? "—"), cardW - 6, 1), x + 3, startY + 11);
 
     if (card.note) {
-      doc.setFont("helvetica", "normal");
+      doc.setFont(pdfFont, "normal");
       doc.setFontSize(6.2);
       doc.setTextColor(...PALETTE.muted);
-      doc.text(truncateLines(doc, card.note, cardW - 6, 1), x + 3, startY + 14.5);
+      doc.text(truncateLines(doc, toPrintCurrencyText(card.note), cardW - 6, 1), x + 3, startY + 14.5);
     }
   });
 
@@ -181,6 +184,7 @@ export async function buildEnterpriseTabularReportPdf(payload) {
     new Date().toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
   const doc = new jsPDF({ orientation, unit: "mm", format: "a4" });
+  const pdfFont = await ensurePdfUnicodeFont(doc, origin);
   const layout = getPageLayout(doc, { margin: MARGIN, footerReserve: FOOTER_RESERVE });
 
   let y = await drawPremiumHeader(doc, layout, origin, {
@@ -189,10 +193,10 @@ export async function buildEnterpriseTabularReportPdf(payload) {
     generatedLabel,
     reportId: reportMeta.reportId,
     preparedBy: reportMeta.preparedBy,
-  });
+  }, pdfFont);
 
-  y = drawMetaStrip(doc, layout, y, filterLines, reportMeta.branch || reportMeta.center);
-  y = drawKpiCards(doc, layout, y, summaryCards);
+  y = drawMetaStrip(doc, layout, y, filterLines, reportMeta.branch || reportMeta.center, pdfFont);
+  y = drawKpiCards(doc, layout, y, summaryCards, pdfFont);
 
   const ratios =
     columnRatios && columnRatios.length === headers.length
@@ -220,6 +224,7 @@ export async function buildEnterpriseTabularReportPdf(payload) {
     tableLineWidth: 0.15,
     tableLineColor: PALETTE.line,
     styles: {
+      font: pdfFont,
       fontSize: tableFontSize,
       cellPadding: { top: 2.4, right: 1.8, bottom: 2.4, left: 1.8 },
       textColor: PALETTE.ink,
@@ -229,6 +234,7 @@ export async function buildEnterpriseTabularReportPdf(payload) {
       overflow: "linebreak",
     },
     headStyles: {
+      font: pdfFont,
       fillColor: PALETTE.headBg,
       textColor: PALETTE.headText,
       fontStyle: "bold",
@@ -332,7 +338,7 @@ export function buildPreviewColumnsPdfPayload({
       columns.map((col) => {
         const val = row[col.key];
         if (col.cellType === "currency") return fmtInrPdf(Number(val || 0));
-        return String(val ?? "—");
+        return fmtPdfText(val ?? "-");
       }),
     statusColumnIndices,
     currencyColumnIndices,
@@ -364,7 +370,8 @@ export function buildSimpleTablePdfPayload({
     subtitle,
     headers,
     rows,
-    mapRowToCells: (row) => (Array.isArray(row) ? row.map((c) => String(c ?? "")) : []),
+    mapRowToCells: (row) =>
+      Array.isArray(row) ? row.map((c) => toPrintCurrencyText(String(c ?? ""))) : [],
     filterLines,
     summaryCards,
     reportMeta,

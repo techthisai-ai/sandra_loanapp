@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   AlertCircle,
-  ClipboardList,
   Clock,
   Download,
   Eye,
@@ -15,6 +14,7 @@ import {
 } from "lucide-react";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import EnterpriseReportPreview from "../components/reports/EnterpriseReportPreview.jsx";
+import { ExportToolbar, ExportToolbarButton } from "../components/reports/ExportToolbar.jsx";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import useAuth from "../hooks/useAuth";
 import {
@@ -174,20 +174,15 @@ const COLLECTION_STAT_ACCENTS = {
   },
 };
 
-function CollectionStats({ label, value, icon: Icon, accent = "blue" }) {
+function CollectionStats({ label, value, accent = "blue" }) {
   const tone = COLLECTION_STAT_ACCENTS[accent] || COLLECTION_STAT_ACCENTS.blue;
   return (
     <div
       className={`collection-register-stat flex min-h-[4.75rem] min-w-0 flex-col justify-between rounded-2xl border px-3.5 py-3 shadow-sm ${tone.card}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className={`min-w-0 flex-1 text-[10px] font-semibold uppercase leading-snug tracking-[0.14em] ${tone.label}`}>
-          {label}
-        </p>
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${tone.icon}`}>
-          <Icon className="h-4 w-4" />
-        </div>
-      </div>
+      <p className={`min-w-0 text-[10px] font-semibold uppercase leading-snug tracking-[0.14em] ${tone.label}`}>
+        {label}
+      </p>
       <p className={`mt-2 text-center text-xl font-semibold tabular-nums tracking-tight ${tone.value}`}>{value}</p>
     </div>
   );
@@ -563,79 +558,63 @@ export default function Collection() {
                 <div className="min-w-0 w-full lg:min-w-0 lg:flex-1">
                   <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                     <CollectionStats
-                      icon={Wallet}
-                      label="Total collected"
+                      label="Collected"
                       value={formatCurrency(totals.totalCollected)}
                       accent="green"
                     />
                     <CollectionStats
-                      icon={ClipboardList}
-                      label="Collection records"
+                      label="Records"
                       value={String(totals.records)}
                       accent="blue"
                     />
                     <CollectionStats
-                      icon={FileText}
-                      label="Outstanding total"
+                      label="Outstanding"
                       value={formatCurrency(totals.totalOutstanding)}
                       accent="orange"
                     />
                     <CollectionStats
-                      icon={Users}
-                      label="Approved customers"
+                      label="Approved customer"
                       value={String(totals.approvedPaymentCustomerIds.size)}
                       accent="purple"
                     />
                   </div>
                 </div>
                 <div className="collection-register-toolbar-side flex w-full min-w-0 flex-col gap-2 lg:w-auto lg:shrink-0 lg:border-l lg:border-slate-200/80 lg:pl-3">
-                  <div className="collection-register-toolbar-actions flex flex-wrap items-center gap-1.5 sm:gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCollectionPreviewOpen(true)}
-                      className="collection-view-report-btn collection-register-toolbar-btn group inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-semibold"
-                    >
-                      <Eye className="h-3.5 w-3.5 shrink-0 text-blue-600 transition group-hover:scale-105" aria-hidden />
-                      View Report
-                    </button>
-                    <button
-                      type="button"
+                  <ExportToolbar className="collection-register-toolbar-actions">
+                    <ExportToolbarButton variant="view" onClick={() => setCollectionPreviewOpen(true)}>
+                      View
+                    </ExportToolbarButton>
+                    <ExportToolbarButton
+                      variant="neutral"
+                      icon={Download}
                       onClick={() => downloadFile(makeCsv(filteredRows), `collection-register-${reportDateStamp()}.csv`, "text/csv;charset=utf-8;")}
-                      className="collection-neutral-btn collection-register-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-medium"
                     >
-                      <Download className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                       CSV
-                    </button>
-                    <button
-                      type="button"
+                    </ExportToolbarButton>
+                    <ExportToolbarButton
+                      variant="excel"
+                      loading={collectionExcelExportLoading}
                       disabled={collectionExcelExportLoading}
                       onClick={handleCollectionPreviewExcel}
-                      className="collection-neutral-btn collection-register-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-medium"
                     >
-                      {collectionExcelExportLoading ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
-                          Excel…
-                        </span>
-                      ) : (
-                        <>
-                          <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                          Excel
-                        </>
-                      )}
-                    </button>
-                    <button
-                      type="button"
+                      Excel
+                    </ExportToolbarButton>
+                    <ExportToolbarButton
+                      variant="pdf"
                       disabled={collectionPdfExportLoading}
-                      onClick={() => {
-                        setCollectionPreviewOpen(true);
-                      }}
-                      className="collection-neutral-btn collection-register-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-medium"
+                      onClick={() => setCollectionPreviewOpen(true)}
                     >
-                      <FileText className="h-3.5 w-3.5 shrink-0 text-rose-600" />
-                      Report & PDF
-                    </button>
-                  </div>
+                      PDF
+                    </ExportToolbarButton>
+                    <ExportToolbarButton
+                      variant="print"
+                      loading={collectionPrintLoading}
+                      disabled={collectionPrintLoading}
+                      onClick={handleCollectionPrint}
+                    >
+                      Print
+                    </ExportToolbarButton>
+                  </ExportToolbar>
                   <div className="collection-register-toolbar-period flex flex-wrap items-center gap-2">
                     {PERIOD_OPTIONS.map((option) => (
                       <button
