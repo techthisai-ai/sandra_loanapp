@@ -5,6 +5,7 @@ import { getCenterMatchLabels } from "./employeeScope.js";
 import { isActiveCustomerRecord } from "./recordFlags.js";
 
 const LOAN_MERGE_FIELDS = [
+  "applicationId",
   "loanAmount",
   "loanWeeks",
   "weeklyDue",

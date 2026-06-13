@@ -47,7 +47,7 @@ import {
   normalizeCollectorKey,
 } from "../utils/employeeCollectionDetails.js";
 import { loadLoanCenters } from "../constants/dayCenters.js";
-import { generateLoanId, generateLoanRequestId } from "../utils/loanIds.js";
+import { formatSequentialLoanId, generateLoanRequestId, maxSequentialLoanNumber } from "../utils/loanIds.js";
 import { normalizeCollectionFrequency } from "../utils/loanTimelineDates.js";
 import { preserveCustomerDocumentDataUrls } from "../utils/customerDocumentAttachments.js";
 import {
@@ -367,10 +367,21 @@ async function assertCustomerIdAvailable(customerId, excludeId = "") {
   return normalized;
 }
 
-function makeApplicationId() {
-  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `APP-${datePart}-${randomPart}`;
+/** Returns the next available loan ID in the format RFS0001. */
+export async function getNextLoanId() {
+  const [applicationsSnap, customersSnap, requestsSnap] = await Promise.all([
+    getDocs(collection(db, "loanApplications")),
+    getDocs(collection(db, "customers")),
+    getDocs(collection(db, "loanRequests")).catch(() => null),
+  ]);
+
+  const loanIds = [
+    ...applicationsSnap.docs.map((docSnap) => docSnap.data().applicationId || docSnap.id),
+    ...customersSnap.docs.map((docSnap) => docSnap.data().applicationId),
+    ...(requestsSnap?.docs || []).map((docSnap) => docSnap.data().loanId || docSnap.data().applicationId),
+  ].filter(Boolean);
+
+  return formatSequentialLoanId(maxSequentialLoanNumber(loanIds) + 1);
 }
 
 function makeNotificationId() {
@@ -583,7 +594,7 @@ async function buildLoanApplicationRecord({
 }) {
   const now = new Date();
   const finalCustomerId = customerId || (await makeCustomerId());
-  const finalApplicationId = applicationId || makeApplicationId();
+  const finalApplicationId = applicationId || (await getNextLoanId());
   const preset = {
     id: loanPresetId,
     loanAmount: loanPresetLoanAmount,
@@ -1588,6 +1599,45 @@ export async function updateEmployeeCenters(employeeDocId, assignedCenters = [])
   const updatedSnap = await getDoc(userRef);
   const updated = updatedSnap.exists() ? updatedSnap.data() : null;
   return updated ? { ...updated, assignedCenters: centers } : { assignedCenters: centers };
+}
+
+/** Stores or updates the fixed monthly salary on an employee profile. */
+export async function assignEmployeeMonthlySalary(employeeDocId, monthlySalary) {
+  if (!employeeDocId) {
+    throw new Error("Employee record is missing.");
+  }
+
+  const amount = Number(monthlySalary);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Enter a valid monthly salary greater than zero.");
+  }
+
+  const userRef = doc(db, USERS_COLLECTION, employeeDocId);
+  const currentSnap = await getDoc(userRef);
+  if (!currentSnap.exists()) {
+    throw new Error("Employee record was not found.");
+  }
+  const current = currentSnap.data();
+  if (normalizeEmployeeStatus(current) === "inactive") {
+    throw new Error("Salary can only be assigned to active employees.");
+  }
+
+  await updateDoc(userRef, {
+    monthlySalary: amount,
+    updatedAt: serverTimestamp(),
+  });
+
+  await createAuditLog({
+    action: "assign_employee_monthly_salary",
+    entityType: "user",
+    entityId: employeeDocId,
+    message: `Monthly salary set to ${amount} for ${current.displayName || current.employeeId || "employee"}.`,
+    actorName: "Admin",
+    actorRole: "admin",
+  });
+
+  const updatedSnap = await getDoc(userRef);
+  return updatedSnap.exists() ? { id: employeeDocId, ...updatedSnap.data() } : null;
 }
 
 /** Reads the assignment record(s) from the employee_centers table. */
@@ -3085,7 +3135,7 @@ export async function approveLoanRequest(requestId) {
   }
   const customer = { ...customerSnap.data(), customerId: request.customerId };
 
-  const loanId = generateLoanId();
+  const loanId = await getNextLoanId();
   const approvedAt = new Date().toISOString();
 
   await upsertLoanApplication(buildLoanPayloadFromCustomer(customer, request, loanId));

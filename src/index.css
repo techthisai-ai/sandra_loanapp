@@ -105,13 +105,12 @@ main {
   display: grid;
   width: 100%;
   grid-template-columns:
-    2.25rem
-    minmax(8rem, max-content)
-    7.25rem
-    minmax(4.5rem, 0.72fr)
-    minmax(5.5rem, 0.82fr)
-    minmax(5rem, 0.78fr)
-    minmax(5.25rem, auto);
+    minmax(9rem, 1.35fr)
+    minmax(6.5rem, 1fr)
+    minmax(5.5rem, 0.85fr)
+    minmax(5.75rem, 0.9fr)
+    minmax(4.25rem, 0.65fr)
+    minmax(5.5rem, auto);
   column-gap: 0.5rem;
   align-items: center;
 }
@@ -121,31 +120,21 @@ main {
   max-width: 100%;
 }
 
-.loan-apply-customer-grid > :nth-child(1),
-.loan-apply-customer-grid > :nth-child(2),
-.loan-apply-customer-grid > :nth-child(3) {
+.loan-apply-customer-grid > :nth-child(1) {
   justify-self: start;
   text-align: left;
 }
 
-.loan-apply-customer-grid > :nth-child(2) {
-  width: 100%;
-}
-
-.loan-apply-customer-grid > :nth-child(3) {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
-}
-
+.loan-apply-customer-grid > :nth-child(2),
+.loan-apply-customer-grid > :nth-child(3),
 .loan-apply-customer-grid > :nth-child(4),
-.loan-apply-customer-grid > :nth-child(5),
-.loan-apply-customer-grid > :nth-child(6) {
+.loan-apply-customer-grid > :nth-child(5) {
   justify-self: center;
   text-align: center;
   white-space: nowrap;
 }
 
-.loan-apply-customer-grid > :nth-child(7) {
+.loan-apply-customer-grid > :nth-child(6) {
   justify-self: end;
   text-align: right;
 }
@@ -2221,7 +2210,15 @@ td.cr-alert-bg-red:hover,
     height: 0.75rem;
   }
 
-  .accounts-toolbar-side .accounts-toolbar-actions {
+  .accounts-toolbar-controls {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .accounts-toolbar-actions {
     display: inline-flex;
     flex-wrap: nowrap;
     width: auto;
@@ -2229,7 +2226,7 @@ td.cr-alert-bg-red:hover,
     gap: 0.25rem;
   }
 
-  .accounts-toolbar-side .accounts-toolbar-actions .app-export-btn {
+  .accounts-toolbar-actions .app-export-btn {
     width: auto;
     min-width: 0;
     max-width: none;
@@ -2240,45 +2237,6 @@ td.cr-alert-bg-red:hover,
     min-height: 2rem;
     max-height: 2rem;
     white-space: nowrap;
-    text-align: center;
-    line-height: 1.15;
-  }
-
-  .accounts-toolbar-side .accounts-toolbar-actions .app-export-btn svg {
-    width: 0.75rem;
-    height: 0.75rem;
-  }
-
-  .accounts-toolbar-side .accounts-office-period-select {
-    width: auto;
-    min-width: 5.5rem;
-    max-width: 6.75rem;
-    flex: 0 0 auto;
-    height: 2rem;
-    min-height: 2rem;
-    font-size: 0.625rem;
-    padding-right: 1.25rem;
-  }
-
-  .accounts-toolbar-actions {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    width: 100%;
-    gap: 0.25rem;
-  }
-
-  .accounts-toolbar-actions .app-export-btn {
-    width: 100%;
-    min-width: 0;
-    max-width: none;
-    justify-content: center;
-    padding-inline: 0.2rem;
-    font-size: 0.5625rem;
-    gap: 0.15rem;
-    height: 2rem;
-    min-height: 2rem;
-    max-height: 2rem;
-    white-space: normal;
     text-align: center;
     line-height: 1.15;
   }
@@ -3592,6 +3550,7 @@ td.cr-alert-bg-red:hover,
 .accounts-toolbar-card {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 1rem;
   border-radius: 1rem;
   border: 1px solid rgb(191 219 254);
@@ -3600,34 +3559,171 @@ td.cr-alert-bg-red:hover,
   overflow: hidden;
 }
 
+.accounts-toolbar-filters {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.accounts-toolbar-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.accounts-toolbar-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(226 232 240);
+  background: rgb(255 255 255);
+  padding: 0.5rem 0.625rem;
+}
+
+.accounts-toolbar-metric-label {
+  font-size: 0.5rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.accounts-toolbar-metric-value {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: rgb(15 23 42);
+  white-space: nowrap;
+}
+
+.accounts-toolbar-metric--income {
+  border-color: rgb(167 243 208);
+  background: linear-gradient(135deg, rgb(236 253 245), rgb(255 255 255));
+}
+
+.accounts-toolbar-metric--income .accounts-toolbar-metric-label {
+  color: rgb(5 150 105);
+}
+
+.accounts-toolbar-metric--income .accounts-toolbar-metric-value {
+  color: rgb(6 95 70);
+}
+
+.accounts-toolbar-metric--expense {
+  border-color: rgb(254 202 202);
+  background: linear-gradient(135deg, rgb(254 242 242), rgb(255 255 255));
+}
+
+.accounts-toolbar-metric--expense .accounts-toolbar-metric-label {
+  color: rgb(220 38 38);
+}
+
+.accounts-toolbar-metric--expense .accounts-toolbar-metric-value {
+  color: rgb(153 27 27);
+}
+
+.accounts-toolbar-metric--salary {
+  border-color: rgb(191 219 254);
+  background: linear-gradient(135deg, rgb(239 246 255), rgb(255 255 255));
+}
+
+.accounts-toolbar-metric--salary .accounts-toolbar-metric-label {
+  color: rgb(37 99 235);
+}
+
+.accounts-toolbar-metric--salary .accounts-toolbar-metric-value {
+  color: rgb(30 64 175);
+}
+
+.accounts-toolbar-periods {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+@media (min-width: 768px) {
+  .accounts-toolbar-filters {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 1rem;
+  }
+
+  .accounts-toolbar-metrics {
+    width: auto;
+    min-width: 18rem;
+    flex: 0 0 auto;
+  }
+
+  .accounts-toolbar-metric-value {
+    font-size: 1.0625rem;
+  }
+}
+
 @media (min-width: 1024px) {
   .accounts-toolbar-card {
     flex-direction: row;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 1.25rem;
   }
 
-  .accounts-payroll-period-stats {
-    flex: 1 1 16rem;
+  .accounts-toolbar-filters {
+    flex: 1 1 auto;
     min-width: 0;
   }
+}
 
-  .accounts-toolbar-side {
-    width: auto;
-    max-width: 100%;
-  }
+.accounts-toolbar-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  min-width: 0;
+  width: 100%;
+}
 
-  .accounts-toolbar-side .accounts-office-period-select {
+@media (min-width: 1024px) {
+  .accounts-toolbar-controls {
     width: auto;
-    min-width: 6.75rem;
-    max-width: 8.5rem;
+    flex-wrap: nowrap;
   }
+}
+
+.accounts-toolbar-actions {
+  width: auto;
+  max-width: 100%;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
 }
 
 .accounts-payroll-period-stats {
   min-width: 0;
-  flex: 0 0 auto;
+  width: 100%;
+}
+
+.accounts-latest-payroll-stats {
+  margin-top: 0.75rem;
+}
+
+.accounts-latest-payroll-stats .accounts-payroll-period-grid {
+  gap: 0.625rem;
+}
+
+.accounts-latest-payroll-stats .accounts-payroll-period-stat {
+  padding: 0.625rem 0.75rem;
+}
+
+.accounts-latest-payroll-stats .accounts-payroll-period-stat-value {
+  font-size: 1.25rem;
 }
 
 .accounts-payroll-period-title {
@@ -3641,7 +3737,7 @@ td.cr-alert-bg-red:hover,
 
 .accounts-payroll-period-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.5rem;
 }
 
@@ -3710,10 +3806,38 @@ td.cr-alert-bg-red:hover,
   color: rgb(154 52 18);
 }
 
+.accounts-payroll-period-stat--pending-amount {
+  border-color: rgb(253 186 116);
+  background: linear-gradient(135deg, rgb(255 247 237), rgb(255 255 255));
+}
+
+.accounts-payroll-period-stat--pending-amount .accounts-payroll-period-stat-label {
+  color: rgb(194 65 12);
+}
+
+.accounts-payroll-period-stat--pending-amount .accounts-payroll-period-stat-value {
+  color: rgb(154 52 18);
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.accounts-latest-payroll-stats .accounts-payroll-period-stat--pending-amount .accounts-payroll-period-stat-value {
+  font-size: 1.0625rem;
+}
+
 .accounts-toolbar-side {
   min-width: 0;
   flex: 0 0 auto;
   width: 100%;
+}
+
+.accounts-toolbar-actions--primary,
+.accounts-toolbar-actions--secondary {
+  width: auto;
+  max-width: 100%;
+  flex-wrap: nowrap;
 }
 
 .accounts-toolbar-actions {
@@ -3871,17 +3995,69 @@ td.cr-alert-bg-red:hover,
     gap: 0.75rem;
   }
 
-  .accounts-toolbar-side {
+  .accounts-toolbar-filters {
+    gap: 0.625rem;
+  }
+
+  .accounts-toolbar-metrics {
+    gap: 0.375rem;
+  }
+
+  .accounts-toolbar-metric {
+    padding: 0.4375rem 0.5rem;
+  }
+
+  .accounts-toolbar-metric-value {
+    font-size: 0.9375rem;
+  }
+
+  .accounts-toolbar-periods {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .accounts-date-preset-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.3125rem 0.5rem;
+    font-size: 0.6875rem;
+    text-align: center;
+  }
+
+  .accounts-toolbar-controls {
     flex-wrap: nowrap;
+    justify-content: flex-end;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
   }
 
-  .accounts-toolbar-side .accounts-office-period-select {
+  .accounts-toolbar-actions {
+    display: inline-flex;
+    flex-wrap: nowrap;
     width: auto;
-    min-width: 5.5rem;
-    max-width: 6.75rem;
+    max-width: none;
+    gap: 0.25rem;
+  }
+
+  .accounts-toolbar-actions .app-export-btn {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding-inline: 0.375rem;
+    font-size: 0.5625rem;
+    gap: 0.15rem;
+    height: 2rem;
+    min-height: 2rem;
+    max-height: 2rem;
+    white-space: nowrap;
+    text-align: center;
+    line-height: 1.15;
+  }
+
+  .accounts-toolbar-actions .app-export-btn svg {
+    width: 0.75rem;
+    height: 0.75rem;
   }
 
   .accounts-tx-filter-grid {
@@ -3899,7 +4075,7 @@ td.cr-alert-bg-red:hover,
   }
 
   .accounts-payroll-period-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.375rem;
   }
 
@@ -4286,19 +4462,23 @@ td.cr-alert-bg-red:hover,
 }
 
 .accounts-latest-payroll-table .accounts-payroll-col-center {
-  width: 34%;
+  width: 26%;
 }
 
 .accounts-latest-payroll-table .accounts-payroll-col-month {
-  width: 13%;
+  width: 11%;
+}
+
+.accounts-latest-payroll-table .accounts-payroll-col-salary {
+  width: 12%;
 }
 
 .accounts-latest-payroll-table .accounts-payroll-col-net {
-  width: 14%;
+  width: 13%;
 }
 
 .accounts-latest-payroll-table .accounts-payroll-col-status {
-  width: 16%;
+  width: 15%;
 }
 
 .accounts-latest-payroll-table th,
@@ -4314,12 +4494,19 @@ td.cr-alert-bg-red:hover,
 .accounts-latest-payroll-table th.accounts-payroll-col-center,
 .accounts-latest-payroll-table td.accounts-payroll-col-center,
 .accounts-latest-payroll-table th.accounts-payroll-col-month,
-.accounts-latest-payroll-table td.accounts-payroll-col-month {
+.accounts-latest-payroll-table td.accounts-payroll-col-month,
+.accounts-latest-payroll-table th.accounts-payroll-col-salary,
+.accounts-latest-payroll-table td.accounts-payroll-col-salary {
   text-align: left;
 }
 
 .accounts-latest-payroll-table th.accounts-payroll-col-net,
 .accounts-latest-payroll-table td.accounts-payroll-col-net {
+  text-align: right;
+}
+
+.accounts-latest-payroll-table th.accounts-payroll-col-salary,
+.accounts-latest-payroll-table td.accounts-payroll-col-salary {
   text-align: right;
 }
 
@@ -4549,6 +4736,11 @@ html[data-admin-theme="dark"] .accounts-payroll-period-stat--pending {
   border-color: rgba(251, 146, 60, 0.35) !important;
 }
 
+html[data-admin-theme="dark"] .accounts-payroll-period-stat--pending-amount {
+  background: linear-gradient(135deg, rgba(154, 52, 18, 0.4), rgba(30, 41, 59, 0.92)) !important;
+  border-color: rgba(251, 191, 36, 0.35) !important;
+}
+
 html[data-admin-theme="dark"] .accounts-payroll-period-stat-label {
   color: var(--app-text-soft) !important;
 }
@@ -4562,6 +4754,10 @@ html[data-admin-theme="dark"] .accounts-payroll-period-stat--paid .accounts-payr
 }
 
 html[data-admin-theme="dark"] .accounts-payroll-period-stat--pending .accounts-payroll-period-stat-label {
+  color: rgb(253 186 116) !important;
+}
+
+html[data-admin-theme="dark"] .accounts-payroll-period-stat--pending-amount .accounts-payroll-period-stat-label {
   color: rgb(253 186 116) !important;
 }
 

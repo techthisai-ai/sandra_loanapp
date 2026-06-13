@@ -4,22 +4,25 @@ import {
   AlertTriangle,
   ArrowLeft,
   CalendarDays,
+  Check,
   CheckCircle2,
   Clock,
   IdCard,
   IndianRupee,
   MapPin,
+  Pencil,
   Phone,
   Printer,
   UserRound,
   FileSpreadsheet,
   FileText,
   Wallet,
+  X,
 } from "lucide-react";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import LoanNomineeSection from "../components/LoanNomineeSection";
 import useWalletAvailable from "../hooks/useWalletAvailable";
-import { approveLoanApplication, getLoanSettings, listCustomers, upsertLoanApplication } from "../services/userAuth";
+import { approveLoanApplication, getLoanSettings, getNextLoanId, listCustomers, upsertLoanApplication } from "../services/userAuth";
 import {
   coerceIdentityType,
   safeValidateIdentityNumber,
@@ -57,14 +60,6 @@ function formatSummaryDate(value) {
 
 function formatInr(n) {
   return `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
-}
-
-function generateLoanId(now) {
-  const dd = String(now.getDate()).padStart(2, "0");
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const yyyy = now.getFullYear();
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `LOAN-${dd}${mm}${yyyy}-${rand}`;
 }
 
 function InfoRow({ icon: Icon, label, value, compact = false, wide = false }) {
@@ -148,10 +143,61 @@ function LoanSummaryStatsGrid({
   emiStartDate,
   emiEndDate,
   compact = false,
+  emiEditable = false,
+  emiEditing = false,
+  emiDraft = "",
+  onEmiEditStart,
+  onEmiDraftChange,
+  onEmiEditSave,
+  onEmiEditCancel,
 }) {
   return (
     <div className={`grid gap-2 ${compact ? "grid-cols-2" : "grid-cols-1 gap-3 sm:grid-cols-2"}`}>
-      <LoanSummaryStatCard compact={compact} icon={IndianRupee} label="EMI amount" value={formatInr(emiAmount)} highlight tone="blue" />
+      {emiEditing ? (
+        <div className="rounded-lg border border-blue-200 bg-gradient-to-br from-blue-50/95 via-white to-white px-2.5 py-2">
+          <p className="loan-apply-label">EMI amount</p>
+          <div className="mt-1 flex items-center gap-1">
+            <input
+              value={emiDraft}
+              onChange={(event) => onEmiDraftChange(event.target.value.replace(/\D/g, ""))}
+              inputMode="numeric"
+              className="loan-apply-field h-8 min-w-0 flex-1 px-2 text-sm font-semibold tabular-nums"
+              placeholder="Enter EMI"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={onEmiEditSave}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700"
+              title="Save EMI"
+            >
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={onEmiEditCancel}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600"
+              title="Cancel"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="relative">
+          <LoanSummaryStatCard compact={compact} icon={IndianRupee} label="EMI amount" value={formatInr(emiAmount)} highlight tone="blue" />
+          {emiEditable ? (
+            <button
+              type="button"
+              onClick={onEmiEditStart}
+              className="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-md border border-blue-200 bg-white text-blue-600 shadow-sm hover:bg-blue-50"
+              title="Edit EMI amount"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          ) : null}
+        </div>
+      )}
       <LoanSummaryStatCard compact={compact} icon={Wallet} label="Interest amount" value={formatInr(interestAmount)} tone="amber" />
       <LoanSummaryStatCard compact={compact} icon={IndianRupee} label="Total payable" value={formatInr(totalPayable)} highlight tone="emerald" />
       <LoanSummaryStatCard compact={compact} icon={CalendarDays} label="EMI end date" value={formatSummaryDate(emiEndDate)} tone="emerald" />
@@ -247,6 +293,11 @@ export default function LoanApply() {
   const [disbursementDate, setDisbursementDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [collectionFrequency, setCollectionFrequency] = useState("Weekly");
+  const [loanId, setLoanId] = useState("");
+  const [loanIdLoading, setLoanIdLoading] = useState(true);
+  const [customEmiAmount, setCustomEmiAmount] = useState("");
+  const [emiEditing, setEmiEditing] = useState(false);
+  const [emiDraft, setEmiDraft] = useState("");
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -260,11 +311,37 @@ export default function LoanApply() {
   const selectedPreset = loanSettings.loanPresets.find((item) => item.id === selectedPresetId) || null;
   const activePreset = selectedPreset || matchedPreset;
 
-  const { emiAmount, totalPayable, interestAmount } = calculateLoanValues({
-    loanAmount,
-    loanWeeks,
-    preset: activePreset,
-  });
+  const calculatedLoan = useMemo(
+    () =>
+      calculateLoanValues({
+        loanAmount,
+        loanWeeks,
+        preset: activePreset,
+      }),
+    [activePreset, loanAmount, loanWeeks]
+  );
+
+  const emiAmount = useMemo(() => {
+    if (customEmiAmount !== "") {
+      const value = Number(customEmiAmount);
+      return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
+    }
+    return calculatedLoan.emiAmount;
+  }, [calculatedLoan.emiAmount, customEmiAmount]);
+
+  const totalPayable = useMemo(() => {
+    const weeks = Math.max(Number(loanWeeks) || 0, 0);
+    if (customEmiAmount !== "" && emiAmount > 0 && weeks > 0) {
+      return emiAmount * weeks;
+    }
+    return calculatedLoan.totalPayable;
+  }, [calculatedLoan.totalPayable, customEmiAmount, emiAmount, loanWeeks]);
+
+  const interestAmount = useMemo(() => {
+    const principal = Number(loanAmount || 0);
+    return Math.max(totalPayable - principal, 0);
+  }, [loanAmount, totalPayable]);
+
   const collectionDay = customer?.selectedDay || "--";
 
   const { principalDelta, insufficientWalletForSave } = useMemo(() => {
@@ -294,7 +371,7 @@ export default function LoanApply() {
       }),
     [collectionFrequency, disbursementDate, emiStartDate, loanWeeks, now, resolvedDueDate]
   );
-  const loanId = useMemo(() => generateLoanId(now), [now]);
+
   const loanSheetData = useMemo(
     () => ({
       loanId,
@@ -393,6 +470,45 @@ export default function LoanApply() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function resolveLoanId() {
+      const existingId = customer?.applicationId || customer?.loanId;
+      if (existingId) {
+        if (active) {
+          setLoanId(String(existingId));
+          setLoanIdLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const nextId = await getNextLoanId();
+        if (active) setLoanId(nextId);
+      } catch {
+        if (active) setLoanId("");
+      } finally {
+        if (active) setLoanIdLoading(false);
+      }
+    }
+
+    if (customer) {
+      setLoanIdLoading(true);
+      void resolveLoanId();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [customer?.applicationId, customer?.loanId, customer?.customerId]);
+
+  useEffect(() => {
+    setCustomEmiAmount("");
+    setEmiEditing(false);
+    setEmiDraft("");
+  }, [loanAmount, loanWeeks, selectedPresetId]);
 
   const hydrateNomineeFromCustomer = useCallback((record) => {
     if (!record) return;
@@ -669,6 +785,14 @@ export default function LoanApply() {
       setError("Please complete all required loan fields.");
       return;
     }
+    if (!loanId) {
+      setError("Loan ID is not ready yet. Please wait a moment and try again.");
+      return;
+    }
+    if (!emiAmount || emiAmount <= 0) {
+      setError("Enter a valid EMI amount.");
+      return;
+    }
 
     setError("");
     setLoading(true);
@@ -691,11 +815,11 @@ export default function LoanApply() {
         loanWeeks,
         loanPresetId: activePreset?.id || selectedPresetId || "",
         loanPresetLabel: activePreset ? formatPresetLabel(activePreset) : "",
-        loanPresetLoanAmount: Number(activePreset?.loanAmount || 0),
-        loanPresetLoanWeeks: Number(activePreset?.loanWeeks || 0),
-        loanPresetEmiAmount: Number(activePreset?.emiAmount || 0),
-        loanPresetInterestAmount: Number(activePreset?.interestAmount || 0),
-        loanPresetTotalPayable: Number(activePreset?.totalPayable || 0),
+        loanPresetLoanAmount: Number(activePreset?.loanAmount || loanAmount || 0),
+        loanPresetLoanWeeks: Number(activePreset?.loanWeeks || loanWeeks || 0),
+        loanPresetEmiAmount: emiAmount,
+        loanPresetInterestAmount: interestAmount,
+        loanPresetTotalPayable: totalPayable,
         disbursementDate,
         dueDate: resolvedDueDate,
         collectionFrequency,
@@ -931,7 +1055,14 @@ export default function LoanApply() {
               ) : null}
 
               <div className="grid grid-cols-2 gap-2">
-                <LoanSummaryStatCard compact icon={FileText} label="Loan ID" value={loanId} highlight tone="blue" className="[&_p:last-child]:break-all [&_p:last-child]:whitespace-normal" />
+                <LoanSummaryStatCard
+                  compact
+                  icon={FileText}
+                  label="Loan ID"
+                  value={loanIdLoading ? "Loading..." : loanId || "--"}
+                  highlight
+                  tone="blue"
+                />
                 <LoanSummaryStatCard compact icon={CalendarDays} label="Collection day" value={collectionDay} tone="slate" />
               </div>
 
@@ -1019,6 +1150,24 @@ export default function LoanApply() {
                   loanIssueDate={loanTimelinePreview.loanIssueDate}
                   emiStartDate={loanTimelinePreview.emiStartDate}
                   emiEndDate={loanTimelinePreview.emiEndDate}
+                  emiEditable
+                  emiEditing={emiEditing}
+                  emiDraft={emiDraft}
+                  onEmiEditStart={() => {
+                    setEmiDraft(customEmiAmount !== "" ? customEmiAmount : String(emiAmount || ""));
+                    setEmiEditing(true);
+                  }}
+                  onEmiDraftChange={setEmiDraft}
+                  onEmiEditSave={() => {
+                    const nextEmi = Number(emiDraft || 0);
+                    if (!nextEmi || nextEmi <= 0) return;
+                    setCustomEmiAmount(String(nextEmi));
+                    setEmiEditing(false);
+                  }}
+                  onEmiEditCancel={() => {
+                    setEmiDraft("");
+                    setEmiEditing(false);
+                  }}
                 />
               </div>
 
@@ -1038,7 +1187,7 @@ export default function LoanApply() {
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={loading || insufficientWalletForSave}
+                  disabled={loading || loanIdLoading || insufficientWalletForSave}
                   title={
                     insufficientWalletForSave
                       ? "Insufficient wallet balance — reduce principal increase or add capital"

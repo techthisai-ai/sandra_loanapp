@@ -7,7 +7,7 @@ import LoanRequestsPanel from "../components/loan/LoanRequestsPanel";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import { DEFAULT_DAY_CENTERS, loadLoanCenters } from "../constants/dayCenters";
 import { mergeCustomersWithLoanApplications } from "../utils/collectionCustomerUtils";
-import { hasAppliedForLoan } from "../utils/customerSheets";
+import { enrichCustomerForCollection, hasAppliedForLoan, hasValidLoanForCollection } from "../utils/customerSheets";
 import { isActiveCustomerRecord, isRecordDeleted } from "../utils/recordFlags";
 
 const defaultCenters = DEFAULT_DAY_CENTERS;
@@ -41,8 +41,60 @@ function formatDate(value) {
   return date.toLocaleDateString("en-GB");
 }
 
+function customerHasExistingLoan(customer, application, enriched) {
+  if (hasValidLoanForCollection(enriched)) return true;
+  if (application?.applicationId) return true;
+  const loanAmount = Number(enriched?.loanAmount || application?.loanAmount || 0);
+  const loanWeeks = Number(enriched?.loanWeeks || application?.loanWeeks || 0);
+  const weeklyDue = Number(
+    enriched?.weeklyDue || enriched?.emiAmount || application?.weeklyDue || application?.emiAmount || 0
+  );
+  const totalPayable = Number(enriched?.totalPayable || application?.totalPayable || 0);
+  if (loanAmount > 0 && (loanWeeks > 0 || totalPayable > 0 || weeklyDue > 0)) return true;
+  const status = String(enriched?.approvalStatus || application?.approvalStatus || "").toLowerCase();
+  return status === "approved" && loanAmount > 0;
+}
+
+function resolveCustomerLoanDisplay(customer, loanApplicationByCustomerId, collectedAmountByCustomer) {
+  const application = loanApplicationByCustomerId.get(customer?.customerId) || null;
+  const merged = application
+    ? mergeCustomersWithLoanApplications([customer], [application])[0]
+    : customer;
+  const enriched = enrichCustomerForCollection(merged);
+  const hasLoan = customerHasExistingLoan(customer, application, enriched);
+
+  const loanId =
+    enriched?.applicationId ||
+    enriched?.loanId ||
+    application?.applicationId ||
+    application?.loanId ||
+    "--";
+
+  const loanAmount = Number(enriched?.loanAmount || application?.loanAmount || 0);
+  const totalPayable = Number(enriched?.totalPayable || application?.totalPayable || 0);
+  const loanWeeks = Number(enriched?.loanWeeks || application?.loanWeeks || 0);
+  const weeklyDue = Number(
+    enriched?.weeklyDue || enriched?.emiAmount || application?.weeklyDue || application?.emiAmount || 0
+  );
+  const repaymentTarget =
+    totalPayable > 0 ? totalPayable : loanWeeks > 0 && weeklyDue > 0 ? weeklyDue * loanWeeks : loanAmount;
+
+  const collected = Number(collectedAmountByCustomer.get(customer.customerId) || 0);
+  const pendingAmount =
+    hasLoan && repaymentTarget > 0 ? Math.max(repaymentTarget - collected, 0) : null;
+
+  return { hasLoan, loanId, loanAmount, pendingAmount };
+}
+
 function formatCurrency(value) {
   return Number(value || 0).toLocaleString("en-IN");
+}
+
+function formatLoanCurrency(value, { allowZero = false } = {}) {
+  const amount = Number(value ?? NaN);
+  if (!Number.isFinite(amount)) return "--";
+  if (amount <= 0 && !allowZero) return "--";
+  return `₹${amount.toLocaleString("en-IN")}`;
 }
 
 function formatPhone(value) {
@@ -283,20 +335,6 @@ export default function LoanApplyHome() {
     };
   };
 
-  const scoreBadgeClass = (score) => {
-    if (score === "A") return "bg-emerald-100 text-emerald-700 border-emerald-200";
-    if (score === "B") return "bg-blue-100 text-blue-700 border-blue-200";
-    if (score === "C") return "bg-amber-100 text-amber-700 border-amber-200";
-    if (score === "RISK") return "bg-rose-100 text-rose-700 border-rose-200";
-    return "bg-slate-100 text-slate-600 border-slate-200";
-  };
-
-  const decisionClass = (decision) => {
-    if (decision === "Recommended") return "text-emerald-700";
-    if (decision === "Caution") return "text-rose-700";
-    return "text-slate-600";
-  };
-
   const dayCenters = useMemo(() => defaultCenters, []);
   const dayCounts = useMemo(() => {
     const map = new Map();
@@ -338,10 +376,37 @@ export default function LoanApplyHome() {
     });
   }, [centerCustomers, searchTerm]);
 
+  const loanApplicationByCustomerId = useMemo(() => {
+    const map = new Map();
+    loanApplications.forEach((application) => {
+      const customerId = application?.customerId;
+      if (!customerId) return;
+      const existing = map.get(customerId);
+      if (!existing || String(application.submittedAt || "") > String(existing.submittedAt || "")) {
+        map.set(customerId, application);
+      }
+    });
+    return map;
+  }, [loanApplications]);
+
+  const customerLoanDisplayRows = useMemo(
+    () =>
+      filteredCustomers.map((customer) => ({
+        customer,
+        profile: getRepaymentProfile(customer.customerId),
+        ...resolveCustomerLoanDisplay(customer, loanApplicationByCustomerId, collectedAmountByCustomer),
+      })),
+    [collectedAmountByCustomer, filteredCustomers, loanApplicationByCustomerId, repaymentByCustomer]
+  );
+
   const goToLoanForm = (customerId) => {
     const customer = customers.find((item) => item.customerId === customerId);
     if (!customer) return;
     navigate(`/dashboard/loan-apply/${customer.customerId}`, { state: { applyLoan: true, customer } });
+  };
+
+  const goToViewLoan = (customerId) => {
+    navigate(`/dashboard/customer/${customerId}/profile`);
   };
 
   const recentLoanRows = useMemo(() => {
@@ -568,50 +633,43 @@ export default function LoanApplyHome() {
 
           {filteredCustomers.length > 0 ? (
             <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-              <div className="loan-apply-customer-grid min-w-[720px] items-center border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
-                <span>#</span>
-                <span>Customer</span>
-                <span>Mobile</span>
-                <span>On-time</span>
-                <span>History</span>
-                <span>Last paid</span>
+              <div className="loan-apply-customer-grid min-w-[760px] items-center border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                <span>Customer name</span>
+                <span>Loan ID</span>
+                <span>Loan amount</span>
+                <span>Pending amount</span>
+                <span>Ontime</span>
                 <span>Action</span>
               </div>
               <div className="max-h-[52vh] overflow-y-auto">
-                {filteredCustomers.map((customer, index) => (
-                  (() => {
-                    const profile = getRepaymentProfile(customer.customerId);
-                    return (
+                {customerLoanDisplayRows.map((row) => (
                   <div
-                    key={customer.customerId}
-                    className="loan-apply-customer-grid min-w-[720px] items-center border-b border-slate-100 px-3 py-2 text-xs text-slate-700"
+                    key={row.customer.customerId}
+                    className="loan-apply-customer-grid min-w-[760px] items-center border-b border-slate-100 px-3 py-2 text-xs text-slate-700"
                   >
-                    <span className="font-semibold tabular-nums text-slate-500">{index + 1}</span>
-                    <div className="loan-apply-customer-cell">
-                      <span className="min-w-0 truncate font-medium text-slate-900">{customer.customerName || "Unnamed"}</span>
-                      <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
-                        <span className={`rounded border px-1.5 py-px text-[10px] font-semibold leading-tight ${scoreBadgeClass(profile.score)}`}>
-                          {profile.score}
-                        </span>
-                        <span className={`text-[10px] font-semibold leading-tight ${decisionClass(profile.decision)}`}>
-                          {profile.decision}
-                        </span>
-                      </div>
-                    </div>
-                    <span className="truncate tabular-nums">{customer.mobileNumber || "--"}</span>
-                    <span className="tabular-nums">{profile.onTimeRate}</span>
-                    <span className="text-xs tabular-nums text-slate-600">L:{profile.late}/M:{profile.missed}</span>
-                    <span className="tabular-nums">{profile.lastPaidAt}</span>
+                    <span className="truncate font-medium text-slate-900">{row.customer.customerName || "Unnamed"}</span>
+                    <span className="truncate font-mono text-[11px] text-slate-700" title={row.loanId}>
+                      {row.hasLoan ? row.loanId : "--"}
+                    </span>
+                    <span className="truncate tabular-nums font-semibold text-slate-900">
+                      {row.hasLoan ? formatLoanCurrency(row.loanAmount) : "--"}
+                    </span>
+                    <span className="truncate tabular-nums font-semibold text-slate-900">
+                      {row.hasLoan && row.pendingAmount != null
+                        ? formatLoanCurrency(row.pendingAmount, { allowZero: true })
+                        : "--"}
+                    </span>
+                    <span className="tabular-nums">{row.profile.onTimeRate}</span>
                     <button
                       type="button"
-                      onClick={() => goToLoanForm(customer.customerId)}
+                      onClick={() =>
+                        row.hasLoan ? goToViewLoan(row.customer.customerId) : goToLoanForm(row.customer.customerId)
+                      }
                       className="loan-apply-action-btn"
                     >
-                      Apply loan
+                      {row.hasLoan ? "View loan" : "Apply loan"}
                     </button>
                   </div>
-                    );
-                  })()
                 ))}
               </div>
             </div>

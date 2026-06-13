@@ -38,6 +38,12 @@ import {
   TRANSACTION_CATEGORY_OTHERS_VALUE,
 } from "../utils/accountsTransactionCategory";
 import { formatAssignedCentersLabel } from "../utils/employeeManagement";
+import {
+  buildEmployeePayrollRow,
+  buildPayrollPeriodStats,
+  isActiveEmployee,
+  normalizeEmployeeIdKey,
+} from "../utils/employeePayrollFlow";
 import { sumInvestorDeposits } from "../utils/walletLedgerBalance";
 import {
   buildPreviewColumnsPdfPayload,
@@ -64,7 +70,7 @@ import {
   updateAccountsTransaction,
   updateSalaryRecord,
 } from "../services/accounts";
-import { listEmployees } from "../services/userAuth";
+import { assignEmployeeMonthlySalary, listEmployees } from "../services/userAuth";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -73,6 +79,22 @@ const TABS = [
 ];
 
 const VALID_TAB_KEYS = new Set(TABS.map((item) => item.key));
+
+const OFFICE_PERIOD_PRESETS = [
+  { key: "today", label: "Today" },
+  { key: "this_week", label: "Week" },
+  { key: "this_month", label: "Month" },
+  { key: "this_year", label: "Year" },
+];
+
+function emptyAssignSalaryForm() {
+  return {
+    employeeDocId: "",
+    employeeId: "",
+    employeeName: "",
+    monthlySalary: "",
+  };
+}
 
 function formatCurrency(value) {
   const amount = Number(value || 0);
@@ -136,6 +158,13 @@ function computeOfficeDateBounds(preset, customFromStr, customToStr) {
       start: new Date(now.getFullYear(), now.getMonth(), 1),
       end: endOfDay(now),
       label: "This month",
+    };
+  }
+  if (preset === "this_year") {
+    return {
+      start: new Date(now.getFullYear(), 0, 1),
+      end: endOfDay(now),
+      label: "This year",
     };
   }
   const from = getDateValue(customFromStr);
@@ -257,6 +286,8 @@ function getStatusTone(status) {
   const value = String(status || "").toLowerCase();
   if (value === "completed" || value === "paid") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (value === "pending" || value === "processing") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (value === "inactive") return "border-slate-200 bg-slate-100 text-slate-500";
+  if (value === "unassigned") return "border-orange-200 bg-orange-50 text-orange-700";
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
@@ -292,10 +323,6 @@ function emptySalaryForm() {
     paymentDate: "",
     description: "",
   };
-}
-
-function normalizeEmployeeIdKey(value) {
-  return String(value || "").trim().toUpperCase();
 }
 
 function resolveSalaryCenter(record, employeesByEmployeeId = new Map()) {
@@ -476,6 +503,9 @@ export default function Accounts() {
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
   const [salaryModalOpen, setSalaryModalOpen] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [assignSalaryModalOpen, setAssignSalaryModalOpen] = useState(false);
+  const [assignSalaryForm, setAssignSalaryForm] = useState(emptyAssignSalaryForm);
+  const [assignSalaryError, setAssignSalaryError] = useState("");
 
   /** Office-only reporting range (income / expense / salary / exports) — separate from loan module. */
   const [officeDatePreset, setOfficeDatePreset] = useState("this_month");
@@ -591,6 +621,73 @@ export default function Accounts() {
   function closeCategoryModal() {
     setCategoryModalOpen(false);
     setCategoryError("");
+  }
+
+  function openAssignSalaryModal() {
+    setAssignSalaryError("");
+    setAssignSalaryForm(emptyAssignSalaryForm());
+    setAssignSalaryModalOpen(true);
+  }
+
+  function closeAssignSalaryModal() {
+    setAssignSalaryModalOpen(false);
+    setAssignSalaryError("");
+    setAssignSalaryForm(emptyAssignSalaryForm());
+  }
+
+  function handleAssignSalaryEmployeePick(employeeDocId) {
+    const employee = employees.find((item) => item.id === employeeDocId);
+    if (!employee) {
+      setAssignSalaryForm(emptyAssignSalaryForm());
+      return;
+    }
+    if (!isActiveEmployee(employee)) {
+      setAssignSalaryError("Salary can only be assigned to active employees.");
+      setAssignSalaryForm(emptyAssignSalaryForm());
+      return;
+    }
+    setAssignSalaryError("");
+    setAssignSalaryForm({
+      employeeDocId: employee.id,
+      employeeId: employee.employeeId || "",
+      employeeName: employee.displayName || employee.username || "",
+      monthlySalary: Number(employee.monthlySalary || 0) > 0 ? String(employee.monthlySalary) : "",
+    });
+  }
+
+  async function handleAssignSalarySubmit(event) {
+    event.preventDefault();
+    if (!user?.uid) return;
+    if (!assignSalaryForm.employeeDocId || !assignSalaryForm.employeeId || !assignSalaryForm.employeeName) {
+      setAssignSalaryError("Select an employee to assign salary.");
+      return;
+    }
+    if (Number(assignSalaryForm.monthlySalary || 0) <= 0) {
+      setAssignSalaryError("Enter a valid monthly salary greater than zero.");
+      return;
+    }
+
+    const existingEmployee = employees.find((item) => item.id === assignSalaryForm.employeeDocId);
+    if (!existingEmployee || !isActiveEmployee(existingEmployee)) {
+      setAssignSalaryError("Salary can only be assigned to active employees.");
+      return;
+    }
+    const isUpdate = Number(existingEmployee?.monthlySalary || 0) > 0;
+
+    setSaving(true);
+    setAssignSalaryError("");
+    setStatusMessage("");
+    try {
+      await assignEmployeeMonthlySalary(assignSalaryForm.employeeDocId, assignSalaryForm.monthlySalary);
+      const items = await listEmployees();
+      setEmployees(Array.isArray(items) ? items : []);
+      setStatusMessage(isUpdate ? "Monthly salary updated successfully." : "Monthly salary assigned successfully.");
+      closeAssignSalaryModal();
+    } catch (error) {
+      setAssignSalaryError(error.message || "Unable to assign monthly salary");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function openAddExpenseCategory() {
@@ -908,19 +1005,16 @@ export default function Accounts() {
     () =>
       employees
         .map((employee) => {
-          const employeeId = employee.employeeId || "—";
           const key = normalizeEmployeeIdKey(employee.employeeId);
           const record = key ? salaryByEmployeeIdForPeriod.get(key) : null;
-          const isPaid = record && String(record.payment_status).toLowerCase() === "paid";
-          return {
-            key: employee.id || employeeId,
-            employeeId,
-            name: employee.displayName || employee.username || "—",
-            center: formatAssignedCentersLabel(employee),
-            month: record?.salary_month ? formatMonthLabel(record.salary_month) : formatMonthLabel(currentMonth),
-            net: record ? formatCurrency(record.final_salary) : "—",
-            status: isPaid ? "paid" : "pending",
-          };
+          return buildEmployeePayrollRow({
+            employee,
+            salaryRecord: record,
+            currentMonth,
+            formatCurrency,
+            formatMonthLabel,
+            formatAssignedCentersLabel,
+          });
         })
         .sort((left, right) => left.name.localeCompare(right.name)),
     [currentMonth, employees, salaryByEmployeeIdForPeriod]
@@ -963,26 +1057,15 @@ export default function Accounts() {
     return { paid, pending, monthVal, count: salaryRecords.length };
   }, [currentMonth, salaryRecords]);
 
-  const payrollPeriodStats = useMemo(() => {
-    const inRange = salaryRecordsForOfficeExport;
-    const totalEmployees = employees.length;
-    const paidEmployeeIds = new Set(
-      inRange
-        .filter((item) => String(item.payment_status).toLowerCase() === "paid")
-        .map((item) => String(item.employee_id || "").trim().toUpperCase())
-        .filter(Boolean)
-    );
-    const paid = paidEmployeeIds.size;
-    const pending = Math.max(totalEmployees - paid, 0);
-    return {
-      total: totalEmployees,
-      paid,
-      pending,
-      periodLabel: officeAppliedBounds.label,
-    };
-  }, [employees.length, salaryRecordsForOfficeExport, officeAppliedBounds.label]);
-
-  const monthlyNetProfit = overviewMetrics.monthlyIncome - overviewMetrics.monthlyExpense;
+  const payrollPeriodStats = useMemo(
+    () =>
+      buildPayrollPeriodStats({
+        employees,
+        salaryByEmployeeId: salaryByEmployeeIdForPeriod,
+        periodLabel: officeAppliedBounds.label,
+      }),
+    [employees, salaryByEmployeeIdForPeriod, officeAppliedBounds.label]
+  );
 
   const pendingExpenseAmount = useMemo(
     () =>
@@ -1254,12 +1337,17 @@ export default function Accounts() {
   function handleSalaryEmployeePick(employeeDocId) {
     const employee = employees.find((item) => item.id === employeeDocId);
     if (!employee) return;
+    const assignedSalary = Number(employee.monthlySalary || 0);
+    setSalaryError(
+      isActiveEmployee(employee) ? "" : "This employee is inactive. Payroll is tracked only for active employees."
+    );
     setSalaryForm((current) => ({
       ...current,
       employeeName: employee.displayName || employee.username || "",
       employeeId: employee.employeeId || "",
       employeeCenter: formatAssignedCentersLabel(employee),
       department: current.department || employee.department || "",
+      basicSalary: assignedSalary > 0 ? String(assignedSalary) : current.basicSalary,
     }));
   }
 
@@ -1268,6 +1356,13 @@ export default function Accounts() {
     if (!user?.uid) return;
     if (!salaryForm.employeeName || !salaryForm.employeeId || !salaryForm.salaryMonth || Number(salaryForm.basicSalary || 0) <= 0) {
       setSalaryError("Employee name, employee ID, salary month, and basic salary are required.");
+      return;
+    }
+    const selectedEmployee = employees.find(
+      (item) => normalizeEmployeeIdKey(item.employeeId) === normalizeEmployeeIdKey(salaryForm.employeeId)
+    );
+    if (selectedEmployee && !isActiveEmployee(selectedEmployee)) {
+      setSalaryError("Payroll can only be processed for active employees.");
       return;
     }
     if (salaryForm.paymentStatus === "paid" && !salaryForm.paymentDate) {
@@ -1867,35 +1962,49 @@ export default function Accounts() {
         <section id="accounts-overview" className="scroll-mt-20 min-w-0 max-w-full space-y-4">
           <div className="accounts-summary-kpi-grid">
             <SummaryKpi label="Wallet balance" value={formatCurrency(Math.round(liveWalletBalance))} tone="wallet" />
-            <SummaryKpi label="Income" value={formatCurrency(Math.round(overviewMetrics.monthlyIncome))} tone="income" />
-            <SummaryKpi label="Expense" value={formatCurrency(Math.round(overviewMetrics.monthlyExpense))} tone="expense" />
+            <SummaryKpi label="Income" value={formatCurrency(Math.round(overviewMetrics.periodIncome))} tone="income" />
+            <SummaryKpi label="Expense" value={formatCurrency(Math.round(overviewMetrics.periodExpenseTotal))} tone="expense" />
             <SummaryKpi
               label="Net"
-              value={formatCurrency(Math.round(monthlyNetProfit))}
-              tone={monthlyNetProfit < 0 ? "net-negative" : monthlyNetProfit > 0 ? "net-positive" : "net-neutral"}
+              value={formatCurrency(Math.round(overviewMetrics.periodNet))}
+              tone={overviewMetrics.periodNet < 0 ? "net-negative" : overviewMetrics.periodNet > 0 ? "net-positive" : "net-neutral"}
             />
           </div>
 
           <div className="accounts-toolbar-card">
-            <div className="accounts-payroll-period-stats">
-              <div className="accounts-payroll-period-grid">
-                <div className="accounts-payroll-period-stat accounts-payroll-period-stat--total">
-                  <span className="accounts-payroll-period-stat-label">Total employees</span>
-                  <span className="accounts-payroll-period-stat-value">{employeesLoading ? "—" : payrollPeriodStats.total}</span>
+            <div className="accounts-toolbar-filters">
+              <div className="accounts-toolbar-metrics" role="group" aria-label="Office totals for selected period">
+                <div className="accounts-toolbar-metric accounts-toolbar-metric--income">
+                  <span className="accounts-toolbar-metric-label">Income</span>
+                  <span className="accounts-toolbar-metric-value">{formatCurrency(overviewMetrics.periodIncome)}</span>
                 </div>
-                <div className="accounts-payroll-period-stat accounts-payroll-period-stat--paid">
-                  <span className="accounts-payroll-period-stat-label">Paid</span>
-                  <span className="accounts-payroll-period-stat-value">{payrollPeriodStats.paid}</span>
+                <div className="accounts-toolbar-metric accounts-toolbar-metric--expense">
+                  <span className="accounts-toolbar-metric-label">Other expense</span>
+                  <span className="accounts-toolbar-metric-value">{formatCurrency(overviewMetrics.periodExpenseBooks)}</span>
                 </div>
-                <div className="accounts-payroll-period-stat accounts-payroll-period-stat--pending">
-                  <span className="accounts-payroll-period-stat-label">Pending</span>
-                  <span className="accounts-payroll-period-stat-value">{payrollPeriodStats.pending}</span>
+                <div className="accounts-toolbar-metric accounts-toolbar-metric--salary">
+                  <span className="accounts-toolbar-metric-label">Salary expense</span>
+                  <span className="accounts-toolbar-metric-value">{formatCurrency(overviewMetrics.periodSalaryPaid)}</span>
                 </div>
               </div>
+              <div className="accounts-toolbar-periods" role="group" aria-label="Office period">
+                {OFFICE_PERIOD_PRESETS.map((preset) => (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    className={`accounts-date-preset-btn ${officeDatePreset === preset.key ? "accounts-date-preset-btn--active" : ""}`}
+                    onClick={() => applyOfficeDatePreset(preset.key)}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
             </div>
-
-            <div className="accounts-toolbar-side flex w-full min-w-0 flex-row flex-wrap items-center gap-2 lg:w-auto lg:shrink-0 lg:border-l lg:border-slate-200/80 lg:pl-3">
+            <div className="accounts-toolbar-controls">
               <ExportToolbar className="accounts-toolbar-actions">
+                <ExportToolbarButton variant="category" icon={Plus} pressed={categoryModalOpen} onClick={openCategoryModal}>
+                  Add category
+                </ExportToolbarButton>
                 <ExportToolbarButton
                   variant="income"
                   icon={Plus}
@@ -1912,43 +2021,10 @@ export default function Accounts() {
                 >
                   Add expense
                 </ExportToolbarButton>
-                <ExportToolbarButton variant="category" icon={Plus} pressed={categoryModalOpen} onClick={openCategoryModal}>
-                  Add category
-                </ExportToolbarButton>
                 <ExportToolbarButton variant="salary" icon={Plus} pressed={salaryModalOpen} onClick={openSalaryModal}>
                   Pay salary
                 </ExportToolbarButton>
               </ExportToolbar>
-              <select
-                value={officeDatePreset}
-                onChange={(event) => applyOfficeDatePreset(event.target.value)}
-                className="app-select accounts-office-period-select shrink-0"
-                aria-label="Payroll period"
-              >
-                <option value="today">Today</option>
-                <option value="yesterday">Yesterday</option>
-                <option value="this_week">This week</option>
-                <option value="this_month">This month</option>
-                <option value="custom">Custom</option>
-              </select>
-              {officeDatePreset === "custom" ? (
-                <div className="accounts-toolbar-custom-range flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">From</label>
-                    <input type="date" value={officeCustomFrom} onChange={(e) => setOfficeCustomFrom(e.target.value)} className="app-input h-10 min-w-[150px]" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">To</label>
-                    <input type="date" value={officeCustomTo} onChange={(e) => setOfficeCustomTo(e.target.value)} className="app-input h-10 min-w-[150px]" />
-                  </div>
-                  <button type="button" onClick={applyOfficeCustomRange} className="app-button-primary h-10 rounded-xl px-4 text-sm font-semibold">
-                    Apply
-                  </button>
-                  <button type="button" onClick={resetOfficeDateFilter} className="app-button-secondary h-10 rounded-xl px-4 text-sm font-semibold">
-                    Reset
-                  </button>
-                </div>
-              ) : null}
             </div>
           </div>
 
@@ -2195,6 +2271,15 @@ export default function Accounts() {
                   <h3 className="text-base font-semibold text-slate-900">Last payroll</h3>
                 </div>
                 <ExportToolbar>
+                  <ExportToolbarButton
+                    variant="neutral"
+                    icon={Plus}
+                    pressed={assignSalaryModalOpen}
+                    title="Assign salary"
+                    onClick={openAssignSalaryModal}
+                  >
+                    Assign Salary
+                  </ExportToolbarButton>
                   <ExportToolbarButton variant="view" title="View report" onClick={() => setSalaryReportPreviewOpen(true)}>
                     View
                   </ExportToolbarButton>
@@ -2205,6 +2290,26 @@ export default function Accounts() {
                     Print
                   </ExportToolbarButton>
                 </ExportToolbar>
+              </div>
+              <div className="accounts-payroll-period-stats accounts-latest-payroll-stats">
+                <div className="accounts-payroll-period-grid">
+                  <div className="accounts-payroll-period-stat accounts-payroll-period-stat--total">
+                    <span className="accounts-payroll-period-stat-label">Total employees</span>
+                    <span className="accounts-payroll-period-stat-value">{employeesLoading ? "—" : payrollPeriodStats.total}</span>
+                  </div>
+                  <div className="accounts-payroll-period-stat accounts-payroll-period-stat--paid">
+                    <span className="accounts-payroll-period-stat-label">Paid</span>
+                    <span className="accounts-payroll-period-stat-value">{payrollPeriodStats.paid}</span>
+                  </div>
+                  <div className="accounts-payroll-period-stat accounts-payroll-period-stat--pending">
+                    <span className="accounts-payroll-period-stat-label">Pending</span>
+                    <span className="accounts-payroll-period-stat-value">{payrollPeriodStats.pending}</span>
+                  </div>
+                  <div className="accounts-payroll-period-stat accounts-payroll-period-stat--pending-amount">
+                    <span className="accounts-payroll-period-stat-label">Pending salary amount</span>
+                    <span className="accounts-payroll-period-stat-value">{formatCurrency(payrollPeriodStats.pendingSalaryAmount)}</span>
+                  </div>
+                </div>
               </div>
               <div className="accounts-latest-payroll-table-wrap app-table-wrap mt-2">
                 {employeesLoading ? (
@@ -2218,6 +2323,7 @@ export default function Accounts() {
                       <col className="accounts-payroll-col-name" />
                       <col className="accounts-payroll-col-center" />
                       <col className="accounts-payroll-col-month" />
+                      <col className="accounts-payroll-col-salary" />
                       <col className="accounts-payroll-col-net" />
                       <col className="accounts-payroll-col-status" />
                     </colgroup>
@@ -2227,6 +2333,7 @@ export default function Accounts() {
                         <th className="accounts-payroll-col-name">Name</th>
                         <th className="accounts-payroll-col-center">Center</th>
                         <th className="accounts-payroll-col-month">Month</th>
+                        <th className="accounts-payroll-col-salary">Salary</th>
                         <th className="accounts-payroll-col-net">Net</th>
                         <th className="accounts-payroll-col-status">Status</th>
                       </tr>
@@ -2240,6 +2347,7 @@ export default function Accounts() {
                             {item.center}
                           </td>
                           <td className="accounts-payroll-col-month whitespace-nowrap text-slate-600">{item.month}</td>
+                          <td className="accounts-payroll-col-salary whitespace-nowrap font-semibold tabular-nums text-slate-950">{item.salary}</td>
                           <td className="accounts-payroll-col-net whitespace-nowrap font-semibold tabular-nums text-slate-950">{item.net}</td>
                           <td className="accounts-payroll-col-status">
                             <StatusBadge value={item.status} />
@@ -2479,7 +2587,7 @@ export default function Accounts() {
               className="app-select h-10"
             >
               <option value="">Choose employee</option>
-              {employees.map((employee) => (
+              {employees.filter(isActiveEmployee).map((employee) => (
                 <option key={employee.id} value={employee.id}>
                   {(employee.displayName || employee.username || "Employee") + (employee.employeeId ? ` (${employee.employeeId})` : "")}
                 </option>
@@ -2561,6 +2669,57 @@ export default function Accounts() {
             </button>
             <button type="button" onClick={closeSalaryModal} className="app-button-secondary rounded-xl px-4 py-2 text-sm font-medium">
               Clear
+            </button>
+          </div>
+        </form>
+      </AccountsModal>
+
+      <AccountsModal open={assignSalaryModalOpen} onClose={closeAssignSalaryModal} title="Assign Salary" icon={BriefcaseBusiness}>
+        <form className="space-y-3" onSubmit={handleAssignSalarySubmit}>
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Select employee</label>
+            <select
+              value={assignSalaryForm.employeeDocId}
+              onChange={(event) => handleAssignSalaryEmployeePick(event.target.value)}
+              className="app-select h-10"
+            >
+              <option value="">Choose employee</option>
+              {employees.filter(isActiveEmployee).map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {(employee.displayName || employee.username || "Employee") + (employee.employeeId ? ` (${employee.employeeId})` : "")}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Employee ID</label>
+              <input value={assignSalaryForm.employeeId} readOnly className="app-input h-10 bg-slate-50" placeholder="Auto fill" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Employee name</label>
+              <input value={assignSalaryForm.employeeName} readOnly className="app-input h-10 bg-slate-50" placeholder="Auto fill" />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Monthly salary</label>
+              <input
+                type="number"
+                min="0"
+                value={assignSalaryForm.monthlySalary}
+                onChange={(event) => setAssignSalaryForm((current) => ({ ...current, monthlySalary: event.target.value }))}
+                className="app-input h-10"
+                placeholder="Enter monthly salary"
+              />
+            </div>
+          </div>
+          {assignSalaryError ? <p className="text-sm text-rose-600">{assignSalaryError}</p> : null}
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" disabled={saving} className="app-button-primary inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-60">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save
+            </button>
+            <button type="button" onClick={closeAssignSalaryModal} className="app-button-secondary rounded-xl px-4 py-2 text-sm font-medium">
+              Cancel
             </button>
           </div>
         </form>

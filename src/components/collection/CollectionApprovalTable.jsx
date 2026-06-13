@@ -169,7 +169,7 @@ export default function CollectionApprovalTable({
   };
 
   const colSpan = (showRemarksColumn ? 13 : 12) - (enableBulkSelect ? 0 : 1);
-  const tableWidth = (showRemarksColumn ? 1584 : 1464) - (enableBulkSelect ? 0 : 48);
+  const tableWidth = (showRemarksColumn ? 1476 : 1356) - (enableBulkSelect ? 0 : 48);
 
   return (
     <>
@@ -230,8 +230,8 @@ export default function CollectionApprovalTable({
             <colgroup>
               {enableBulkSelect ? <col className="w-[48px]" /> : null}
               <col className="w-[140px]" />
-              <col className="w-[190px]" />
-              <col className="w-[140px]" />
+              <col className="w-[92px]" />
+              <col className="w-[132px]" />
               <col className="w-[76px]" />
               <col className="w-[96px]" />
               <col className="w-[96px]" />
@@ -260,10 +260,10 @@ export default function CollectionApprovalTable({
                 <th className="border-b border-r border-slate-200 px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
                   Customer
                 </th>
-                <th className="border-b border-r border-slate-200 px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+                <th className="border-b border-r border-slate-200 px-2 py-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
                   Customer ID
                 </th>
-                <th className="border-b border-r border-slate-200 px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+                <th className="border-b border-r border-slate-200 px-2 py-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
                   Center
                 </th>
                 <th className="border-b border-r border-slate-200 px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
@@ -346,12 +346,12 @@ export default function CollectionApprovalTable({
                           {row.customerName}
                         </CustomerDetailLink>
                       </td>
-                      <td className="overflow-hidden border-r border-slate-100 px-3 py-3 align-middle text-xs text-slate-700">
+                      <td className="overflow-hidden border-r border-slate-100 px-2 py-3 align-middle text-xs text-slate-700">
                         <span className="block truncate font-mono text-[11px]" title={row.customerId}>
                           {row.customerId}
                         </span>
                       </td>
-                      <td className="overflow-hidden border-r border-slate-100 px-3 py-3 align-middle text-xs text-slate-700">
+                      <td className="overflow-hidden border-r border-slate-100 px-2 py-3 align-middle text-xs text-slate-700">
                         <span className="block truncate" title={row.center}>
                           {row.center}
                         </span>
