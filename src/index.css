@@ -3839,7 +3839,7 @@ td.cr-alert-bg-red:hover,
 
 .accounts-ledger-table-wrap .app-table.accounts-ledger-table--tx {
   width: 100%;
-  min-width: 100%;
+  min-width: 0;
   max-width: 100%;
   table-layout: fixed;
 }
@@ -3989,28 +3989,39 @@ td.cr-alert-bg-red:hover,
 /* Transaction ledger */
 .accounts-ledger-table--tx {
   width: 100%;
-  min-width: 100%;
+  min-width: 0;
   table-layout: fixed;
 }
 
 .accounts-ledger-table--tx .accounts-ledger-col-date {
-  width: 18%;
-}
-
-.accounts-ledger-table--tx .accounts-ledger-col-type {
-  width: 12%;
-}
-
-.accounts-ledger-table--tx .accounts-ledger-col-category {
   width: 26%;
 }
 
-.accounts-ledger-table--tx .accounts-ledger-col-amount {
+.accounts-ledger-table--tx .accounts-ledger-col-type {
+  width: 15%;
+}
+
+.accounts-ledger-table--tx .accounts-ledger-col-category {
   width: 22%;
 }
 
+.accounts-ledger-table--tx .accounts-ledger-col-amount {
+  width: 13%;
+}
+
 .accounts-ledger-table--tx .accounts-ledger-col-status {
-  width: 22%;
+  width: 24%;
+}
+
+.accounts-ledger-table--tx th {
+  overflow: visible;
+  text-overflow: clip;
+  letter-spacing: 0.04em;
+}
+
+.accounts-ledger-table--tx td {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .accounts-ledger-table--tx th,
@@ -4053,6 +4064,41 @@ td.cr-alert-bg-red:hover,
 
 .accounts-ledger-table--tx td.accounts-ledger-col-status > span {
   margin-inline: auto;
+}
+
+@media (min-width: 1024px) {
+  .accounts-workspace-split .accounts-ledger-table-wrap .app-table.accounts-ledger-table--tx,
+  .accounts-workspace-split .accounts-ledger-table--tx {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    table-layout: fixed;
+  }
+
+  .accounts-workspace-split .accounts-ledger-table--tx .accounts-ledger-col-date {
+    width: 26%;
+  }
+
+  .accounts-workspace-split .accounts-ledger-table--tx .accounts-ledger-col-type {
+    width: 15%;
+  }
+
+  .accounts-workspace-split .accounts-ledger-table--tx .accounts-ledger-col-category {
+    width: 22%;
+  }
+
+  .accounts-workspace-split .accounts-ledger-table--tx .accounts-ledger-col-amount {
+    width: 13%;
+  }
+
+  .accounts-workspace-split .accounts-ledger-table--tx .accounts-ledger-col-status {
+    width: 24%;
+  }
+
+  .accounts-workspace-split .accounts-ledger-table--tx th,
+  .accounts-workspace-split .accounts-ledger-table--tx td {
+    padding: 0.5rem 0.5rem;
+  }
 }
 
 @media (max-width: 767px) {

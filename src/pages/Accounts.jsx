@@ -2056,9 +2056,13 @@ export default function Accounts() {
                     ) : (
                       filteredTransactions.map((item) => (
                         <tr key={item.transaction_id}>
-                          <td className="accounts-ledger-col-date whitespace-nowrap text-slate-600">{formatDate(item.date)}</td>
-                          <td className="accounts-ledger-col-type capitalize text-slate-600">{item.transaction_type}</td>
-                          <td className="accounts-ledger-col-category truncate font-medium text-slate-900" title={item.category || "—"}>
+                          <td className="accounts-ledger-col-date whitespace-nowrap text-slate-600" title={formatDate(item.date)}>
+                            {formatDate(item.date)}
+                          </td>
+                          <td className="accounts-ledger-col-type capitalize whitespace-nowrap text-slate-600" title={item.transaction_type}>
+                            {item.transaction_type}
+                          </td>
+                          <td className="accounts-ledger-col-category font-medium text-slate-900" title={item.category || "—"}>
                             {item.category || "—"}
                           </td>
                           <td className="accounts-ledger-col-amount font-semibold tabular-nums text-slate-950">{formatCurrency(item.amount)}</td>
