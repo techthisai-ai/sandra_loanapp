@@ -1,4 +1,5 @@
 import BrandLogo from "../components/BrandLogo";
+import { BRAND_COMPANY_NAME } from "../constants/brand";
 
 export default function Home() {
   return (
@@ -8,7 +9,7 @@ export default function Home() {
           <BrandLogo variant="lg" className="shrink-0" />
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Home</p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Ruthra Financial Solutions</h2>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">{BRAND_COMPANY_NAME}</h2>
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
               Loan operations and collections in one place—built for teams in the field and at the desk, with a calm, shop-grade experience on mobile and web.
             </p>

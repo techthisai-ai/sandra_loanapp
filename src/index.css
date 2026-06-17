@@ -1470,6 +1470,11 @@ html[data-admin-theme="dark"] .app-table tbody tr:hover {
   padding-right: 0.5rem;
 }
 
+.erp-report-shell .erp-report-detail-search {
+  padding-left: 2.5rem;
+  padding-right: 0.75rem;
+}
+
 .collection-report-toolbar,
 .collection-report-toolbar-row,
 .collection-report-toolbar-side,
@@ -2453,6 +2458,149 @@ td.cr-alert-bg-red:hover,
   font-size: 0.88rem;
   color: var(--app-text-muted);
   box-shadow: var(--app-shadow-soft);
+}
+
+.brand-logo {
+  display: block;
+  width: auto;
+  max-width: min(280px, 72vw);
+  object-fit: contain;
+  object-position: center;
+}
+
+.brand-logo--sm {
+  height: 1.75rem;
+  max-height: 1.75rem;
+}
+
+.brand-logo--md {
+  height: 2.25rem;
+  max-height: 2.25rem;
+}
+
+.brand-logo--lg {
+  height: 2.75rem;
+  max-height: 2.75rem;
+}
+
+.brand-logo--auth {
+  display: block;
+  width: min(22rem, 92%);
+  max-width: 100%;
+  height: auto;
+  max-height: 10rem;
+  margin-inline: auto;
+  object-fit: contain;
+  object-position: center;
+}
+
+@media (min-width: 640px) {
+  .brand-logo--auth {
+    width: min(24rem, 88%);
+    max-height: 11rem;
+  }
+}
+
+.brand-logo--sidebar {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: 4.75rem;
+  object-fit: contain;
+  object-position: center;
+}
+
+@media (min-width: 1024px) {
+  .brand-logo--sidebar {
+    max-height: 5.25rem;
+  }
+}
+
+.brand-logo--splash {
+  width: auto;
+  max-width: min(280px, 72vw);
+  height: 6rem;
+  max-height: 6rem;
+}
+
+@media (min-width: 640px) {
+  .brand-logo--splash {
+    height: 7rem;
+    max-height: 7rem;
+  }
+}
+
+.brand-logo-plaque {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  margin-inline: auto;
+  padding: 0.35rem 0.45rem;
+  border-radius: 0.875rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 0 0 1px rgba(226, 232, 240, 0.95),
+    0 10px 22px -16px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.brand-logo-plaque .brand-logo--sidebar {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: 4.75rem;
+  min-height: 0;
+  object-fit: contain;
+  object-position: center;
+}
+
+@media (min-width: 1024px) {
+  .brand-logo-plaque .brand-logo--sidebar {
+    max-height: 5.25rem;
+  }
+}
+
+.login-brand-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid rgb(226 232 240);
+  text-align: center;
+}
+
+.login-brand-header .brand-logo--auth {
+  width: 100%;
+  max-width: none;
+  max-height: 10.5rem;
+}
+
+@media (min-width: 640px) {
+  .login-brand-header .brand-logo--auth {
+    max-height: 11.5rem;
+  }
+}
+
+.login-brand-header .app-eyebrow {
+  margin: 0;
+}
+
+.app-loading-screen-card .brand-logo--auth {
+  width: 100%;
+  max-width: none;
+  max-height: 10.5rem;
+}
+
+@media (min-width: 640px) {
+  .app-loading-screen-card .brand-logo--auth {
+    max-height: 11.5rem;
+  }
 }
 
 .sidebar-premium {

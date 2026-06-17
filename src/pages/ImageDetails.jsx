@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowLeft, Database, Download, FileSearch, FileSpreadsheet, FileText, Search, SquarePen } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import logoUrl from "../assets/logo.jpeg";
+import { BRAND_COMPANY_NAME, BRAND_LOGO_PATH } from "../constants/brand";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import { CUSTOMER_DAY_FILTER_OPTIONS, loadCentersWithDay } from "../constants/dayCenters";
 import { LOAN_CENTERS_CHANGED_EVENT } from "../constants/loanCenterStorage";
@@ -159,7 +159,7 @@ function buildSheetHtml(rows, title, logoSrc) {
         <div class="header">
           ${logoHtml}
           <div class="header-text">
-            <h1>RUTHRA FINANCIAL</h1>
+            <h1>{BRAND_COMPANY_NAME.toUpperCase()}</h1>
             <p>Collection Centre Sheet</p>
           </div>
         </div>
@@ -450,7 +450,7 @@ export default function ImageDetails() {
 
                     <button
                       type="button"
-                      onClick={() => downloadSheetHtml(exportRows, `${sanitizeFileName(exportLabel)}-sheet.html`, `Centre Sheet - ${exportLabel}`, logoUrl)}
+                      onClick={() => downloadSheetHtml(exportRows, `${sanitizeFileName(exportLabel)}-sheet.html`, `Centre Sheet - ${exportLabel}`, BRAND_LOGO_PATH)}
                       className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
                     >
                       <FileSpreadsheet className="h-4 w-4" />
@@ -459,7 +459,7 @@ export default function ImageDetails() {
 
                     <button
                       type="button"
-                      onClick={() => openPdf(exportRows, `Centre Sheet - ${exportLabel}`, logoUrl)}
+                      onClick={() => openPdf(exportRows, `Centre Sheet - ${exportLabel}`, BRAND_LOGO_PATH)}
                       className="inline-flex items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
                     >
                       <Download className="h-4 w-4" />

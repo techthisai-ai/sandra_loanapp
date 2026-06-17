@@ -101,7 +101,7 @@ function ApprovalStats({ label, value, accent = "blue" }) {
 /** Full approval register UI (used on Collection page and legacy route). */
 export function ApprovalRegisterPanel() {
   const { customers, entries, loading, error: syncError } = useLoanDataSync();
-  const reportMeta = useReportMeta("RFS-APR");
+  const reportMeta = useReportMeta("APR");
   const [actionError, setActionError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [savingId, setSavingId] = useState("");

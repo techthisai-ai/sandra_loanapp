@@ -1,4 +1,7 @@
-export const LOAN_ID_PREFIX = "RFS";
+export const LOAN_ID_PREFIX = "SA";
+const LOAN_ID_LEGACY_PREFIX = "RFS";
+
+const LOAN_ID_PATTERN = new RegExp(`^(?:${LOAN_ID_PREFIX}|${LOAN_ID_LEGACY_PREFIX})(\\d+)$`, "i");
 
 export function formatSequentialLoanId(sequenceNumber) {
   const next = Number(sequenceNumber);
@@ -10,8 +13,16 @@ export function formatSequentialLoanId(sequenceNumber) {
 
 export function parseSequentialLoanNumber(value) {
   const text = String(value || "").trim().toUpperCase();
-  const match = text.match(/^RFS(\d+)$/);
+  const match = text.match(LOAN_ID_PATTERN);
   return match ? Number(match[1]) : 0;
+}
+
+/** Show SA0001 even when the stored record still uses legacy RFS0001. */
+export function formatLoanIdDisplay(value) {
+  const sequence = parseSequentialLoanNumber(value);
+  if (sequence > 0) return formatSequentialLoanId(sequence);
+  const text = String(value || "").trim();
+  return text || "—";
 }
 
 export function maxSequentialLoanNumber(loanIds = []) {

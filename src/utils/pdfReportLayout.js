@@ -1,6 +1,7 @@
 /** Shared layout helpers for jsPDF + jspdf-autotable finance reports. */
 
 import { formatCurrencyForPrint } from "./formatCurrency.js";
+import { BRAND_COMPANY_NAME, BRAND_LOGO_PATH } from "../constants/brand.js";
 
 export const RFS_PALETTE = {
   ink: [15, 23, 42],
@@ -22,7 +23,7 @@ export const RFS_PALETTE = {
 export async function loadLogoDataUrl(origin) {
   const base = (origin || "").replace(/\/$/, "");
   try {
-    const res = await fetch(`${base}/branding/ruthra-logo.png`);
+    const res = await fetch(`${base}${BRAND_LOGO_PATH}`);
     if (!res.ok) return null;
     const blob = await res.blob();
     return await new Promise((resolve, reject) => {
@@ -77,7 +78,7 @@ export function drawReportFooter(doc, pageIndex, totalPages, generatedLabel, mar
   doc.setFont(footerFont, "normal");
   doc.setFontSize(7.2);
   doc.setTextColor(...RFS_PALETTE.muted);
-  doc.text("Ruthra Financial Solutions - confidential", margin, footerY + 1.5);
+  doc.text(`${BRAND_COMPANY_NAME} - confidential`, margin, footerY + 1.5);
 
   doc.setTextColor(...RFS_PALETTE.inkSoft);
   doc.text(`Page ${pageIndex} of ${totalPages}`, pageWidth / 2, footerY + 1.5, { align: "center" });

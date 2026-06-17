@@ -1,4 +1,5 @@
 import { formatCurrencyForPrint } from "./formatCurrency.js";
+import { BRAND_LOGO_PATH } from "../constants/brand.js";
 import { resolveLoanTimelineDates } from "./loanTimelineDates";
 
 function toNumber(value) {
@@ -168,7 +169,7 @@ export function buildLoanSheetHtml(data) {
     })
     .join("");
 
-  const logoMarkup = `<img class="brand-logo" src="/branding/rfs-logo.png" alt="${escapeHtml(companyName)} logo" />`;
+  const logoMarkup = `<img class="brand-logo" src="${BRAND_LOGO_PATH}" alt="${escapeHtml(companyName)} logo" />`;
 
   return `
     <html>

@@ -1,22 +1,33 @@
+import { BRAND_LOGO_ALT, BRAND_LOGO_PATH } from "../constants/brand";
+
 const sizeClass = {
-  sm: "h-7 max-h-7",
-  md: "h-9 max-h-9",
-  lg: "h-11 max-h-11",
-  /** Taller mark for dark sidebars — strong read on white backing */
-  sidebar: "h-[52px] max-h-[52px] min-h-[52px]",
-  /** Full-screen app loading splash */
-  splash: "h-20 max-h-20 min-h-20 sm:h-24 sm:max-h-24 sm:min-h-24",
+  sm: "brand-logo--sm",
+  md: "brand-logo--md",
+  lg: "brand-logo--lg",
+  auth: "brand-logo--auth",
+  sidebar: "brand-logo--sidebar",
+  splash: "brand-logo--splash",
 };
 
-export default function BrandLogo({ variant = "md", className = "", priority = false }) {
-  return (
+/**
+ * @param {"none" | "plaque"} frame
+ *   plaque — white inset card for dark surfaces (sidebar); logo white background blends in.
+ */
+export default function BrandLogo({ variant = "md", frame = "none", className = "", priority = false }) {
+  const image = (
     <img
-      src="/branding/ruthra-logo.png"
-      alt="Ruthra Financial Solutions"
-      className={`block w-auto max-w-[min(280px,72vw)] object-contain object-left ${sizeClass[variant] ?? sizeClass.md} ${className}`}
+      src={BRAND_LOGO_PATH}
+      alt={BRAND_LOGO_ALT}
+      className={`brand-logo ${sizeClass[variant] ?? sizeClass.md} ${className}`.trim()}
       loading={priority ? "eager" : "lazy"}
       decoding="async"
       fetchPriority={priority ? "high" : undefined}
     />
   );
+
+  if (frame === "plaque") {
+    return <div className="brand-logo-plaque">{image}</div>;
+  }
+
+  return image;
 }

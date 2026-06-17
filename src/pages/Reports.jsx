@@ -30,7 +30,7 @@ import BrandLogo from "../components/BrandLogo";
 import CustomerDetailLink from "../components/customer/CustomerDetailLink";
 import EnterpriseReportPreview from "../components/reports/EnterpriseReportPreview.jsx";
 import { ExportToolbar, ExportToolbarButton } from "../components/reports/ExportToolbar.jsx";
-import { downloadCollectionReportXlsx, downloadEmployeeLoanReportXlsx } from "../utils/collectionReportExports.js";
+import { downloadEmployeeLoanReportXlsx, downloadEnterprisePreviewXlsx } from "../utils/collectionReportExports.js";
 import { downloadEmployeeLoanReportPdf, printEmployeeLoanReportPdf } from "../utils/employeeLoanReportPdf.js";
 import { downloadLoanCollectionReportPdf, printLoanCollectionReportPdf } from "../utils/loanCollectionReportPdf.js";
 import { reportDateStamp } from "../utils/reportFilenames.js";
@@ -1032,8 +1032,8 @@ const EMPLOYEE_TXN_PAGE_SIZE = 12;
 
 export default function Reports() {
   const { customers, entries, loading, error: syncError } = useLoanDataSync();
-  const collectionReportMeta = useReportMeta("RFS-RPT-COL");
-  const employeeReportMeta = useReportMeta("RFS-RPT-EMP");
+  const collectionReportMeta = useReportMeta("RPT-COL");
+  const employeeReportMeta = useReportMeta("RPT-EMP");
   const error = syncError || "";
   const persistedRange = typeof window !== "undefined" ? loadPersistedReportRange() : null;
   const [rangePreset, setRangePreset] = useState(() => {
@@ -1358,15 +1358,28 @@ export default function Reports() {
     setCollectionExcelLoading(true);
     try {
       await Promise.resolve();
-      downloadCollectionReportXlsx(filteredDetailRows, reportDateStamp(), {
-        periodLabel: report.periodLabel,
-        generatedAt: new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "medium" }),
+      downloadEnterprisePreviewXlsx({
+        title: "Collection report",
+        subtitle: `Portfolio · ${report.periodLabel}`,
+        columns: collectionPreviewColumns,
+        rows: collectionPreviewRows,
+        metrics: collectionPreviewMetrics,
         filterLines: collectionPreviewFilterLines,
+        reportMeta: collectionReportMeta,
+        generatedAt: collectionReportMeta.generatedLabel,
+        filenamePrefix: "collection-report",
       });
     } finally {
       setCollectionExcelLoading(false);
     }
-  }, [filteredDetailRows, report.periodLabel, collectionPreviewFilterLines]);
+  }, [
+    collectionPreviewColumns,
+    collectionPreviewFilterLines,
+    collectionPreviewMetrics,
+    collectionPreviewRows,
+    collectionReportMeta,
+    report.periodLabel,
+  ]);
 
   const handleCollectionPrint = useCallback(async () => {
     setCollectionPrintLoading(true);

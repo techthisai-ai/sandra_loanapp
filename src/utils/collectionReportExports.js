@@ -1,5 +1,44 @@
 import * as XLSX from "xlsx";
+import { BRAND_COMPANY_NAME } from "../constants/brand.js";
+import { resolveReportPaidColumnAmount } from "./collectionReportRows.js";
+import {
+  makePaidEntryKey,
+  sanitizePaidAmount,
+} from "./collectionReportPaidStorage.js";
 import { reportDateStamp } from "./reportFilenames.js";
+
+const COLLECTION_REPORT_PANEL_COLUMNS = [
+  { key: "serial", label: "S.NO", width: 8 },
+  { key: "customerId", label: "CUSTOMER ID", width: 14 },
+  { key: "customerName", label: "CUSTOMER NAME", width: 22 },
+  { key: "phoneNumber", label: "PHONE NUMBER", width: 14 },
+  { key: "nomineeName", label: "NOMINEE NAME", width: 18 },
+  { key: "loanDate", label: "LOAN DATE", width: 12 },
+  { key: "currentTenure", label: "CURRENT TENURE", width: 14 },
+  { key: "currentDueAmount", label: "CURRENT DUE", width: 14 },
+  { key: "pendingTenuresLabel", label: "PENDING", width: 10 },
+  { key: "pendingAmountDisplay", label: "TOTAL PENDING", width: 16 },
+  { key: "balanceAmount", label: "BALANCE TENURE", width: 16 },
+  { key: "paid", label: "PAID", width: 14 },
+  { key: "entry", label: "ENTRY", width: 12 },
+];
+
+function mapCollectionReportPanelCell(row, column, index, paidState) {
+  if (column.key === "serial") return index + 1;
+  if (column.key === "paid") {
+    const amount = resolveReportPaidColumnAmount(row, paidState);
+    return amount > 0 ? amount : "";
+  }
+  if (column.key === "entry") {
+    if (row.installmentNumber == null) return "";
+    const entryKey = makePaidEntryKey(row.customerId, row.installmentNumber);
+    const draftAmount = sanitizePaidAmount(paidState.drafts?.[entryKey]);
+    return draftAmount ? Number(draftAmount) : "";
+  }
+  const value = row[column.key];
+  if (value == null || value === "—") return "";
+  return value;
+}
 
 function rowsToCsv(lines) {
   return lines
@@ -14,6 +53,146 @@ function downloadBlob(filename, blob) {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+function pushFilterLine(infoRows, line) {
+  const raw = String(line || "").trim();
+  if (!raw) return;
+  const idx = raw.indexOf(":");
+  if (idx > 0 && idx < 40) {
+    infoRows.push([raw.slice(0, idx).trim(), raw.slice(idx + 1).trim()]);
+  } else {
+    infoRows.push(["Filter", raw]);
+  }
+}
+
+function writeWorkbook(filename, wb) {
+  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  downloadBlob(
+    filename,
+    new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+  );
+}
+
+/**
+ * Excel export that mirrors EnterpriseReportPreview columns, metrics, and metadata.
+ */
+export function downloadEnterprisePreviewXlsx({
+  title = "Report",
+  subtitle = "",
+  columns = [],
+  rows = [],
+  metrics = [],
+  filterLines = [],
+  reportMeta = {},
+  generatedAt = "",
+  filenamePrefix = "report",
+  stamp = reportDateStamp(),
+}) {
+  const infoRows = [
+    ["Field", "Value"],
+    ["Company", BRAND_COMPANY_NAME],
+    ["Report", title],
+  ];
+  if (subtitle) infoRows.push(["Subtitle", subtitle]);
+  if (reportMeta.reportId) infoRows.push(["Report ID", reportMeta.reportId]);
+  if (reportMeta.preparedBy) infoRows.push(["Prepared by", reportMeta.preparedBy]);
+  if (reportMeta.contact) infoRows.push(["Contact", reportMeta.contact]);
+  if (reportMeta.branch || reportMeta.center) {
+    infoRows.push(["Center / branch", reportMeta.branch || reportMeta.center]);
+  }
+  if (generatedAt || reportMeta.generatedLabel) {
+    infoRows.push(["Generated", generatedAt || reportMeta.generatedLabel]);
+  }
+  for (const line of filterLines) pushFilterLine(infoRows, line);
+  for (const card of metrics) {
+    infoRows.push([String(card.label || "Metric"), String(card.value ?? "")]);
+    if (card.note) infoRows.push([`${card.label} (note)`, String(card.note)]);
+  }
+
+  const headers = columns.map((column) => column.label);
+  const dataRows = rows.map((row) =>
+    columns.map((column) => {
+      const value = row[column.key];
+      if (value == null || value === "") return "";
+      if (column.cellType === "currency") {
+        const amount = Number(value);
+        return Number.isFinite(amount) ? amount : 0;
+      }
+      return value;
+    })
+  );
+
+  const wsData = XLSX.utils.aoa_to_sheet(
+    dataRows.length ? [headers, ...dataRows] : [headers, ["No rows in this view"]]
+  );
+  wsData["!cols"] = columns.map((column) => ({
+    wch: Math.max(
+      String(column.label || "").length + 2,
+      column.cellType === "currency" ? 14 : 12
+    ),
+  }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(infoRows), "Report info");
+  XLSX.utils.book_append_sheet(wb, wsData, "Data");
+  writeWorkbook(`${filenamePrefix}-${stamp}.xlsx`, wb);
+}
+
+/**
+ * Collection customer report table export — matches on-screen columns in one sheet.
+ */
+export function downloadCollectionReportPanelXlsx({
+  rows = [],
+  paidState = { drafts: {}, committed: {} },
+  employeeName = "All employees",
+  mainCenter = "All",
+  filterLines = [],
+  summaryCards = [],
+  reportId = "",
+  generatedAt = "",
+  printDate = "",
+  companyName = BRAND_COMPANY_NAME,
+  stamp = reportDateStamp(),
+}) {
+  const infoRows = [
+    ["Field", "Value"],
+    ["Company", companyName],
+    ["Report", "Collection customer report"],
+    ["Employee", employeeName || "All employees"],
+    ["Main center", mainCenter || "All"],
+    ["Report ID", reportId || ""],
+    ["Generated", generatedAt || ""],
+    ["Print date", printDate || ""],
+    ["Total customers", String(rows.length)],
+  ];
+  for (const line of filterLines) pushFilterLine(infoRows, line);
+  for (const card of summaryCards) {
+    infoRows.push([String(card.label || "Summary"), String(card.value ?? "")]);
+  }
+
+  const headers = COLLECTION_REPORT_PANEL_COLUMNS.map((column) => column.label);
+  const tableRows = rows.map((row, index) =>
+    COLLECTION_REPORT_PANEL_COLUMNS.map((column) =>
+      mapCollectionReportPanelCell(row, column, index, paidState)
+    )
+  );
+
+  const sheetRows = [
+    ...infoRows,
+    [],
+    headers,
+    ...(tableRows.length ? tableRows : [["No customers found for the selected filters."]]),
+  ];
+
+  const worksheet = XLSX.utils.aoa_to_sheet(sheetRows);
+  worksheet["!cols"] = COLLECTION_REPORT_PANEL_COLUMNS.map((column, index) => ({
+    wch: index === 0 ? 20 : index === 1 ? 28 : column.width,
+  }));
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Collection Report");
+  writeWorkbook(`collection-customer-report-${stamp}.xlsx`, workbook);
 }
 
 /** @param {object[]} rows — same shape as Reports detailRows */

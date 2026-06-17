@@ -23,6 +23,7 @@ import AdminLayout from "../components/dashboard/AdminLayout";
 import LoanNomineeSection from "../components/LoanNomineeSection";
 import useWalletAvailable from "../hooks/useWalletAvailable";
 import { approveLoanApplication, getLoanSettings, getNextLoanId, listCustomers, upsertLoanApplication } from "../services/userAuth";
+import { formatLoanIdDisplay } from "../utils/loanIds.js";
 import {
   coerceIdentityType,
   safeValidateIdentityNumber,
@@ -906,7 +907,7 @@ export default function LoanApply() {
           <div className="mt-6 space-y-4 rounded-2xl border border-emerald-200/80 bg-white/95 p-4 shadow-sm backdrop-blur-sm sm:p-5">
             <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-r from-slate-50 to-white px-4 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Loan ID</p>
-              <p className="mt-1 break-all font-mono text-sm font-bold text-slate-900">{result.loanId}</p>
+              <p className="mt-1 break-all font-mono text-sm font-bold text-slate-900">{formatLoanIdDisplay(result.loanId)}</p>
             </div>
 
             <LoanSummaryStatsGrid
@@ -1059,7 +1060,7 @@ export default function LoanApply() {
                   compact
                   icon={FileText}
                   label="Loan ID"
-                  value={loanIdLoading ? "Loading..." : loanId || "--"}
+                  value={loanIdLoading ? "Loading..." : formatLoanIdDisplay(loanId) === "—" ? "--" : formatLoanIdDisplay(loanId)}
                   highlight
                   tone="blue"
                 />

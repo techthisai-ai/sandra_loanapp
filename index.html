@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#0c4a6e" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <title>Ruthra Financial Solutions</title>
+    <title>SA Finance</title>
     <style>
       #app-splash {
         position: fixed;
@@ -25,26 +25,32 @@
         flex-direction: column;
         align-items: center;
         width: min(100%, 22rem);
-        padding: 2.5rem 2rem;
+        padding: 2.75rem 2rem;
         text-align: center;
         border-radius: 28px;
         border: 1px solid rgba(148, 163, 184, 0.35);
         background: rgba(255, 255, 255, 0.96);
         box-shadow: 0 18px 44px -28px rgba(12, 74, 110, 0.28);
       }
+      .app-splash-brand-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+      }
       .app-splash-logo {
         display: block;
-        width: auto;
-        max-width: min(280px, 72vw);
-        height: 5.5rem;
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        max-height: 10.5rem;
         object-fit: contain;
+        object-position: center;
       }
-      .app-splash-brand {
-        margin: 1.5rem 0 0;
-        font: 600 0.68rem/1.4 system-ui, -apple-system, Segoe UI, sans-serif;
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-        color: #0f766e;
+      @media (min-width: 640px) {
+        .app-splash-logo {
+          max-height: 11.5rem;
+        }
       }
       .app-splash-spinner {
         width: 2.25rem;
@@ -70,16 +76,17 @@
   <body>
     <div id="app-splash" class="app-splash" aria-live="polite" aria-busy="true">
       <div class="app-splash-card">
-        <img
-          class="app-splash-logo"
-          src="/branding/ruthra-logo.png"
-          alt="Ruthra Financial Solutions"
-          width="220"
-          height="88"
-          decoding="async"
-          fetchpriority="high"
-        />
-        <p class="app-splash-brand">Ruthra Financial Solutions</p>
+        <div class="app-splash-brand-wrap">
+          <img
+            class="app-splash-logo"
+            src="/branding/sa-finance-logo.png"
+            alt="SA Finance"
+            width="200"
+            height="84"
+            decoding="async"
+            fetchpriority="high"
+          />
+        </div>
         <div class="app-splash-spinner" aria-hidden="true"></div>
         <p class="app-splash-text">Loading application…</p>
       </div>

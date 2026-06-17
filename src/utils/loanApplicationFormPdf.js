@@ -11,11 +11,12 @@ import {
   loadLogoDataUrl,
 } from "./pdfReportLayout";
 import { resolveLoanTimelineDates } from "./loanTimelineDates";
+import { BRAND_COMPANY_NAME } from "../constants/brand.js";
 
 const MARGIN = 12;
 const FOOTER_RESERVE = 16;
 const COMPANY = {
-  name: "Ruthra Financial Solutions",
+  name: BRAND_COMPANY_NAME,
   address: "Tamil Nadu, India",
   phone: "Contact your branch office",
   email: "admin@loanweb.com",

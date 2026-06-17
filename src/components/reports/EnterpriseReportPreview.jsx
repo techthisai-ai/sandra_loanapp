@@ -12,6 +12,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import BrandLogo from "../BrandLogo";
+import { BRAND_COMPANY_NAME, BRAND_SUPPORT_EMAIL } from "../../constants/brand";
 import { formatCurrencyForPrint, toPrintCurrencyText } from "../../utils/formatCurrency.js";
 import { ExportToolbar, ExportToolbarButton } from "./ExportToolbar.jsx";
 
@@ -162,7 +163,7 @@ function buildPremiumPrintHtml({ title, subtitle, generatedAt, filterLines, repo
   .footer { margin-top: 16px; text-align: center; font-size: 8px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
 </style></head><body><div class="wrap">
   <div class="band">
-    <p class="brand">Ruthra Financial Solutions</p>
+    <p class="brand">${BRAND_COMPANY_NAME}</p>
     <h1>${escapeHtml(title)}</h1>
     ${subtitle ? `<p class="sub">${escapeHtml(subtitle)}</p>` : ""}
     <div class="meta-grid">
@@ -173,7 +174,7 @@ function buildPremiumPrintHtml({ title, subtitle, generatedAt, filterLines, repo
   </div>
   ${metricHtml}
   <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
-  <p class="footer">Generated from Ruthra Financial Solutions System · Confidential — authorised use only</p>
+  <p class="footer">Generated from ${BRAND_COMPANY_NAME} System · Confidential — authorised use only</p>
 </div></body></html>`;
 }
 
@@ -410,7 +411,7 @@ export default function EnterpriseReportPreview({
               <div className="flex min-w-0 items-start gap-4">
                 <BrandLogo variant="sm" className="shrink-0 drop-shadow-sm" />
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-teal-700">Ruthra Financial Solutions</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-teal-700">{BRAND_COMPANY_NAME}</p>
                   <h2 id="erp-preview-title" className="mt-1.5 text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
                     {title}
                   </h2>
@@ -495,8 +496,11 @@ export default function EnterpriseReportPreview({
           <div className="mt-6 rounded-2xl border border-slate-200/90 bg-white p-3 shadow-[0_4px_20px_rgba(15,23,42,0.04)] sm:p-4 print:border-slate-300 print:shadow-none">
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between print:hidden">
               <p className="text-sm font-bold text-slate-900">Register detail</p>
-              <label className="relative w-full sm:max-w-xs">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <div className="relative min-w-0 w-full sm:max-w-xs">
+                <Search
+                  className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+                  aria-hidden
+                />
                 <input
                   value={search}
                   onChange={(e) => {
@@ -504,9 +508,10 @@ export default function EnterpriseReportPreview({
                     setPage(1);
                   }}
                   placeholder="Search in report…"
-                  className="app-input h-9 w-full rounded-xl border-slate-200 bg-slate-50/80 pl-9 text-sm"
+                  aria-label="Search in report"
+                  className="app-input reports-detail-toolbar-filter-control reports-detail-toolbar-search erp-report-detail-search w-full rounded-xl border-slate-200 bg-slate-50/80 text-sm"
                 />
-              </label>
+              </div>
             </div>
 
             <div className="max-h-[min(52vh,520px)] overflow-auto rounded-xl border border-slate-100 bg-slate-50/30 print:max-h-none print:overflow-visible">
@@ -606,9 +611,9 @@ export default function EnterpriseReportPreview({
           </div>
 
           <footer className="mt-6 border-t border-slate-100 pt-4 text-center">
-            <p className="text-[11px] font-semibold text-slate-500">Generated from Ruthra Financial Solutions System</p>
+            <p className="text-[11px] font-semibold text-slate-500">Generated from {BRAND_COMPANY_NAME} System</p>
             <p className="mt-1 text-[10px] text-slate-400">
-              Confidential — for authorised use only · support@ruthra.financial · +91 44 0000 0000
+              Confidential — for authorised use only · {BRAND_SUPPORT_EMAIL} · +91 44 0000 0000
             </p>
           </footer>
         </div>

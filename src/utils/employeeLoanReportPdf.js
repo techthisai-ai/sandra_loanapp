@@ -11,6 +11,7 @@ import {
   getPageLayout,
   loadLogoDataUrl,
 } from "./pdfReportLayout";
+import { BRAND_COMPANY_NAME } from "../constants/brand.js";
 
 const MARGIN = 10;
 const FOOTER_RESERVE = 14;
@@ -83,7 +84,7 @@ async function drawPremiumHeader(doc, layout, origin, generatedLabel, reportTitl
   doc.setFont(pdfFont, "bold");
   doc.setFontSize(15);
   doc.setTextColor(...PALETTE.ink);
-  doc.text("Ruthra Financial Solutions", textX, 12);
+  doc.text(BRAND_COMPANY_NAME, textX, 12);
 
   doc.setFontSize(10.5);
   doc.setTextColor(...PALETTE.accent);

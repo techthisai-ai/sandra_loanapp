@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import AdminLayout from "../components/dashboard/AdminLayout";
 import EnterpriseReportPreview from "../components/reports/EnterpriseReportPreview.jsx";
+import { BRAND_SUPPORT_EMAIL } from "../constants/brand.js";
 import { ExportToolbar, ExportToolbarButton } from "../components/reports/ExportToolbar.jsx";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import useAuth from "../hooks/useAuth";
@@ -26,12 +27,12 @@ import {
 import CollectionApprovalTable from "../components/collection/CollectionApprovalTable";
 import { resolveCollectionEntryDisplayStatus } from "../utils/collectionEntryDisplay.js";
 import { useSearchParams } from "react-router-dom";
-import { downloadCollectionRegisterXlsx } from "../utils/collectionReportExports.js";
+import { downloadEnterprisePreviewXlsx } from "../utils/collectionReportExports.js";
 import {
   downloadCollectionRegisterPdf,
   printCollectionRegisterPdf,
 } from "../utils/collectionRegisterReportPdf.js";
-import { reportDateStamp } from "../utils/reportFilenames.js";
+import { buildReportId, reportDateStamp } from "../utils/reportFilenames.js";
 import { ApprovalRegisterPanel } from "./ApprovalPage";
 import CollectionReportPanel from "../components/collection/CollectionReportPanel.jsx";
 import { normalizeCollectionFrequency as normalizeFrequency } from "../utils/loanTimelineDates";
@@ -346,10 +347,11 @@ export default function Collection() {
 
   const collectionReportMeta = useMemo(
     () => ({
-      reportId: `RFS-CR-${reportDateStamp()}-${Date.now().toString(36).slice(-4).toUpperCase()}`,
+      reportId: buildReportId("CR"),
       preparedBy: profile?.displayName || user?.email || "Operations",
       branch: frequencyFilter === "All" ? "All centers" : `Frequency: ${frequencyFilter}`,
-      contact: "support@ruthra.financial",
+      contact: BRAND_SUPPORT_EMAIL,
+      generatedLabel: new Date().toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }),
     }),
     [frequencyFilter, profile?.displayName, user?.email]
   );
@@ -444,11 +446,28 @@ export default function Collection() {
     setCollectionExcelExportLoading(true);
     try {
       await Promise.resolve();
-      downloadCollectionRegisterXlsx(filteredRows);
+      downloadEnterprisePreviewXlsx({
+        title: "Collection register",
+        subtitle: exportTitle,
+        columns: collectionPreviewColumns,
+        rows: collectionPreviewRows,
+        metrics: collectionPreviewMetrics,
+        filterLines: collectionPreviewFilterLines,
+        reportMeta: collectionReportMeta,
+        generatedAt: collectionReportMeta.generatedLabel,
+        filenamePrefix: "collection-register",
+      });
     } finally {
       setCollectionExcelExportLoading(false);
     }
-  }, [filteredRows]);
+  }, [
+    collectionPreviewColumns,
+    collectionPreviewFilterLines,
+    collectionPreviewMetrics,
+    collectionPreviewRows,
+    collectionReportMeta,
+    exportTitle,
+  ]);
 
   const handleApprove = async (entryId) => {
     setSavingId(entryId);

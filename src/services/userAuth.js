@@ -20,6 +20,7 @@ import {
   ACCOUNTS_TRANSACTIONS_COLLECTION,
 } from "./accounts.js";
 import { auth, db, firebaseConfig } from "../firebase/config";
+import { canRunDemoBootstrap } from "../firebase/environment.js";
 import { calculateLoanValues } from "../utils/loanCalculation";
 import { getLedgerWalletBalance, ledgerHasLoanDisbursementForCustomer } from "../utils/walletLedgerBalance";
 import { notifyLoanCentersChanged } from "../constants/loanCenterStorage";
@@ -84,6 +85,53 @@ const DEFAULT_LOAN_PRESET = {
   totalPayable: 20000,
 };
 
+const FIRESTORE_READ_TIMEOUT_MS = 12_000;
+let defaultAccountsBootstrapPromise = null;
+
+function scheduleTimeout(ms) {
+  const schedule =
+    typeof window !== "undefined" ? window.setTimeout.bind(window) : setTimeout;
+  const clear =
+    typeof window !== "undefined" ? window.clearTimeout.bind(window) : clearTimeout;
+  return { schedule, clear };
+}
+
+async function getDocWithTimeout(docRef, timeoutMs = FIRESTORE_READ_TIMEOUT_MS, label = "Profile load") {
+  const { schedule, clear } = scheduleTimeout();
+  let timeoutId;
+  try {
+    return await Promise.race([
+      getDoc(docRef),
+      new Promise((_, reject) => {
+        timeoutId = schedule(() => {
+          reject(
+            new Error(
+              `${label} timed out. Check your internet connection and try again.`
+            )
+          );
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId != null) clear(timeoutId);
+  }
+}
+
+async function waitForBootstrapBeforeLogin() {
+  if (!defaultAccountsBootstrapPromise) return;
+  try {
+    await Promise.race([
+      defaultAccountsBootstrapPromise,
+      new Promise((resolve) => {
+        const { schedule } = scheduleTimeout();
+        schedule(resolve, 4000);
+      }),
+    ]);
+  } catch {
+    // Demo bootstrap failures should not block real user sign-in.
+  }
+}
+
 const EMPLOYEE_SEQUENTIAL_ID_PATTERN = /^EMP(\d{3})$/;
 
 function makeEmployeeId() {
@@ -139,7 +187,11 @@ export async function resolveLoginEmail(identifier) {
 
   const normalizedUsername = normalizeUsername(raw);
   try {
-    const mappingSnap = await getDoc(doc(db, EMPLOYEE_LOGINS_COLLECTION, normalizedUsername));
+    const mappingSnap = await getDocWithTimeout(
+      doc(db, EMPLOYEE_LOGINS_COLLECTION, normalizedUsername),
+      8_000,
+      "Username lookup"
+    );
     if (mappingSnap.exists()) {
       const loginEmail = normalizeText(mappingSnap.data().loginEmail);
       if (loginEmail) return loginEmail.toLowerCase();
@@ -367,7 +419,7 @@ async function assertCustomerIdAvailable(customerId, excludeId = "") {
   return normalized;
 }
 
-/** Returns the next available loan ID in the format RFS0001. */
+/** Returns the next available loan ID in the format SA0001. */
 export async function getNextLoanId() {
   const [applicationsSnap, customersSnap, requestsSnap] = await Promise.all([
     getDocs(collection(db, "loanApplications")),
@@ -1020,6 +1072,9 @@ export async function seedDefaultAccounts() {
   if (Capacitor.isNativePlatform()) {
     return;
   }
+  if (!canRunDemoBootstrap()) {
+    return;
+  }
   if (auth.currentUser) {
     return;
   }
@@ -1030,29 +1085,39 @@ export async function seedDefaultAccounts() {
     }
     return;
   }
+  if (defaultAccountsBootstrapPromise) {
+    return defaultAccountsBootstrapPromise;
+  }
   if (defaultAccountsSeedAttempted) {
     return;
   }
   defaultAccountsSeedAttempted = true;
 
-  try {
-    const adminOk = await withBootstrapTimeout(seedAdminUser(), "Admin account setup");
-    const employeeOk = await withBootstrapTimeout(seedDemoEmployeeUser(), "Employee account setup");
-    // Only skip future bootstrap attempts when both demo accounts are ready — avoids poisoning
-    // the tab with sessionStorage after a failed create (e.g. sign-up disabled in Firebase).
-    if (adminOk && employeeOk) {
-      await withBootstrapTimeout(seedDemoCustomerIfMissing(), "Demo customer setup");
-      markSeedFinishedThisBrowserSession();
+  defaultAccountsBootstrapPromise = (async () => {
+    try {
+      const adminOk = await withBootstrapTimeout(seedAdminUser(), "Admin account setup");
+      const employeeOk = await withBootstrapTimeout(seedDemoEmployeeUser(), "Employee account setup");
+      // Only skip future bootstrap attempts when both demo accounts are ready — avoids poisoning
+      // the tab with sessionStorage after a failed create (e.g. sign-up disabled in Firebase).
+      if (adminOk && employeeOk) {
+        await withBootstrapTimeout(seedDemoCustomerIfMissing(), "Demo customer setup");
+        markSeedFinishedThisBrowserSession();
+      }
+    } catch (e) {
+      console.warn("[loan-web] Default accounts bootstrap:", e);
+    } finally {
+      defaultAccountsBootstrapPromise = null;
     }
-  } catch (e) {
-    console.warn("[loan-web] Default accounts bootstrap:", e);
-  }
+  })();
+
+  return defaultAccountsBootstrapPromise;
 }
 
 /** @deprecated Use seedDefaultAccounts — kept for existing imports. */
 export const seedAdminAccount = seedDefaultAccounts;
 
 export async function loginWithRole({ email, password }) {
+  await waitForBootstrapBeforeLogin();
   const normalizedEmail = await resolveLoginEmail(email);
   const loginPassword = String(password ?? "").trim();
   if (!loginPassword) {
@@ -1095,7 +1160,7 @@ export async function loginWithRole({ email, password }) {
   const profileRef = doc(db, USERS_COLLECTION, credential.user.uid);
   let profileSnap;
   try {
-    profileSnap = await getDoc(profileRef);
+    profileSnap = await getDocWithTimeout(profileRef, FIRESTORE_READ_TIMEOUT_MS, "Profile load");
   } catch (profileError) {
     await signOut(auth);
     const message = profileError?.message || "";
@@ -1103,6 +1168,9 @@ export async function loginWithRole({ email, password }) {
       throw new Error(
         "Could not load your employee profile. Ask an admin to open the Employee page, edit your account, set your password again, and save."
       );
+    }
+    if (message.includes("timed out")) {
+      throw profileError;
     }
     throw profileError;
   }
@@ -1165,7 +1233,7 @@ export async function loginWithRole({ email, password }) {
   return { credential, profile };
 }
 
-const LOGIN_TIMEOUT_MS = 30_000;
+const LOGIN_TIMEOUT_MS = 45_000;
 const BOOTSTRAP_TIMEOUT_MS = 15_000;
 
 async function withBootstrapTimeout(promise, label) {
@@ -1198,7 +1266,8 @@ export async function loginWithRoleTimed(credentials, timeoutMs = LOGIN_TIMEOUT_
     timeoutId = schedule(() => {
       reject(
         new Error(
-          "Login timed out. Check your internet connection, deploy Firestore rules (firebase deploy --only firestore:rules), then try again."
+          "Sign-in timed out. Check your internet connection, wait a moment, and try again. " +
+            "If you are on a slow network, reload the page before signing in."
         )
       );
     }, timeoutMs);

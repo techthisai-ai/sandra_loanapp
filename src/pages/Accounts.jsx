@@ -456,7 +456,7 @@ function AccountsModal({ open, onClose, title, icon: Icon, children, wide = fals
 
 export default function Accounts() {
   const { user, profile } = useAuth();
-  const accountsReportMeta = useReportMeta("RFS-ACC");
+  const accountsReportMeta = useReportMeta("ACC");
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const todayLabel = new Date().toISOString().slice(0, 10);

@@ -8,6 +8,7 @@ import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import { DEFAULT_DAY_CENTERS, loadLoanCenters } from "../constants/dayCenters";
 import { mergeCustomersWithLoanApplications } from "../utils/collectionCustomerUtils";
 import { enrichCustomerForCollection, hasAppliedForLoan, hasValidLoanForCollection } from "../utils/customerSheets";
+import { formatLoanIdDisplay } from "../utils/loanIds.js";
 import { isActiveCustomerRecord, isRecordDeleted } from "../utils/recordFlags";
 
 const defaultCenters = DEFAULT_DAY_CENTERS;
@@ -63,12 +64,13 @@ function resolveCustomerLoanDisplay(customer, loanApplicationByCustomerId, colle
   const enriched = enrichCustomerForCollection(merged);
   const hasLoan = customerHasExistingLoan(customer, application, enriched);
 
-  const loanId =
+  const loanId = formatLoanIdDisplay(
     enriched?.applicationId ||
-    enriched?.loanId ||
-    application?.applicationId ||
-    application?.loanId ||
-    "--";
+      enriched?.loanId ||
+      application?.applicationId ||
+      application?.loanId ||
+      ""
+  );
 
   const loanAmount = Number(enriched?.loanAmount || application?.loanAmount || 0);
   const totalPayable = Number(enriched?.totalPayable || application?.totalPayable || 0);
@@ -649,7 +651,7 @@ export default function LoanApplyHome() {
                   >
                     <span className="truncate font-medium text-slate-900">{row.customer.customerName || "Unnamed"}</span>
                     <span className="truncate font-mono text-[11px] text-slate-700" title={row.loanId}>
-                      {row.hasLoan ? row.loanId : "--"}
+                      {row.hasLoan ? (row.loanId === "—" ? "--" : row.loanId) : "--"}
                     </span>
                     <span className="truncate tabular-nums font-semibold text-slate-900">
                       {row.hasLoan ? formatLoanCurrency(row.loanAmount) : "--"}

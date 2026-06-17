@@ -91,7 +91,8 @@ import {
   groupReportRowsBySubCenter,
   printCollectionCustomerReport,
 } from "../../utils/collectionCustomerReportPrint";
-import { reportDateStamp } from "../../utils/reportFilenames";
+import { downloadCollectionReportPanelXlsx } from "../../utils/collectionReportExports";
+import { buildReportId, reportDateStamp } from "../../utils/reportFilenames";
 import {
   commitPaidDraftEntry,
   loadCollectionReportPaidState,
@@ -278,6 +279,7 @@ export default function CollectionReportPanel() {
   const [search, setSearch] = useState("");
   const [printLoading, setPrintLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [excelLoading, setExcelLoading] = useState(false);
   const [paidState, setPaidState] = useState(() => loadCollectionReportPaidState());
   const [pendingAmountRow, setPendingAmountRow] = useState(null);
   const [entryPersistError, setEntryPersistError] = useState("");
@@ -586,7 +588,7 @@ export default function CollectionReportPanel() {
       mainCenter: centerFilter === "All" ? "All" : centerFilter,
       sections,
       paidState,
-      reportId: `RFS-CRR-${reportDateStamp()}`,
+      reportId: buildReportId("CRR"),
       filterLines: [
         `Employee: ${employeeLabel}`,
         `Main center: ${centerFilter}`,
@@ -648,6 +650,37 @@ export default function CollectionReportPanel() {
     }
   }, [buildExportPayload]);
 
+  const handleExcel = useCallback(async () => {
+    setExcelLoading(true);
+    try {
+      if (!reportRows.length) {
+        window.alert("No customers found for the selected filters.");
+        return;
+      }
+      const payload = buildExportPayload();
+      downloadCollectionReportPanelXlsx({
+        rows: reportRows,
+        paidState,
+        employeeName: payload.employeeName,
+        mainCenter: payload.mainCenter,
+        filterLines: payload.filterLines,
+        summaryCards: payload.summaryCards,
+        reportId: payload.reportId,
+        generatedAt: new Date().toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }),
+        printDate: new Date().toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        }),
+      });
+    } catch (excelError) {
+      console.error(excelError);
+      window.alert(excelError?.message || "Excel export failed. Please try again.");
+    } finally {
+      setExcelLoading(false);
+    }
+  }, [buildExportPayload, paidState, reportRows]);
+
   const loading = syncLoading || employeesLoading;
 
   return (
@@ -695,7 +728,15 @@ export default function CollectionReportPanel() {
               >
                 Print
               </ExportToolbarButton>
-              <ExportToolbarButton variant="excel">Excel</ExportToolbarButton>
+              <ExportToolbarButton
+                variant="excel"
+                loading={excelLoading}
+                disabled={excelLoading || !reportRows.length}
+                onClick={() => void handleExcel()}
+                title="Download customer report Excel"
+              >
+                Excel
+              </ExportToolbarButton>
               <ExportToolbarButton
                 variant="pdf"
                 loading={pdfLoading}

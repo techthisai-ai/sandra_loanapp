@@ -122,13 +122,9 @@ export default function Login() {
   return (
     <main className="app-shell flex min-h-[100dvh] items-center justify-center px-4 py-8 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(2.5rem,env(safe-area-inset-top))] text-slate-900 sm:px-6 sm:py-10">
       <section className="app-panel w-full max-w-md rounded-[24px] p-6 sm:rounded-[28px] sm:p-8 md:max-w-lg">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <BrandLogo variant="md" className="shrink-0" />
-          <div className="min-w-0">
-            <p className="app-eyebrow text-[11px] font-semibold uppercase tracking-[0.24em]">Sign in</p>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Ruthra Financial Solutions</h1>
-          </div>
-        </div>
+        <header className="login-brand-header">
+          <BrandLogo variant="auth" priority />
+        </header>
 
         {error ? (
           <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
