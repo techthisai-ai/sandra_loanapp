@@ -244,11 +244,7 @@ function buildSectionHtml(section, paidState, columns = PRINT_COLUMNS) {
   `;
 }
 
-const PRINT_SHEET_STYLES = `
-      @page {
-        size: A4 landscape;
-        margin: 10mm 8mm;
-      }
+const PRINT_BODY_STYLES = `
       * { box-sizing: border-box; }
       body {
         margin: 0;
@@ -351,6 +347,35 @@ const PRINT_SHEET_STYLES = `
       }
 `;
 
+/** Collection report Print button — A4 portrait. */
+const PRINT_CUSTOMER_PORTRAIT_STYLES = `
+      @page {
+        size: A4 portrait;
+        margin: 10mm 8mm;
+      }
+      ${PRINT_BODY_STYLES}
+      .detail-table thead th {
+        font-size: 6.5px;
+        padding: 4px 2px;
+        letter-spacing: 0.04em;
+      }
+      .detail-table tbody td {
+        font-size: 7px;
+        padding: 3px 2px;
+      }
+      .section-title {
+        font-size: 10px;
+      }
+`;
+
+const PRINT_SHEET_STYLES = `
+      @page {
+        size: A4 landscape;
+        margin: 10mm 8mm;
+      }
+      ${PRINT_BODY_STYLES}
+`;
+
 const FULL_REPORT_EXTRA_STYLES = `
       .top-band {
         display: flex;
@@ -443,7 +468,7 @@ function buildCollectionCustomerPrintHtml({
     <meta charset="UTF-8" />
     <title>Collection Customer Report</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" />
-    <style>${PRINT_SHEET_STYLES}</style>
+    <style>${PRINT_CUSTOMER_PORTRAIT_STYLES}</style>
   </head>
   <body>
     <div class="sheet">
