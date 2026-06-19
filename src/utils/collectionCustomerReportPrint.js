@@ -347,24 +347,115 @@ const PRINT_BODY_STYLES = `
       }
 `;
 
-/** Collection report Print button — A4 portrait. */
+/** Collection report Print button — A4 portrait, large readable B&W text. */
 const PRINT_CUSTOMER_PORTRAIT_STYLES = `
       @page {
         size: A4 portrait;
-        margin: 10mm 8mm;
+        margin: 8mm 6mm;
       }
-      ${PRINT_BODY_STYLES}
-      .detail-table thead th {
-        font-size: 6.5px;
-        padding: 4px 2px;
-        letter-spacing: 0.04em;
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Noto Sans Tamil", "Segoe UI", Arial, sans-serif;
+        color: #000;
+        background: #fff;
+        line-height: 1.45;
+        font-size: 11pt;
+        font-variant-numeric: normal;
+        letter-spacing: normal;
       }
-      .detail-table tbody td {
-        font-size: 7px;
-        padding: 3px 2px;
+      .sheet { width: 100%; margin: 0 auto; }
+      .sub-center-section {
+        margin-bottom: 16px;
+        page-break-inside: avoid;
+      }
+      .sub-center-section:first-child .section-header {
+        margin-top: 0;
+      }
+      .section-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 12px 0 8px;
+      }
+      .section-line {
+        flex: 1;
+        height: 1px;
+        background: #000;
+        min-width: 20px;
       }
       .section-title {
-        font-size: 10px;
+        margin: 0;
+        flex-shrink: 0;
+        font-size: 12pt;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #000;
+        white-space: nowrap;
+      }
+      .detail-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 6px;
+        table-layout: fixed;
+      }
+      .detail-table thead th {
+        background: #fff;
+        color: #000;
+        font-size: 9pt;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        padding: 7px 5px;
+        border: 1px solid #000;
+        vertical-align: middle;
+      }
+      .detail-table tbody td {
+        border: 1px solid #000;
+        padding: 6px 5px;
+        font-size: 10pt;
+        color: #000;
+        vertical-align: middle;
+        word-wrap: break-word;
+        background: #fff;
+      }
+      .detail-table tbody tr:nth-child(even) td:not(.cr-alert-bg-red):not(.cr-alert-bg-yellow) {
+        background: #fff;
+      }
+      .detail-table tbody td.cr-alert-text-red {
+        color: #be123c;
+        font-weight: 700;
+      }
+      .detail-table tbody td.cr-alert-bg-red {
+        background: #ffe4e6 !important;
+        color: #000;
+        font-weight: 700;
+      }
+      .detail-table tbody td.cr-alert-bg-yellow {
+        background: #fef3c7 !important;
+        color: #000;
+        font-weight: 700;
+      }
+      .text-right { text-align: right; }
+      .text-center { text-align: center; }
+      .text-left { text-align: left; }
+      .empty-table {
+        margin: 0;
+        color: #000;
+        font-style: italic;
+        font-size: 11pt;
+      }
+      @media print {
+        body,
+        .detail-table tbody td.cr-alert-text-red,
+        .detail-table tbody td.cr-alert-bg-red,
+        .detail-table tbody td.cr-alert-bg-yellow {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .sub-center-section { break-inside: avoid-page; }
+        .detail-table thead { display: table-header-group; }
       }
 `;
 
