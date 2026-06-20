@@ -13,7 +13,7 @@
     "cap:sync": "cap sync",
     "cap:android": "cap open android",
     "android:apk": "npm run build && npx cap sync android && cd android && .\\gradlew.bat assembleDebug",
-    "deploy:hosting": "npm run build && npx firebase deploy --only hosting,firestore:rules --project sandraloanapp-85985",
+    "deploy:hosting": "npm run build && node --input-type=module -e \"import fs from 'node:fs'; if (!fs.existsSync('dist/index.html')) { console.error('Missing dist/index.html — run npm run build first.'); process.exit(1); }\" && npx firebase deploy --only hosting,firestore:rules --project sandraloanapp-85985",
     "deploy:live": "npm run deploy:hosting",
     "deploy:firebase": "npm run build && npx firebase deploy --only hosting,firestore:rules",
     "deploy:firestore": "npx firebase deploy --only firestore",
