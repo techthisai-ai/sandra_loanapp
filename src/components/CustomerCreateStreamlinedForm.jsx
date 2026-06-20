@@ -19,8 +19,9 @@ import {
   IDENTITY_TYPE_OPTIONS,
   coerceIdentityType,
   safeValidateIdentityNumber,
-  validateCustomerId,
+  validateIdentityNumberIfProvided,
   validatePhoneNumber,
+  validatePhoneNumberIfProvided,
 } from "../utils/customerValidation";
 import { getNextCustomerId } from "../services/userAuth";
 import { getDocumentDataUrlField } from "../utils/customerDocumentAttachments";
@@ -176,7 +177,6 @@ export default function CustomerCreateStreamlinedForm({
   const [crifPrecheckError, setCrifPrecheckError] = useState("");
   const [crifModalOpen, setCrifModalOpen] = useState(false);
   const [highlightedFields, setHighlightedFields] = useState(() => new Set());
-  const strictOnboarding = !isEdit;
 
   const allCenters = useMemo(() => loadLoanCenters(), []);
   const isHighlighted = useCallback((key) => highlightedFields.has(key), [highlightedFields]);
@@ -207,30 +207,8 @@ export default function CustomerCreateStreamlinedForm({
   );
 
   const applicantReady = useMemo(
-    () =>
-      Boolean(
-        form.customerName &&
-          form.mobileNumber &&
-          form.identityType &&
-          form.identityNumber &&
-          form.address &&
-          form.selectedDay &&
-          (!strictOnboarding ||
-            (form.alternateNumber && (subOptions.length === 0 || form.selectedCenter) && form.customerPhotoName))
-      ),
-    [
-      form.address,
-      form.alternateNumber,
-      form.customerName,
-      form.customerPhotoName,
-      form.identityNumber,
-      form.identityType,
-      form.mobileNumber,
-      form.selectedCenter,
-      form.selectedDay,
-      strictOnboarding,
-      subOptions.length,
-    ]
+    () => Boolean(form.customerName?.trim() && phoneDigitsOk),
+    [form.customerName, phoneDigitsOk]
   );
   const docsAttached = useMemo(
     () => [form.customerPhotoName, form.idDocumentName, form.addressProofName, form.loanAgreementName].filter(Boolean).length,
@@ -280,29 +258,18 @@ export default function CustomerCreateStreamlinedForm({
   }, [crifDemoResult?.creditTier]);
 
   const collectRequiredFieldIssues = useCallback(() => {
-    const nextIdentityError = safeValidateIdentityNumber(form.identityType, form.identityNumber);
     const nextPhoneError = validatePhoneNumber(form.mobileNumber, "Phone number");
-    const nextAltError =
-      strictOnboarding || form.alternateNumber?.trim()
-        ? validatePhoneNumber(form.alternateNumber, "Alternate number")
-        : "";
-    const nextCustomerIdError = validateCustomerId(form.customerId, { allowLegacy: isEdit });
+    const nextAltError = validatePhoneNumberIfProvided(form.alternateNumber, "Alternate number");
+    const nextIdentityError = validateIdentityNumberIfProvided(form.identityType, form.identityNumber);
     const issues = new Set();
 
-    if (nextCustomerIdError) issues.add("customerId");
     if (!form.customerName?.trim()) issues.add("customerName");
     if (!form.mobileNumber?.trim() || nextPhoneError) issues.add("mobileNumber");
-    if (strictOnboarding && (!form.alternateNumber?.trim() || nextAltError)) issues.add("alternateNumber");
-    if (!form.address?.trim()) issues.add("address");
-    if (!form.identityType?.trim()) issues.add("identityType");
-    if (!form.identityNumber?.trim() || nextIdentityError) issues.add("identityNumber");
-    if (!form.selectedDay?.trim()) issues.add("selectedDay");
-    if (strictOnboarding && subOptions.length > 0 && !form.selectedCenter?.trim()) issues.add("selectedCenter");
-    if (strictOnboarding && !form.customerPhotoName?.trim()) issues.add("customerPhotoName");
-    if (strictOnboarding && !form.idDocumentName?.trim()) issues.add("idDocumentName");
+    if (nextAltError) issues.add("alternateNumber");
+    if (nextIdentityError) issues.add("identityNumber");
 
-    return { issues, nextIdentityError, nextPhoneError, nextAltError, nextCustomerIdError };
-  }, [form, isEdit, strictOnboarding, subOptions.length]);
+    return { issues, nextIdentityError, nextPhoneError, nextAltError, nextCustomerIdError: "" };
+  }, [form]);
 
   useEffect(() => {
     if (isEdit || initialData) return;
@@ -337,7 +304,7 @@ export default function CustomerCreateStreamlinedForm({
     if (field === "identityType" || field === "identityNumber") {
       setForm((c) => {
         const next = { ...c, [field]: value };
-        setIdentityError(next.identityNumber ? safeValidateIdentityNumber(next.identityType, next.identityNumber) : "");
+        setIdentityError(validateIdentityNumberIfProvided(next.identityType, next.identityNumber));
         return next;
       });
       setCrifPrecheckError("");
@@ -356,7 +323,7 @@ export default function CustomerCreateStreamlinedForm({
   const updateAlternatePhone = (event) => {
     const digits = event.target.value.replace(/\D/g, "").slice(0, 10);
     setForm((c) => ({ ...c, alternateNumber: digits }));
-    setAlternatePhoneError(digits ? validatePhoneNumber(digits, "Alternate number") : strictOnboarding ? "Enter alternate number" : "");
+    setAlternatePhoneError(digits ? validatePhoneNumber(digits, "Alternate number") : "");
     setCrifPrecheckError("");
     clearHighlight("alternateNumber");
   };
@@ -477,16 +444,18 @@ export default function CustomerCreateStreamlinedForm({
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const { issues, nextIdentityError, nextPhoneError, nextAltError, nextCustomerIdError } =
-      collectRequiredFieldIssues();
+    const { issues, nextIdentityError, nextPhoneError, nextAltError } = collectRequiredFieldIssues();
     setIdentityError(nextIdentityError);
     setPhoneError(nextPhoneError);
     setAlternatePhoneError(nextAltError);
-    setCustomerIdError(nextCustomerIdError);
 
     if (issues.size > 0) {
       setHighlightedFields(issues);
-      setError("Please complete all required fields marked in red.");
+      setError(
+        issues.has("customerName") || issues.has("mobileNumber")
+          ? "Enter customer name and a valid 10-digit mobile number."
+          : "Please fix validation errors in the optional fields you filled in."
+      );
       return;
     }
     if (nextIdentityError || nextPhoneError || nextAltError) {
@@ -528,8 +497,6 @@ export default function CustomerCreateStreamlinedForm({
         ? "yellow"
         : "red"
     : "slate";
-  const documentIssuesActive = isHighlighted("idDocumentName");
-
   return (
     <form className="mx-auto w-full min-w-0 max-w-[min(840px,100%)]" onSubmit={handleSubmit}>
       <section className="dash-glass-panel rounded-3xl p-3 shadow-lg shadow-slate-200/40 sm:p-4 md:p-5">
@@ -602,17 +569,15 @@ export default function CustomerCreateStreamlinedForm({
               </div>
 
               <div>
-                <RequiredLabel label="Address" required />
+                <RequiredLabel label="Address" hint="Optional" />
                 <textarea
                   value={form.address}
                   onChange={update("address")}
                   rows={3}
                   className={fieldClass("app-textarea min-h-[96px] w-full text-sm transition", isHighlighted("address"))}
                   placeholder="Enter full address"
-                  required
                   aria-invalid={isHighlighted("address") || undefined}
                 />
-                <FieldError message={isHighlighted("address") ? "Address is required." : ""} />
               </div>
             </div>
             <DocumentPhotoTile
@@ -621,16 +586,13 @@ export default function CustomerCreateStreamlinedForm({
               fileName={form.customerPhotoName}
               onPick={pickNamedFile("customerPhotoName", setApplicantPhotoPreview, "customerPhotoDataUrl")}
               onClear={() => clearAttachment("customerPhotoName", setApplicantPhotoPreview, "customerPhotoDataUrl")}
-              required={strictOnboarding}
               invalid={isHighlighted("customerPhotoName")}
-              helperText={isHighlighted("customerPhotoName") ? "Applicant photo is required." : ""}
             />
           </div>
-          <FieldError message={isHighlighted("customerPhotoName") ? "Applicant photo is required before submission." : ""} />
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <RequiredLabel label="ID Type" required />
+              <RequiredLabel label="ID Type" hint="Optional" />
               <select
                 value={form.identityType}
                 onChange={update("identityType")}
@@ -644,23 +606,22 @@ export default function CustomerCreateStreamlinedForm({
               </select>
             </div>
             <div>
-              <RequiredLabel label="ID Number" required />
+              <RequiredLabel label="ID Number" hint="Optional" />
               <input
                 value={form.identityNumber}
                 onChange={update("identityNumber")}
                 className={fieldClass("app-input h-11 text-sm transition", isHighlighted("identityNumber"))}
                 placeholder="Enter ID number"
-                required
                 aria-invalid={isHighlighted("identityNumber") || undefined}
               />
             </div>
           </div>
-          <FieldError message={identityError || (isHighlighted("identityNumber") ? "Valid ID details are required." : "")} />
+          <FieldError message={identityError} />
 
           <div className="rounded-2xl border border-slate-200/90 bg-gradient-to-br from-slate-50 via-white to-blue-50/40 p-4 shadow-sm ring-1 ring-slate-100/90">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div>
-                <RequiredLabel label="Alternate Number" required={strictOnboarding} hint="Needed for eligibility" />
+                <RequiredLabel label="Alternate Number" hint="Optional — needed for eligibility check" />
                 <input
                   value={form.alternateNumber}
                   onChange={updateAlternatePhone}
@@ -670,9 +631,7 @@ export default function CustomerCreateStreamlinedForm({
                   placeholder="Enter alternate mobile number"
                   aria-invalid={isHighlighted("alternateNumber") || undefined}
                 />
-                <FieldError
-                  message={alternatePhoneError || (isHighlighted("alternateNumber") ? "Alternate number is required." : "")}
-                />
+                <FieldError message={alternatePhoneError} />
               </div>
               <button
                 type="button"
@@ -773,12 +732,11 @@ export default function CustomerCreateStreamlinedForm({
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <RequiredLabel label="Center" required />
+              <RequiredLabel label="Center" hint="Optional" />
               <select
                 value={form.selectedDay}
                 onChange={update("selectedDay")}
                 className={fieldClass("app-select h-11 text-sm transition", isHighlighted("selectedDay"))}
-                required
                 aria-invalid={isHighlighted("selectedDay") || undefined}
               >
                 <option value="">Select center</option>
@@ -788,13 +746,11 @@ export default function CustomerCreateStreamlinedForm({
                   </option>
                 ))}
               </select>
-              <FieldError message={isHighlighted("selectedDay") ? "Center is required." : ""} />
             </div>
             <div>
               <RequiredLabel
                 label="Sub Center"
-                required={strictOnboarding && subOptions.length > 0}
-                hint={strictOnboarding && form.selectedDay && !subOptions.length ? "No child sub center configured yet" : ""}
+                hint={form.selectedDay && !subOptions.length ? "No child sub center configured yet" : "Optional"}
               />
               <select
                 value={form.selectedCenter}
@@ -811,18 +767,11 @@ export default function CustomerCreateStreamlinedForm({
                   </option>
                 ))}
               </select>
-              <FieldError
-                message={isHighlighted("selectedCenter") ? "Sub center is required when child centers are available." : ""}
-              />
             </div>
           </div>
 
           <div>
-            <RequiredLabel
-              label="Supporting Documents"
-              required={false}
-              hint={strictOnboarding ? "ID proof is required for submission" : ""}
-            />
+            <RequiredLabel label="Supporting Documents" hint="Optional" />
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <DocumentCompactAttach
                 label="ID Proof"
@@ -832,9 +781,6 @@ export default function CustomerCreateStreamlinedForm({
                 capture="environment"
                 onPick={pickNamedFile("idDocumentName")}
                 onClear={() => clearAttachment("idDocumentName")}
-                required={strictOnboarding}
-                invalid={isHighlighted("idDocumentName")}
-                helperText={isHighlighted("idDocumentName") ? "ID proof is required." : ""}
               />
               <DocumentCompactAttach
                 label="Address Proof"
@@ -859,9 +805,6 @@ export default function CustomerCreateStreamlinedForm({
                 invalid={false}
               />
             </div>
-            <FieldError
-              message={documentIssuesActive ? "Upload ID proof before submission." : ""}
-            />
           </div>
 
           <div className="rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50/90 to-white p-3 shadow-sm ring-1 ring-slate-100">

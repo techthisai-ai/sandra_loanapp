@@ -97,6 +97,18 @@ export function safeValidateIdentityNumber(identityType, identityNumber) {
   }
 }
 
+/** Validate phone only when the user entered a value. */
+export function validatePhoneNumberIfProvided(value, label = "Phone number") {
+  if (!String(value ?? "").trim()) return "";
+  return validatePhoneNumber(value, label);
+}
+
+/** Validate ID only when the user entered a number. */
+export function validateIdentityNumberIfProvided(identityType, identityNumber) {
+  if (!normalizeIdentityValue(identityNumber)) return "";
+  return safeValidateIdentityNumber(identityType, identityNumber);
+}
+
 /** Customer ID format: CX + 4-digit running number (e.g. CX0001). */
 export const CUSTOMER_ID_PATTERN = /^CX\d{4}$/;
 export const LEGACY_CUSTOMER_ID_PATTERN = /^CUST-/;

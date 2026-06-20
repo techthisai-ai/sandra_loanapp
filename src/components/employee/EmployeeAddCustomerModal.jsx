@@ -9,7 +9,7 @@ import { fileToStorableDataUrl } from "../../utils/fileToStorableDataUrl";
 import { persistableCenterFieldsFromSelectedDay } from "../../utils/centerDisplay";
 import {
   IDENTITY_TYPE_OPTIONS,
-  validateIdentityNumber,
+  validateIdentityNumberIfProvided,
   validatePhoneNumber,
 } from "../../utils/customerValidation";
 
@@ -93,23 +93,19 @@ export default function EmployeeAddCustomerModal({
     if (field === "identityType" || field === "identityNumber") {
       const nextType = field === "identityType" ? value : form.identityType;
       const nextNumber = field === "identityNumber" ? value : form.identityNumber;
-      setIdentityError(validateIdentityNumber(nextType, nextNumber));
+      setIdentityError(validateIdentityNumberIfProvided(nextType, nextNumber));
     }
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     const nextPhoneError = validatePhoneNumber(form.mobileNumber, "Mobile number");
-    const nextIdentityError = validateIdentityNumber(form.identityType, form.identityNumber);
+    const nextIdentityError = validateIdentityNumberIfProvided(form.identityType, form.identityNumber);
     setPhoneError(nextPhoneError);
     setIdentityError(nextIdentityError);
 
     if (!form.customerName.trim()) {
       setError("Enter customer name.");
-      return;
-    }
-    if (!form.address.trim()) {
-      setError("Enter address.");
       return;
     }
     if (nextPhoneError) {
@@ -118,18 +114,6 @@ export default function EmployeeAddCustomerModal({
     }
     if (nextIdentityError) {
       setError(nextIdentityError);
-      return;
-    }
-    if (!form.customerPhotoName.trim()) {
-      setError("Add a customer photo.");
-      return;
-    }
-    if (!form.idDocumentName.trim()) {
-      setError("Upload ID proof (Aadhaar, PAN, etc.).");
-      return;
-    }
-    if (hasAssignedCenter && !form.selectedCenter.trim()) {
-      setError("Select an assigned centre.");
       return;
     }
 
@@ -191,7 +175,7 @@ export default function EmployeeAddCustomerModal({
               <h3 id="add-customer-modal-title" className="text-base font-semibold text-slate-900 sm:text-lg">
                 Add Customer
               </h3>
-              <p className="text-xs text-slate-500">Name, contact, photo, and ID proof</p>
+              <p className="text-xs text-slate-500">Name and mobile number are required. Other fields are optional.</p>
             </div>
           </div>
           <button
@@ -234,7 +218,7 @@ export default function EmployeeAddCustomerModal({
             </label>
 
             <label className="space-y-1.5">
-              <span className="employee-field-label">Address *</span>
+              <span className="employee-field-label">Address</span>
               <textarea
                 value={form.address}
                 onChange={update("address")}
@@ -246,7 +230,7 @@ export default function EmployeeAddCustomerModal({
 
             {hasAssignedCenter ? (
               <label className="space-y-1.5">
-                <span className="employee-field-label">Assigned centre *</span>
+                <span className="employee-field-label">Assigned centre</span>
                 <select
                   value={form.selectedCenter}
                   onChange={update("selectedCenter")}
@@ -267,7 +251,7 @@ export default function EmployeeAddCustomerModal({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="space-y-1.5">
-                <span className="employee-field-label">ID type *</span>
+                <span className="employee-field-label">ID type</span>
                 <select value={form.identityType} onChange={update("identityType")} className="app-select w-full">
                   {IDENTITY_TYPE_OPTIONS.map((option) => (
                     <option key={option} value={option}>
@@ -278,7 +262,7 @@ export default function EmployeeAddCustomerModal({
               </label>
               <label className="space-y-1.5">
                 <span className="employee-field-label">
-                  {form.identityType === "Aadhaar Card" ? "Aadhaar number *" : "ID number *"}
+                  {form.identityType === "Aadhaar Card" ? "Aadhaar number" : "ID number"}
                 </span>
                 <input
                   value={form.identityNumber}
@@ -297,7 +281,6 @@ export default function EmployeeAddCustomerModal({
                 fileName={form.customerPhotoName}
                 onPick={pickFile(setForm, setPhotoPreview, "customerPhotoName", setPhotoPreview)}
                 onClear={() => clearFile(setForm, setPhotoPreview, "customerPhotoName", setPhotoPreview)}
-                required
                 dense
                 size="sm"
                 previewAspect="portrait"
@@ -311,7 +294,6 @@ export default function EmployeeAddCustomerModal({
                 onClear={() => clearFile(setForm, setIdDocPreview, "idDocumentName", setIdDocPreview)}
                 capture="environment"
                 accept="image/*,application/pdf"
-                required
                 dense
                 size="sm"
                 previewAspect="square"
