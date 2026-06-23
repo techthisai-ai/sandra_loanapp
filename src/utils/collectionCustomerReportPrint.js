@@ -47,6 +47,116 @@ const PRINT_TABLE_COLUMNS = PRINT_COLUMNS.filter(
   (column) => column.key !== "currentTenure" && column.key !== "currentDueAmount"
 );
 
+/** Portrait print button — name/phone merged; hide balance tenure and paid. */
+const PRINT_PORTRAIT_HIDDEN_COLUMNS = new Set(["balanceAmount", "paid"]);
+
+const PRINT_PORTRAIT_COLUMN_LABELS = {
+  customerId: "CUSID",
+  customerNamePhone: "CUSNAME",
+  nomineeName: "NOMNAME",
+  loanDate: "DATE",
+  pendingTenuresLabel: "INST",
+  pendingAmountDisplay: "PEND",
+  entry: "ENTRY",
+};
+
+const PRINT_PORTRAIT_TABLE_COLUMNS = (() => {
+  const columns = [];
+  let mergedContact = false;
+  for (const column of PRINT_TABLE_COLUMNS) {
+    if (PRINT_PORTRAIT_HIDDEN_COLUMNS.has(column.key)) continue;
+    if (column.key === "customerName" || column.key === "phoneNumber") {
+      if (!mergedContact) {
+        columns.push({
+          key: "customerNamePhone",
+          label: PRINT_PORTRAIT_COLUMN_LABELS.customerNamePhone,
+          align: "left",
+        });
+        mergedContact = true;
+      }
+      continue;
+    }
+    columns.push({
+      ...column,
+      label: PRINT_PORTRAIT_COLUMN_LABELS[column.key] || column.label,
+      ...(column.key === "pendingAmountDisplay" ? { align: "center" } : {}),
+    });
+  }
+  return columns;
+})();
+
+const PORTRAIT_COL_CLASS = {
+  customerId: "col-customer-id",
+  customerNamePhone: "col-customer-contact",
+  nomineeName: "col-nominee",
+  loanDate: "col-loan-date",
+  pendingTenuresLabel: "col-pending",
+  pendingAmountDisplay: "col-total-pend",
+  entry: "col-entry",
+};
+
+const PORTRAIT_COL_WIDTH_CLASS = {
+  customerId: "col-w-cusid",
+  customerNamePhone: "col-w-contact",
+  nomineeName: "col-w-nominee",
+  loanDate: "col-w-loan-date",
+  pendingTenuresLabel: "col-w-pending",
+  pendingAmountDisplay: "col-w-total-pend",
+  entry: "col-w-entry",
+};
+
+/** Max data rows per printed page (portrait print button only). */
+const PRINT_ROWS_PER_PAGE = 30;
+
+function columnCellClass(column) {
+  const classes = [cellAlignClass(column.align)];
+  const portraitClass = PORTRAIT_COL_CLASS[column.key];
+  if (portraitClass) classes.push(portraitClass);
+  return classes.filter(Boolean).join(" ");
+}
+
+function buildPortraitColgroupHtml(columns) {
+  const cols = columns
+    .map((column) => {
+      const widthClass = PORTRAIT_COL_WIDTH_CLASS[column.key] || "";
+      return widthClass ? `<col class="${widthClass}" />` : "<col />";
+    })
+    .join("");
+  return `<colgroup>${cols}</colgroup>`;
+}
+
+function formatCustomerNamePhoneHtml(mapped) {
+  const name = String(mapped.customerName || "").trim() || "—";
+  const phone = String(mapped.phoneNumber || "").trim() || "—";
+  if (name === "—" && phone === "—") return "—";
+  if (phone === "—") return `<span class="customer-print-name">${escapeHtml(name)}</span>`;
+  if (name === "—") return `<span class="customer-print-phone">${escapeHtml(phone)}</span>`;
+  return `<span class="customer-print-contact"><span class="customer-print-name">${escapeHtml(name)}</span> <span class="customer-print-phone">${escapeHtml(phone)}</span></span>`;
+}
+
+const PORTRAIT_AMOUNT_COLUMN_KEYS = new Set(["pendingAmountDisplay", "entry"]);
+
+function formatPortraitAmountText(value) {
+  if (value == null || value === "" || value === "—" || value === "-") return "—";
+  const text = toPrintCurrencyText(String(value))
+    .replace(/^Rs\.?\s*/i, "")
+    .trim();
+  return text || "—";
+}
+
+function resolvePrintCellContent(mapped, column, { portrait = false } = {}) {
+  if (column.key === "customerNamePhone") return formatCustomerNamePhoneHtml(mapped);
+  const raw = mapped[column.key];
+  if (portrait && column.key === "entry") {
+    if (!raw || raw === "—") return "";
+    return escapeHtml(formatPortraitAmountText(raw));
+  }
+  if (portrait && PORTRAIT_AMOUNT_COLUMN_KEYS.has(column.key)) {
+    return escapeHtml(formatPortraitAmountText(raw));
+  }
+  return escapeHtml(raw ?? "—");
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -199,12 +309,12 @@ function cellAlignClass(align) {
   return "text-left";
 }
 
-function buildDetailTableHtml(rows, paidState, columns = PRINT_COLUMNS) {
+function buildDetailTableHtml(rows, paidState, columns = PRINT_COLUMNS, { portrait = false } = {}) {
   if (!rows.length) return "";
 
   const headerCells = columns.map(
     (column) =>
-      `<th class="${cellAlignClass(column.align)}">${escapeHtml(column.label)}</th>`
+      `<th class="${columnCellClass(column)}">${escapeHtml(column.label)}</th>`
   ).join("");
 
   const bodyRows = rows
@@ -212,21 +322,116 @@ function buildDetailTableHtml(rows, paidState, columns = PRINT_COLUMNS) {
       const mapped = mapRowForPrint(row, paidState);
       const rowAlert = getCollectionReportAlert(row);
       const cells = columns.map((column) => {
-        const value = mapped[column.key] ?? "—";
         const alertClass = collectionReportPrintCellClass(rowAlert, column.key);
-        const classNames = [cellAlignClass(column.align), alertClass].filter(Boolean).join(" ");
-        return `<td class="${classNames}">${escapeHtml(value)}</td>`;
+        const classNames = [columnCellClass(column), alertClass].filter(Boolean).join(" ");
+        return `<td class="${classNames}">${resolvePrintCellContent(mapped, column, { portrait })}</td>`;
       }).join("");
       return `<tr>${cells}</tr>`;
     })
     .join("");
 
   return `
-    <table class="detail-table">
+    <table class="detail-table${portrait ? " detail-table--portrait" : ""}">
+      ${portrait ? buildPortraitColgroupHtml(columns) : ""}
       <thead><tr>${headerCells}</tr></thead>
       <tbody>${bodyRows}</tbody>
     </table>
   `;
+}
+
+function buildSectionHeaderHtml(subCenter) {
+  return `
+      <div class="section-header">
+        <div class="section-line" aria-hidden="true"></div>
+        <h2 class="section-title">${escapeHtml(subCenter)}</h2>
+        <div class="section-line" aria-hidden="true"></div>
+      </div>`;
+}
+
+function groupPrintItemsBySection(pageItems = []) {
+  const groups = [];
+  pageItems.forEach((item) => {
+    const last = groups[groups.length - 1];
+    if (last && last.sectionLabel === item.sectionLabel) {
+      last.rows.push(item.row);
+      return;
+    }
+    groups.push({ sectionLabel: item.sectionLabel, rows: [item.row] });
+  });
+  return groups;
+}
+
+function buildPortraitPageTableHtml(pageItems, paidState, columns) {
+  if (!pageItems.length) return "";
+
+  const rowCount = pageItems.length;
+  const sectionCount = new Set(pageItems.map((item) => item.sectionLabel)).size;
+  const headerCells = columns
+    .map((column) => `<th class="${columnCellClass(column)}">${escapeHtml(column.label)}</th>`)
+    .join("");
+
+  let lastSection = null;
+  const bodyRows = pageItems
+    .map((item) => {
+      const mapped = mapRowForPrint(item.row, paidState);
+      const rowAlert = getCollectionReportAlert(item.row);
+      const cells = columns
+        .map((column) => {
+          const alertClass = collectionReportPrintCellClass(rowAlert, column.key);
+          const classNames = [columnCellClass(column), alertClass].filter(Boolean).join(" ");
+          return `<td class="${classNames}">${resolvePrintCellContent(mapped, column, { portrait: true })}</td>`;
+        })
+        .join("");
+
+      let html = "";
+      if (item.sectionLabel !== lastSection) {
+        lastSection = item.sectionLabel;
+        html += `<tr class="print-section-row"><td class="print-section-cell" colspan="${columns.length}">${escapeHtml(item.sectionLabel)}</td></tr>`;
+      }
+      html += `<tr class="print-data-row">${cells}</tr>`;
+      return html;
+    })
+    .join("");
+
+  return `
+    <table
+      class="detail-table detail-table--portrait"
+      style="--print-row-count:${rowCount};--print-section-count:${sectionCount}"
+    >
+      ${buildPortraitColgroupHtml(columns)}
+      <thead><tr>${headerCells}</tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>
+  `;
+}
+
+function buildPrintPageHtml(pageItems, paidState, columns, isLastPage) {
+  return `<div class="print-page${isLastPage ? " print-page--last" : ""}">${buildPortraitPageTableHtml(pageItems, paidState, columns)}</div>`;
+}
+
+function flattenSectionsForPortraitPrint(sections = []) {
+  const items = [];
+  sections
+    .filter((section) => section.rows?.length)
+    .forEach((section) => {
+      section.rows.forEach((row) => {
+        items.push({ sectionLabel: section.subCenter, row });
+      });
+    });
+  return items;
+}
+
+function buildPortraitPrintPagesHtml(sections, paidState, columns = PRINT_PORTRAIT_TABLE_COLUMNS) {
+  const flatItems = flattenSectionsForPortraitPrint(sections);
+  if (!flatItems.length) return "";
+
+  let pagesHtml = "";
+  for (let offset = 0; offset < flatItems.length; offset += PRINT_ROWS_PER_PAGE) {
+    const chunk = flatItems.slice(offset, offset + PRINT_ROWS_PER_PAGE);
+    const isLastPage = offset + PRINT_ROWS_PER_PAGE >= flatItems.length;
+    pagesHtml += buildPrintPageHtml(chunk, paidState, columns, isLastPage);
+  }
+  return pagesHtml;
 }
 
 function buildSectionHtml(section, paidState, columns = PRINT_COLUMNS) {
@@ -234,11 +439,7 @@ function buildSectionHtml(section, paidState, columns = PRINT_COLUMNS) {
 
   return `
     <section class="sub-center-section">
-      <div class="section-header">
-        <div class="section-line" aria-hidden="true"></div>
-        <h2 class="section-title">${escapeHtml(section.subCenter)}</h2>
-        <div class="section-line" aria-hidden="true"></div>
-      </div>
+      ${buildSectionHeaderHtml(section.subCenter)}
       ${buildDetailTableHtml(section.rows, paidState, columns)}
     </section>
   `;
@@ -351,7 +552,7 @@ const PRINT_BODY_STYLES = `
 const PRINT_CUSTOMER_PORTRAIT_STYLES = `
       @page {
         size: A4 portrait;
-        margin: 8mm 6mm;
+        margin: 5mm;
       }
       * { box-sizing: border-box; }
       body {
@@ -359,70 +560,153 @@ const PRINT_CUSTOMER_PORTRAIT_STYLES = `
         font-family: "Noto Sans Tamil", "Segoe UI", Arial, sans-serif;
         color: #000;
         background: #fff;
-        line-height: 1.45;
-        font-size: 11pt;
+        line-height: 1.3;
+        font-size: 12pt;
         font-variant-numeric: normal;
         letter-spacing: normal;
       }
       .sheet { width: 100%; margin: 0 auto; }
-      .sub-center-section {
-        margin-bottom: 16px;
-        page-break-inside: avoid;
+      .print-page {
+        page-break-after: always;
+        break-after: page;
+        min-height: 287mm;
+        height: 287mm;
       }
-      .sub-center-section:first-child .section-header {
-        margin-top: 0;
-      }
-      .section-header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin: 12px 0 8px;
-      }
-      .section-line {
-        flex: 1;
-        height: 1px;
-        background: #000;
-        min-width: 20px;
-      }
-      .section-title {
-        margin: 0;
-        flex-shrink: 0;
-        font-size: 12pt;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: #000;
-        white-space: nowrap;
+      .print-page--last {
+        page-break-after: auto;
+        break-after: auto;
       }
       .detail-table {
-        width: auto;
-        max-width: 100%;
+        width: 100%;
         border-collapse: collapse;
-        margin-top: 6px;
+        margin-top: 0;
         table-layout: auto;
       }
+      .detail-table--portrait {
+        table-layout: fixed;
+        width: 100%;
+        height: 287mm;
+        min-height: 287mm;
+      }
+      .detail-table--portrait col.col-w-cusid { width: 9%; }
+      .detail-table--portrait col.col-w-contact { width: 31%; }
+      .detail-table--portrait col.col-w-nominee { width: 14%; }
+      .detail-table--portrait col.col-w-loan-date { width: 16%; }
+      .detail-table--portrait col.col-w-pending { width: 10%; }
+      .detail-table--portrait col.col-w-total-pend { width: 11%; }
+      .detail-table--portrait col.col-w-entry { width: 5%; }
       .detail-table thead th {
         background: #fff;
         color: #000;
-        font-size: 9pt;
+        font-size: 10pt;
         font-weight: 700;
-        letter-spacing: 0.03em;
+        letter-spacing: 0.02em;
         text-transform: uppercase;
-        padding: 7px 6px;
+        padding: 6px 5px;
         border: 1px solid #000;
         vertical-align: middle;
         white-space: nowrap;
       }
+      .detail-table--portrait thead th {
+        font-size: 8.5pt;
+        letter-spacing: 0;
+        line-height: 1.15;
+        padding: 3px 3px;
+        height: 7mm;
+        white-space: normal;
+        word-break: break-word;
+        hyphens: auto;
+      }
       .detail-table tbody td {
         border: 1px solid #000;
-        padding: 6px 6px;
-        font-size: 10pt;
+        padding: 5px 5px;
+        font-size: 12pt;
         color: #000;
         vertical-align: middle;
         white-space: nowrap;
         word-wrap: normal;
         overflow-wrap: normal;
         background: #fff;
+      }
+      .detail-table--portrait tbody tr.print-section-row td.print-section-cell {
+        font-size: 9.5pt;
+        font-weight: 700;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        line-height: 1.25;
+        padding: 3px 8px;
+        height: 6mm;
+        border: 1px solid #000;
+        background: #fff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .detail-table--portrait tbody tr.print-data-row {
+        height: calc((276mm - (var(--print-section-count, 1) * 6mm)) / var(--print-row-count, 30));
+      }
+      .detail-table--portrait tbody tr.print-data-row td {
+        font-size: 11.5pt;
+        padding: 3px 5px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: middle;
+      }
+      .detail-table--portrait td.col-customer-id,
+      .detail-table--portrait th.col-customer-id {
+        padding: 3px 4px;
+        font-size: 10.5pt;
+        letter-spacing: -0.02em;
+      }
+      .detail-table--portrait td.col-customer-contact,
+      .detail-table--portrait th.col-customer-contact {
+        padding: 3px 6px 3px 5px;
+        font-size: 11.5pt;
+      }
+      .detail-table--portrait td.col-nominee,
+      .detail-table--portrait th.col-nominee {
+        font-size: 11pt;
+        padding: 3px 6px;
+        text-align: left;
+      }
+      .detail-table--portrait td.col-loan-date,
+      .detail-table--portrait th.col-loan-date {
+        font-size: 11pt;
+        padding: 3px 5px;
+        text-align: center;
+      }
+      .detail-table--portrait td.col-pending,
+      .detail-table--portrait th.col-pending {
+        font-size: 10pt;
+        padding: 3px 2px;
+        text-align: center;
+      }
+      .detail-table--portrait td.col-total-pend,
+      .detail-table--portrait th.col-total-pend {
+        font-size: 10pt;
+        padding: 3px 2px;
+        text-align: center;
+      }
+      .detail-table--portrait td.col-entry,
+      .detail-table--portrait th.col-entry {
+        font-size: 10.5pt;
+        padding: 3px 2px;
+        text-align: right;
+      }
+      .customer-print-contact {
+        display: inline;
+        white-space: nowrap;
+      }
+      .customer-print-name {
+        display: inline;
+        font-weight: 600;
+      }
+      .customer-print-phone {
+        display: inline;
+        font-size: 0.98em;
+        font-weight: 500;
       }
       .detail-table tbody tr:nth-child(even) td:not(.cr-alert-bg-red):not(.cr-alert-bg-yellow) {
         background: #fff;
@@ -448,7 +732,7 @@ const PRINT_CUSTOMER_PORTRAIT_STYLES = `
         margin: 0;
         color: #000;
         font-style: italic;
-        font-size: 11pt;
+        font-size: 12pt;
       }
       @media print {
         body,
@@ -458,16 +742,35 @@ const PRINT_CUSTOMER_PORTRAIT_STYLES = `
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
-        .sub-center-section { break-inside: avoid-page; }
-        .detail-table {
-          width: max-content;
-          max-width: none;
-          table-layout: auto;
+        .print-page {
+          page-break-after: always;
+          break-after: page;
+          min-height: 287mm;
+          height: 287mm;
         }
-        .detail-table thead th,
-        .detail-table tbody td {
-          white-space: nowrap;
+        .print-page--last {
+          page-break-after: auto;
+          break-after: auto;
+        }
+        .detail-table--portrait {
+          width: 100%;
+          table-layout: fixed;
+          height: 287mm;
+        }
+        .detail-table--portrait tbody tr.print-data-row {
+          height: calc((276mm - (var(--print-section-count, 1) * 6mm)) / var(--print-row-count, 30));
+        }
+        .detail-table--portrait thead th,
+        .detail-table--portrait tbody td {
           word-break: keep-all;
+        }
+        .detail-table--portrait thead th {
+          white-space: normal;
+        }
+        .detail-table--portrait tbody tr.print-data-row td {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         .detail-table thead { display: table-header-group; }
       }
@@ -562,10 +865,7 @@ function buildCollectionCustomerPrintHtml({
   sections = [],
   paidState = { drafts: {}, committed: {} },
 }) {
-  const sectionMarkup = sections
-    .filter((section) => section.rows?.length)
-    .map((section) => buildSectionHtml(section, paidState, PRINT_TABLE_COLUMNS))
-    .join("");
+  const pagesMarkup = buildPortraitPrintPagesHtml(sections, paidState, PRINT_PORTRAIT_TABLE_COLUMNS);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -577,7 +877,7 @@ function buildCollectionCustomerPrintHtml({
   </head>
   <body>
     <div class="sheet">
-      ${sectionMarkup || `<p class="empty-table">No customers found for the selected employee and main center.</p>`}
+      ${pagesMarkup || `<p class="empty-table">No customers found for the selected employee and main center.</p>`}
     </div>
   </body>
 </html>`;
