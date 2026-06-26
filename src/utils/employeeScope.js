@@ -242,3 +242,23 @@ export function getAssignedSubCentersForDayCenter(
 
   return [...new Set(allowed)].sort((a, b) => a.localeCompare(b));
 }
+
+/** Sub-centre labels an employee may filter by across all assigned day centres. */
+export function getEmployeeAssignedSubCenterOptions(assignedCenters = [], allCenters = loadEmployeeCenters()) {
+  const labels = (Array.isArray(assignedCenters) ? assignedCenters : [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  if (!labels.length) return [];
+
+  const options = new Set();
+  getDayCentersFromAssignments(labels, allCenters).forEach((day) => {
+    if (employeeHasWholeDayAssignment(day, labels, allCenters)) {
+      options.add(NO_SUB_CENTER_LABEL);
+      getSubCenterLabels(day, allCenters).forEach((sub) => options.add(sub));
+      return;
+    }
+    getAssignedSubCentersForDayCenter(day, labels, allCenters).forEach((sub) => options.add(sub));
+  });
+
+  return Array.from(options).sort((left, right) => left.localeCompare(right));
+}

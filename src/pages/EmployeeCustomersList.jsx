@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, Search } from "lucide-react";
 import { EMPLOYEE_ROOT_DAYS } from "../constants/employeeDays";
 import useEmployeeCenterScope from "../hooks/useEmployeeCenterScope";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
+import { NO_SUB_CENTER_LABEL, resolveCustomerCenterDisplay } from "../utils/centerDisplay";
+import { getEmployeeAssignedSubCenterOptions } from "../utils/employeeScope";
 import { filterScopedApprovedEntries } from "../utils/scopedCollectionEntries";
 import { buildEmployeeCustomerSummary, getEmployeeCustomerSearchText } from "../utils/employeeCustomerSummary";
 
@@ -64,6 +66,10 @@ function defaultDayLabel(selectedDay) {
   return EMPLOYEE_ROOT_DAYS[0].label;
 }
 
+function formatSubCenterFilterLabel(label) {
+  return label === NO_SUB_CENTER_LABEL ? "No sub-center" : label;
+}
+
 /** One of: due-today | pending | overdue | collected | partially */
 function resolveEmployeeListStatus(row) {
   if (row.isCurrentTenureCollected) return "collected";
@@ -90,8 +96,9 @@ function CustomerStatusValue({ listStatus }) {
 export default function EmployeeCustomersList() {
   const navigate = useNavigate();
   const { customers, entries, loading } = useLoanDataSync();
-  const { allCenters, hasAssignedCenter, scopeCustomers } = useEmployeeCenterScope();
+  const { allCenters, assignedCenters, hasAssignedCenter, scopeCustomers } = useEmployeeCenterScope();
   const [collectionFilter, setCollectionFilter] = useState("All");
+  const [subCenterFilter, setSubCenterFilter] = useState("All");
   const [search, setSearch] = useState("");
 
   const entriesByCustomerId = useMemo(() => {
@@ -123,15 +130,31 @@ export default function EmployeeCustomersList() {
     });
   }, [allCenters, entriesByCustomerId, readyCustomers]);
 
+  const subCenterFilterOptions = useMemo(
+    () => getEmployeeAssignedSubCenterOptions(assignedCenters, allCenters),
+    [allCenters, assignedCenters]
+  );
+
+  useEffect(() => {
+    if (subCenterFilter === "All") return;
+    if (!subCenterFilterOptions.includes(subCenterFilter)) {
+      setSubCenterFilter("All");
+    }
+  }, [subCenterFilter, subCenterFilterOptions]);
+
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return customerRows.filter((row) => {
       const matchesFilter = collectionFilter === "All" || row.listStatus === collectionFilter;
       if (!matchesFilter) return false;
+      if (subCenterFilter !== "All") {
+        const { subCenter } = resolveCustomerCenterDisplay(row.customer, allCenters);
+        if (subCenter !== subCenterFilter) return false;
+      }
       if (!query) return true;
       return getEmployeeCustomerSearchText(row.customer, row, allCenters).includes(query);
     });
-  }, [allCenters, collectionFilter, customerRows, search]);
+  }, [allCenters, collectionFilter, customerRows, search, subCenterFilter]);
 
   const collectionMetrics = useMemo(() => {
     const scopedIds = new Set(readyCustomers.map((customer) => customer.customerId));
@@ -232,7 +255,13 @@ export default function EmployeeCustomersList() {
       </section>
 
       <div className="employee-customers-toolbar mb-2 min-w-0">
-        <div className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200/90 bg-white p-1.5 shadow-sm sm:grid-cols-[minmax(0,1fr)_9.5rem] sm:items-center">
+        <div
+          className={`grid grid-cols-1 gap-2 rounded-xl border border-slate-200/90 bg-white p-1.5 shadow-sm sm:items-center ${
+            subCenterFilterOptions.length > 0
+              ? "sm:grid-cols-[minmax(0,1fr)_9.5rem_9.5rem]"
+              : "sm:grid-cols-[minmax(0,1fr)_9.5rem]"
+          }`}
+        >
           <div className="relative employee-customers-search min-w-0">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
@@ -247,6 +276,21 @@ export default function EmployeeCustomersList() {
               style={{ paddingLeft: "2.25rem", paddingRight: "0.75rem" }}
             />
           </div>
+          {subCenterFilterOptions.length > 0 ? (
+            <select
+              value={subCenterFilter}
+              onChange={(event) => setSubCenterFilter(event.target.value)}
+              className="employee-customers-filter app-select w-full"
+              aria-label="Filter customers by sub-center"
+            >
+              <option value="All">All sub-centers</option>
+              {subCenterFilterOptions.map((option) => (
+                <option key={option} value={option}>
+                  {formatSubCenterFilterLabel(option)}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <select
             value={collectionFilter}
             onChange={(event) => setCollectionFilter(event.target.value)}
