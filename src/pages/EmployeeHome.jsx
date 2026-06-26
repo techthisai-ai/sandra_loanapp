@@ -142,7 +142,7 @@ function EmployeeStatCard({ icon: Icon, label, value, accent = "blue" }) {
 export default function EmployeeHome() {
   const navigate = useNavigate();
   const { customers, entries, loading } = useLoanDataSync();
-  const { assignedCenters, assignedCentersLabel, allCenters, hasAssignedCenter, scopeCustomers } =
+  const { assignedCenters, allCenters, hasAssignedCenter, scopeCustomers } =
     useEmployeeCenterScope();
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
   const [periodFilter, setPeriodFilter] = useState("All");
@@ -233,16 +233,6 @@ export default function EmployeeHome() {
           <span className="whitespace-nowrap">New Loan</span>
         </Link>
       </div>
-
-      {hasAssignedCenter ? (
-        <p className="mb-1.5 rounded-xl border border-blue-100 bg-blue-50/60 px-2.5 py-1.5 text-[11px] text-blue-900">
-          Assigned centres: <span className="font-semibold">{assignedCentersLabel}</span>
-        </p>
-      ) : (
-        <p className="mb-1.5 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
-          No centre assigned yet. Ask your administrator to set your assigned centre.
-        </p>
-      )}
 
       <div className="employee-stat-grid">
         <EmployeeStatCard

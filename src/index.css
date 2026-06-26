@@ -532,11 +532,18 @@ textarea:focus {
 }
 
 .employee-customers-filter {
-  width: 6.75rem;
-  min-width: 6.75rem;
-  max-width: 6.75rem;
+  width: 100%;
+  min-width: 0;
   padding-left: 0.5rem;
-  padding-right: 1.5rem;
+  padding-right: 1.75rem;
+}
+
+@media (min-width: 640px) {
+  .employee-customers-filter {
+    width: 9.5rem;
+    min-width: 9.5rem;
+    max-width: 9.5rem;
+  }
 }
 
 .employee-customers-search {

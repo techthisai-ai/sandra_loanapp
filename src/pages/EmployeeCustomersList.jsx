@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import { EMPLOYEE_ROOT_DAYS } from "../constants/employeeDays";
 import useEmployeeCenterScope from "../hooks/useEmployeeCenterScope";
 import { useLoanDataSync } from "../context/LoanDataSyncContext";
 import { filterScopedApprovedEntries } from "../utils/scopedCollectionEntries";
-import { buildEmployeeCustomerSummary } from "../utils/employeeCustomerSummary";
+import { buildEmployeeCustomerSummary, getEmployeeCustomerSearchText } from "../utils/employeeCustomerSummary";
 
 function formatCurrency(value) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
@@ -92,6 +92,7 @@ export default function EmployeeCustomersList() {
   const { customers, entries, loading } = useLoanDataSync();
   const { allCenters, hasAssignedCenter, scopeCustomers } = useEmployeeCenterScope();
   const [collectionFilter, setCollectionFilter] = useState("All");
+  const [search, setSearch] = useState("");
 
   const entriesByCustomerId = useMemo(() => {
     const map = new Map();
@@ -123,10 +124,14 @@ export default function EmployeeCustomersList() {
   }, [allCenters, entriesByCustomerId, readyCustomers]);
 
   const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
     return customerRows.filter((row) => {
-      return collectionFilter === "All" || row.listStatus === collectionFilter;
+      const matchesFilter = collectionFilter === "All" || row.listStatus === collectionFilter;
+      if (!matchesFilter) return false;
+      if (!query) return true;
+      return getEmployeeCustomerSearchText(row.customer, row, allCenters).includes(query);
     });
-  }, [collectionFilter, customerRows]);
+  }, [allCenters, collectionFilter, customerRows, search]);
 
   const collectionMetrics = useMemo(() => {
     const scopedIds = new Set(readyCustomers.map((customer) => customer.customerId));
@@ -226,22 +231,34 @@ export default function EmployeeCustomersList() {
         </div>
       </section>
 
-      <div className="employee-customers-toolbar mb-2 min-w-0 overflow-x-auto pb-0.5">
-        <div className="flex w-max min-w-full gap-1 rounded-xl border border-slate-200/90 bg-white p-0.5 shadow-sm">
-          {LIST_STATUS_FILTER_OPTIONS.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              onClick={() => setCollectionFilter(option.key)}
-              className={`inline-flex h-9 shrink-0 items-center justify-center rounded-lg px-2.5 text-xs font-semibold transition sm:px-3 sm:text-sm ${
-                collectionFilter === option.key
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
+      <div className="employee-customers-toolbar mb-2 min-w-0">
+        <div className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200/90 bg-white p-1.5 shadow-sm sm:grid-cols-[minmax(0,1fr)_9.5rem] sm:items-center">
+          <div className="relative employee-customers-search min-w-0">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search customer name, ID, phone..."
+              className="app-input w-full bg-slate-50"
+              style={{ paddingLeft: "2.25rem", paddingRight: "0.75rem" }}
+            />
+          </div>
+          <select
+            value={collectionFilter}
+            onChange={(event) => setCollectionFilter(event.target.value)}
+            className="employee-customers-filter app-select w-full"
+            aria-label="Filter customers by status"
+          >
+            {LIST_STATUS_FILTER_OPTIONS.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -294,8 +311,8 @@ export default function EmployeeCustomersList() {
       </div>
 
       {!loading && filtered.length === 0 ? (
-        <p className="employee-customers-empty" title="No customers match the selected status.">
-          No customers match this status
+        <p className="employee-customers-empty" title="No customers match your search or filter.">
+          No customers match your search or filter
         </p>
       ) : null}
     </div>

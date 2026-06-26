@@ -22,16 +22,44 @@ import {
   getEmployeeAssignedCenters,
   normalizeUsername,
 } from "../utils/employeeManagement.js";
+import { entryMatchesCollector } from "../utils/employeeCollectionDetails.js";
+
 const EMPLOYEE_TABLE_COLUMNS = [
   { key: "index", label: "#", width: "3rem" },
   { key: "employee", label: "Employee", width: "11rem" },
   { key: "employeeId", label: "Emp ID", width: "6.5rem" },
   { key: "mobileNumber", label: "Mobile No", width: "7rem" },
-  { key: "username", label: "Username", width: "7rem" },
+  { key: "todayCollection", label: "Today Collection", width: "11rem", align: "center" },
+  { key: "username", label: "Username", width: "8rem" },
   { key: "centers", label: "Centers", width: "10rem" },
   { key: "status", label: "Status", width: "6rem" },
   { key: "actions", label: "Actions", width: "9rem", align: "right" },
 ];
+
+function getTodayDateKey(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
+
+function entryCollectionDateKey(entry) {
+  const raw = entry?.collectionDate || entry?.submittedAt || "";
+  if (!raw) return "";
+  const text = String(raw);
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function sumEmployeeTodayCollection(employee, entries, todayKey = getTodayDateKey()) {
+  return entries
+    .filter(
+      (entry) =>
+        String(entry.approvalStatus || "").toLowerCase() === "approved" &&
+        entryCollectionDateKey(entry) === todayKey &&
+        entryMatchesCollector(entry, employee)
+    )
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+}
 
 function formatRupee(value) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
@@ -166,6 +194,7 @@ export default function EmployeePage() {
   const [employeesLoading, setEmployeesLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [employeeFilter, setEmployeeFilter] = useState("All");
   const [formModal, setFormModal] = useState(null);
   const [formSaving, setFormSaving] = useState(false);
   const [formError, setFormError] = useState("");
@@ -204,8 +233,9 @@ export default function EmployeePage() {
   const allCenters = useMemo(() => loadLoanCenters(), [centerOptions]);
 
   const employeeRows = useMemo(
-    () =>
-      employees.map((employee) => {
+    () => {
+      const todayKey = getTodayDateKey();
+      return employees.map((employee) => {
         const assignedCenters = getEmployeeAssignedCenters(employee);
         const centerCustomers = getCustomersForEmployeeCenters(approvedCustomers, employee, allCenters);
         const customerIds = new Set(centerCustomers.map((customer) => customer.customerId));
@@ -216,6 +246,7 @@ export default function EmployeePage() {
               customerIds.has(entry.customerId)
           )
           .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+        const todayCollection = sumEmployeeTodayCollection(employee, entries, todayKey);
 
         return {
           id: employee.id,
@@ -231,20 +262,46 @@ export default function EmployeePage() {
           status: employee.employeeStatus === "inactive" ? "inactive" : "active",
           totalCustomers: centerCustomers.length,
           totalCollection,
+          todayCollection,
         };
-      }),
+      });
+    },
     [allCenters, approvedCustomers, employees, entries]
   );
 
-  const stats = useMemo(
-    () => ({
+  const stats = useMemo(() => {
+    const todayKey = getTodayDateKey();
+    const todayCollectionTotal = entries
+      .filter((entry) => String(entry.approvalStatus || "").toLowerCase() === "approved")
+      .filter((entry) => entryCollectionDateKey(entry) === todayKey)
+      .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+
+    return {
       totalEmployees: employeeRows.length,
       activeEmployees: employeeRows.filter((row) => row.status === "active").length,
-      totalAssignedCustomers: employeeRows.reduce((sum, row) => sum + row.totalCustomers, 0),
+      todayCollectionTotal,
       totalCollections: employeeRows.reduce((sum, row) => sum + row.totalCollection, 0),
-    }),
+    };
+  }, [employeeRows, entries]);
+
+  const employeeFilterOptions = useMemo(
+    () =>
+      [...employeeRows]
+        .sort((left, right) => left.employeeName.localeCompare(right.employeeName))
+        .map((row) => ({
+          id: row.id,
+          label:
+            `${row.employeeName}${row.employeeSecondName ? ` ${row.employeeSecondName}` : ""}`.trim() ||
+            row.employeeId,
+        })),
     [employeeRows]
   );
+
+  const displayedTodayCollection = useMemo(() => {
+    if (employeeFilter === "All") return stats.todayCollectionTotal;
+    const selected = employeeRows.find((row) => row.id === employeeFilter);
+    return selected?.todayCollection ?? 0;
+  }, [employeeFilter, employeeRows, stats.todayCollectionTotal]);
 
   const assignEmployee = useMemo(() => {
     if (!assignModal?.row?.id) return null;
@@ -254,6 +311,7 @@ export default function EmployeePage() {
   const filteredEmployees = useMemo(() => {
     const query = search.trim().toLowerCase();
     return employeeRows.filter((row) => {
+      const matchesEmployee = employeeFilter === "All" || row.id === employeeFilter;
       const matchesStatus =
         statusFilter === "All" ||
         (statusFilter === "Active" && row.status === "active") ||
@@ -264,9 +322,9 @@ export default function EmployeePage() {
         row.employeeSecondName.toLowerCase().includes(query) ||
         row.employeeId.toLowerCase().includes(query) ||
         row.username.toLowerCase().includes(query);
-      return matchesStatus && matchesSearch;
+      return matchesEmployee && matchesStatus && matchesSearch;
     });
-  }, [employeeRows, search, statusFilter]);
+  }, [employeeFilter, employeeRows, search, statusFilter]);
 
   const openEditEmployee = async (row) => {
     setFormError("");
@@ -390,7 +448,7 @@ export default function EmployeePage() {
             <div className="grid min-w-0 flex-1 grid-cols-2 gap-2 lg:grid-cols-4">
               <SummaryCard label="Total Employees" value={String(stats.totalEmployees)} accent="blue" />
               <SummaryCard label="Active Employees" value={String(stats.activeEmployees)} accent="green" />
-              <SummaryCard label="Assigned Customers" value={String(stats.totalAssignedCustomers)} accent="purple" />
+              <SummaryCard label="Today Collection" value={formatRupee(displayedTodayCollection)} accent="purple" />
               <SummaryCard label="Total Collections" value={formatRupee(stats.totalCollections)} accent="amber" />
             </div>
             <button
@@ -409,18 +467,34 @@ export default function EmployeePage() {
           {statusMessage ? <div className="app-alert-success mb-4">{statusMessage}</div> : null}
           {formError && !formModal ? <div className="app-alert-error mb-4">{formError}</div> : null}
 
-          <div className="mt-4 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_9.5rem_9.5rem] sm:items-center">
+            <div className="relative min-w-0">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search employee name or ID..."
-                className="app-input bg-slate-50"
-                style={{ paddingLeft: "3rem", paddingRight: "1rem" }}
+                placeholder="Search name or ID..."
+                className="app-input w-full bg-slate-50"
+                style={{ paddingLeft: "2.25rem", paddingRight: "0.75rem" }}
               />
             </div>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="app-select">
+            <select
+              value={employeeFilter}
+              onChange={(event) => setEmployeeFilter(event.target.value)}
+              className="app-select w-full min-w-0 sm:w-[9.5rem] sm:shrink-0"
+            >
+              <option value="All">All employees</option>
+              {employeeFilterOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              className="app-select w-full min-w-0 sm:w-[9.5rem] sm:shrink-0"
+            >
               <option value="All">All status</option>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
@@ -429,7 +503,7 @@ export default function EmployeePage() {
 
           <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-sm">
             <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
-              <table className="w-full min-w-0 text-sm md:min-w-[48rem] md:table-fixed">
+              <table className="w-full min-w-0 text-sm md:min-w-[59rem] md:table-fixed">
                 <colgroup className="hidden md:contents">
                   {EMPLOYEE_TABLE_COLUMNS.map((column) => (
                     <col key={column.key} style={{ width: column.width }} />
@@ -438,11 +512,11 @@ export default function EmployeePage() {
                 <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50/95 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-600">
                   <tr>
                     {EMPLOYEE_TABLE_COLUMNS.map((column) => {
-                      const hideOnMobile = ["employeeId", "username", "centers"].includes(column.key);
+                      const hideOnMobile = ["employeeId", "username", "centers", "todayCollection"].includes(column.key);
                       return (
                       <th
                         key={column.key}
-                        className={`whitespace-nowrap px-2 py-2.5 sm:px-3 ${column.align === "right" ? "text-right" : "text-left"} ${hideOnMobile ? "hidden md:table-cell" : ""} ${column.key === "employee" ? "min-w-[8rem]" : ""} ${column.key === "mobileNumber" ? "min-w-[6.5rem]" : ""}`}
+                        className={`whitespace-nowrap px-2 py-2.5 sm:px-3 ${column.align === "right" ? "text-right" : column.align === "center" ? "text-center" : "text-left"} ${hideOnMobile ? "hidden md:table-cell" : ""} ${column.key === "employee" ? "min-w-[8rem]" : ""} ${column.key === "mobileNumber" ? "min-w-[6.5rem]" : ""} ${column.key === "todayCollection" ? "pr-4" : ""} ${column.key === "username" ? "pl-2" : ""}`}
                       >
                         {column.label}
                       </th>
@@ -490,7 +564,10 @@ export default function EmployeePage() {
                         </td>
                         <td className="hidden px-3 py-3 text-sm font-semibold text-blue-600 md:table-cell">{row.employeeId}</td>
                         <td className="whitespace-nowrap px-2 py-3 text-xs text-slate-700 sm:px-3 sm:text-sm">{row.mobileNumber}</td>
-                        <td className="hidden px-3 py-3 text-sm text-slate-700 md:table-cell">
+                        <td className="hidden whitespace-nowrap px-3 py-3 pr-4 text-center text-sm font-semibold tabular-nums text-slate-900 md:table-cell">
+                          {formatRupee(row.todayCollection)}
+                        </td>
+                        <td className="hidden px-3 py-3 pl-2 text-sm text-slate-700 md:table-cell">
                           <span className="block truncate" title={row.username}>
                             {row.username}
                           </span>
