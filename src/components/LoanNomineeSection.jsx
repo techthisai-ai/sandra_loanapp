@@ -1,12 +1,7 @@
-import { useMemo } from "react";
-
 import {
-
   CheckCircle2,
   AlertTriangle,
-
   ChevronDown,
-
 } from "lucide-react";
 
 import {
@@ -122,35 +117,8 @@ export default function LoanNomineeSection({
   const relationshipOk = Boolean(nomineeRelation) && !relationshipError;
   const shakeKey = `${validationPulse || 0}-${relationshipError ? "invalid" : "ok"}`;
 
-
-
-  const basicsReady = Boolean(
-
-    nomineeName?.trim() &&
-
-      nomineeContact?.length === 10 &&
-
-      !phoneError &&
-
-      Boolean(nomineeRelation) &&
-
-      !relationshipError
-
-  );
-
-  const identityReady = idFormatOk;
-
+  const sectionReady = Boolean(nomineeName?.trim()) && !nameError;
   const docsAttached = [nomineeIdProofName, nomineePhotoName].filter(Boolean).length;
-
-
-
-  const sectionReady = useMemo(
-
-    () => basicsReady && (disableOtp || phoneVerified) && identityReady,
-
-    [basicsReady, disableOtp, phoneVerified, identityReady]
-
-  );
 
 
 
@@ -225,7 +193,7 @@ export default function LoanNomineeSection({
                   htmlFor="nominee-phone"
                   className={`loan-apply-label mb-1 block${contactRequiredError || phoneError ? ` ${invalidLabelClass}` : ""}`}
                 >
-                  Nominee phone *
+                  Nominee phone
                 </label>
                 <div className="flex flex-wrap items-center gap-2">
                   <input
@@ -299,7 +267,6 @@ export default function LoanNomineeSection({
                   }`}
                 >
                   Relationship
-                  <span className={relationshipError ? "text-rose-700" : "text-slate-400"}> *</span>
                 </label>
                 <div className="relative">
                   <select
@@ -314,7 +281,6 @@ export default function LoanNomineeSection({
                           ? "border-emerald-200 bg-emerald-50/30"
                           : ""
                     }`}
-                    aria-required="true"
                     aria-invalid={relationshipError ? "true" : undefined}
                   >
                     <option value="">Select</option>

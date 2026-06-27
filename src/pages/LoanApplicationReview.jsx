@@ -91,8 +91,8 @@ export default function LoanApplicationReview() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!form.nomineeName || !form.nomineeContact) {
-      setError("Please enter nominee name and contact number");
+    if (!form.nomineeName?.trim()) {
+      setError("Please enter nominee name");
       return;
     }
 
@@ -325,7 +325,7 @@ export default function LoanApplicationReview() {
             <label className="space-y-2">
               <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
                 <UserRound className="h-4 w-4 text-blue-600" />
-                Nominee name
+                Nominee name *
               </span>
               <input
                 value={form.nomineeName}
@@ -338,7 +338,7 @@ export default function LoanApplicationReview() {
             <label className="space-y-2">
               <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
                 <Phone className="h-4 w-4 text-blue-600" />
-                Nominee contact
+                Nominee contact (optional)
               </span>
               <input
                 value={form.nomineeContact}

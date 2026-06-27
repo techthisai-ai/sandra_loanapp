@@ -26,8 +26,8 @@ import { approveLoanApplication, getLoanSettings, getNextLoanId, listCustomers, 
 import { formatLoanIdDisplay } from "../utils/loanIds.js";
 import {
   coerceIdentityType,
-  safeValidateIdentityNumber,
-  validatePhoneNumber,
+  validateIdentityNumberIfProvided,
+  validatePhoneNumberIfProvided,
 } from "../utils/customerValidation";
 import { loadLoanCenters } from "../constants/dayCenters";
 import {
@@ -564,25 +564,19 @@ export default function LoanApply() {
     }
     if (field === "nomineeIdentityType") {
       setNomineeIdentityType(value);
-      setNomineeIdentityError(
-        nomineeIdentityNumber ? safeValidateIdentityNumber(value, nomineeIdentityNumber) : ""
-      );
+      setNomineeIdentityError(validateIdentityNumberIfProvided(value, nomineeIdentityNumber));
     }
     if (field === "nomineeIdentityNumber") {
       setNomineeIdentityNumber(value);
-      setNomineeIdentityError(
-        value?.trim()
-          ? safeValidateIdentityNumber(nomineeIdentityType, value)
-          : "Aadhaar number is required"
-      );
+      setNomineeIdentityError(validateIdentityNumberIfProvided(nomineeIdentityType, value));
     }
   };
 
   const onNomineePhoneChange = (digits) => {
     const clean = digits.replace(/\D/g, "").slice(0, 10);
     setNomineeContact(clean);
-    setNomineeContactRequiredError(clean ? "" : "Mobile number is required");
-    setNomineePhoneError(clean ? validatePhoneNumber(clean, "Nominee phone") : "");
+    setNomineeContactRequiredError("");
+    setNomineePhoneError(validatePhoneNumberIfProvided(clean, "Nominee phone"));
   };
 
   const pickNomineeFile = (field, previewSetter, dataField = "") => async (file) => {
@@ -721,28 +715,25 @@ export default function LoanApply() {
     };
 
     const nextNameError = nomineeName?.trim() ? "" : "Nominee name is required";
-    const nextContactRequiredError = nomineeContact ? "" : "Mobile number is required";
-    const nextPhoneError = validatePhoneNumber(nomineeContact, "Nominee phone");
-    const nextIdentityError = safeValidateIdentityNumber(nomineeIdentityType, nomineeIdentityNumber);
-    const nextRelationError = isValidNomineeRelation(nomineeRelation)
-      ? ""
-      : "Please select nominee relationship";
-    const nextIdRequiredError = nomineeIdentityNumber?.trim() ? "" : "Aadhaar number is required";
+    const nextPhoneError = validatePhoneNumberIfProvided(nomineeContact, "Nominee phone");
+    const nextIdentityError = validateIdentityNumberIfProvided(nomineeIdentityType, nomineeIdentityNumber);
+    const nextRelationError =
+      nomineeRelation && !isValidNomineeRelation(nomineeRelation) ? "Please select a valid relationship" : "";
 
     setNomineeNameError(nextNameError);
-    setNomineeContactRequiredError(nextContactRequiredError);
+    setNomineeContactRequiredError("");
     setNomineePhoneError(nextPhoneError);
     setNomineeRelationError(nextRelationError);
-    setNomineeIdentityError(nextIdRequiredError || nextIdentityError);
+    setNomineeIdentityError(nextIdentityError);
 
     const firstInvalidId =
       nextNameError
         ? "nominee-name"
-        : nextContactRequiredError || nextPhoneError
+        : nextPhoneError
           ? "nominee-phone"
           : nextRelationError
             ? "nominee-relationship"
-            : nextIdRequiredError || nextIdentityError
+            : nextIdentityError
               ? "nominee-id-number"
               : "";
 
@@ -751,15 +742,11 @@ export default function LoanApply() {
       scrollToField(firstInvalidId);
     }
 
-    if (nextNameError || nextContactRequiredError) {
-      setError("Please complete nominee details.");
+    if (nextNameError) {
+      setError("Please enter nominee name.");
       return;
     }
-    if (nextRelationError) {
-      setError("Please select nominee relationship");
-      return;
-    }
-    if (nextPhoneError || nextIdentityError || nextIdRequiredError) {
+    if (nextPhoneError || nextRelationError || nextIdentityError) {
       setError("Please fix nominee validation errors");
       return;
     }
