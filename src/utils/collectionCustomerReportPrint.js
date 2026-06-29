@@ -289,6 +289,24 @@ export function groupReportRowsBySubCenter({
   return sections;
 }
 
+/** Preserve a custom customer sequence while keeping sub-center divider rows when the label changes. */
+export function buildOrderedPrintSections(orderedRows = []) {
+  const sections = [];
+  let current = null;
+
+  orderedRows.forEach((row) => {
+    const label = row.subCenter || NO_SUB_CENTER_LABEL;
+    if (current && current.subCenter === label) {
+      current.rows.push(row);
+      return;
+    }
+    current = { subCenter: label, rows: [row] };
+    sections.push(current);
+  });
+
+  return sections;
+}
+
 /** @deprecated Use groupReportRowsBySubCenter with full report rows */
 export function buildCollectionCustomerPrintSections(props) {
   return groupReportRowsBySubCenter({

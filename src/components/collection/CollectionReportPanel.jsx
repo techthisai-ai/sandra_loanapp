@@ -88,9 +88,11 @@ function reportTableCellContent(value, { truncate = false, title } = {}) {
 }
 import {
   downloadCollectionCustomerReport,
+  buildOrderedPrintSections,
   groupReportRowsBySubCenter,
   printCollectionCustomerReport,
 } from "../../utils/collectionCustomerReportPrint";
+import CollectionReportPrintOrder from "./CollectionReportPrintOrder.jsx";
 import { downloadCollectionReportPanelXlsx } from "../../utils/collectionReportExports";
 import { buildReportId, reportDateStamp } from "../../utils/reportFilenames";
 import {
@@ -265,6 +267,77 @@ function PendingAmountModal({ row, onClose }) {
   );
 }
 
+const EMPTY_PRINT_ORDER_STATE = {
+  mainCenter: "",
+  subCenterOrder: [],
+  orders: {},
+};
+
+function buildCollectionReportPanelRows({
+  scopedCustomers,
+  allCenters,
+  centerFilter,
+  subCenterFilter = "All",
+  frequencyFilter,
+  paymentStatusFilter,
+  search,
+  entriesByCustomerId,
+  selectedEmployee,
+  employees,
+  paidState,
+}) {
+  const query = search.trim().toLowerCase();
+
+  return scopedCustomers
+    .filter((customer) => {
+      const { dayCenter, subCenter } = resolveCustomerCenterDisplay(customer, allCenters);
+      if (centerFilter !== "All" && dayCenter !== centerFilter) return false;
+      if (subCenterFilter !== "All" && subCenter !== subCenterFilter) return false;
+      if (frequencyFilter !== "All") {
+        if (normalizeCollectionFrequency(customer.collectionFrequency) !== frequencyFilter) return false;
+      }
+      if (!query) return true;
+      return (
+        String(customer.customerName || "").toLowerCase().includes(query) ||
+        String(customer.customerId || "").toLowerCase().includes(query) ||
+        String(customer.mobileNumber || "").toLowerCase().includes(query)
+      );
+    })
+    .flatMap((customer) => {
+      const allCustomerEntries = entriesByCustomerId.get(customer.customerId) || [];
+      const latestPaid = allCustomerEntries
+        .filter((entry) => String(entry.approvalStatus || "").toLowerCase() === "approved")
+        .sort((a, b) => String(b.collectionDate || "").localeCompare(String(a.collectionDate || "")))[0];
+      const rowEmployee = selectedEmployee || findEmployeeForCollectorName(latestPaid?.collectorName, employees);
+      const { dayCenter, subCenter } = resolveCustomerCenterDisplay(customer, allCenters);
+      return buildCollectionReportRowsForCustomer(
+        enrichCustomerForCollection(customer),
+        allCustomerEntries,
+        {
+          dayCenter,
+          subCenter,
+          employeeId: rowEmployee?.employeeId || "--",
+          employeeName: rowEmployee?.displayName || rowEmployee?.username || latestPaid?.collectorName || "--",
+        },
+        paymentStatusFilter,
+        { paidState }
+      );
+    })
+    .sort((a, b) => {
+      const nameCompare = a.customerName.localeCompare(b.customerName);
+      if (nameCompare !== 0) return nameCompare;
+      return (a.installmentNumber || 0) - (b.installmentNumber || 0);
+    });
+}
+
+function syncSubCenterCustomerIds(existingIds = [], availableIds = []) {
+  const nextSet = new Set(availableIds);
+  const kept = existingIds.filter((customerId) => nextSet.has(customerId));
+  const keptSet = new Set(kept);
+  const appended = availableIds.filter((customerId) => !keptSet.has(customerId));
+  return [...kept, ...appended];
+}
+
 export default function CollectionReportPanel() {
   const { customers, entries, loanApplications, loading: syncLoading } = useLoanDataSync();
   const { user, profile } = useAuth();
@@ -283,6 +356,7 @@ export default function CollectionReportPanel() {
   const [paidState, setPaidState] = useState(() => loadCollectionReportPaidState());
   const [pendingAmountRow, setPendingAmountRow] = useState(null);
   const [entryPersistError, setEntryPersistError] = useState("");
+  const [printOrderState, setPrintOrderState] = useState(EMPTY_PRINT_ORDER_STATE);
   const paidInputRefs = useRef({});
   const [centersRevision, setCentersRevision] = useState(0);
   useEffect(() => {
@@ -389,63 +463,171 @@ export default function CollectionReportPanel() {
     subCentersByDay,
   ]);
 
-  const reportRows = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  const reportRows = useMemo(
+    () =>
+      buildCollectionReportPanelRows({
+        scopedCustomers,
+        allCenters,
+        centerFilter,
+        subCenterFilter,
+        frequencyFilter,
+        paymentStatusFilter,
+        search,
+        entriesByCustomerId,
+        selectedEmployee,
+        employees,
+        paidState,
+      }),
+    [
+      allCenters,
+      centerFilter,
+      subCenterFilter,
+      entriesByCustomerId,
+      frequencyFilter,
+      paymentStatusFilter,
+      paidState,
+      scopedCustomers,
+      search,
+      selectedEmployee,
+      employees,
+    ]
+  );
 
-    return scopedCustomers
-      .filter((customer) => {
-        const { dayCenter, subCenter } = resolveCustomerCenterDisplay(customer, allCenters);
-        if (centerFilter !== "All" && dayCenter !== centerFilter) return false;
-        if (subCenterFilter !== "All" && subCenter !== subCenterFilter) return false;
-        if (frequencyFilter !== "All") {
-          if (normalizeCollectionFrequency(customer.collectionFrequency) !== frequencyFilter) return false;
-        }
-        if (!query) return true;
-        return (
-          String(customer.customerName || "").toLowerCase().includes(query) ||
-          String(customer.customerId || "").toLowerCase().includes(query) ||
-          String(customer.mobileNumber || "").toLowerCase().includes(query)
-        );
-      })
-      .flatMap((customer) => {
-        const allCustomerEntries = entriesByCustomerId.get(customer.customerId) || [];
-        const latestPaid = allCustomerEntries
-          .filter((entry) => String(entry.approvalStatus || "").toLowerCase() === "approved")
-          .sort((a, b) => String(b.collectionDate || "").localeCompare(String(a.collectionDate || "")))[0];
-        const rowEmployee =
-          selectedEmployee || findEmployeeForCollectorName(latestPaid?.collectorName, employees);
-        const { dayCenter, subCenter } = resolveCustomerCenterDisplay(customer, allCenters);
-        return buildCollectionReportRowsForCustomer(
-          enrichCustomerForCollection(customer),
-          allCustomerEntries,
-          {
-            dayCenter,
-            subCenter,
-            employeeId: rowEmployee?.employeeId || "--",
-            employeeName: rowEmployee?.displayName || rowEmployee?.username || latestPaid?.collectorName || "--",
-          },
-          paymentStatusFilter,
-          { paidState }
-        );
-      })
-      .sort((a, b) => {
-        const nameCompare = a.customerName.localeCompare(b.customerName);
-        if (nameCompare !== 0) return nameCompare;
-        return (a.installmentNumber || 0) - (b.installmentNumber || 0);
+  const centerReportRows = useMemo(
+    () =>
+      buildCollectionReportPanelRows({
+        scopedCustomers,
+        allCenters,
+        centerFilter,
+        subCenterFilter: "All",
+        frequencyFilter,
+        paymentStatusFilter,
+        search,
+        entriesByCustomerId,
+        selectedEmployee,
+        employees,
+        paidState,
+      }),
+    [
+      allCenters,
+      centerFilter,
+      entriesByCustomerId,
+      frequencyFilter,
+      paymentStatusFilter,
+      paidState,
+      scopedCustomers,
+      search,
+      selectedEmployee,
+      employees,
+    ]
+  );
+
+  const customersBySubCenter = useMemo(() => {
+    const map = new Map();
+    if (centerFilter === "All") return map;
+
+    centerReportRows.forEach((row) => {
+      const subCenter = row.subCenter || NO_SUB_CENTER_LABEL;
+      if (!map.has(subCenter)) map.set(subCenter, new Map());
+      const bucket = map.get(subCenter);
+      if (!bucket.has(row.customerId)) {
+        bucket.set(row.customerId, {
+          customerId: row.customerId,
+          customerName: row.customerName || row.customerId,
+          subCenter,
+        });
+      }
+    });
+
+    const result = new Map();
+    map.forEach((bucket, subCenter) => {
+      result.set(
+        subCenter,
+        [...bucket.values()].sort((left, right) =>
+          String(left.customerName).localeCompare(String(right.customerName), undefined, { sensitivity: "base" })
+        )
+      );
+    });
+    return result;
+  }, [centerFilter, centerReportRows]);
+
+  useEffect(() => {
+    setPrintOrderState({
+      mainCenter: centerFilter === "All" ? "" : centerFilter,
+      subCenterOrder: [],
+      orders: {},
+    });
+  }, [centerFilter]);
+
+  useEffect(() => {
+    if (centerFilter === "All" || subCenterFilter === "All") return;
+
+    const subCenter = subCenterFilter;
+    const availableIds = (customersBySubCenter.get(subCenter) || []).map((option) => option.customerId);
+
+    setPrintOrderState((current) => {
+      if (current.mainCenter !== centerFilter) return current;
+
+      const orders = { ...current.orders };
+      let subCenterOrder = current.subCenterOrder;
+
+      if (!subCenterOrder.includes(subCenter)) {
+        subCenterOrder = [...subCenterOrder, subCenter];
+        orders[subCenter] = availableIds;
+      } else {
+        orders[subCenter] = syncSubCenterCustomerIds(orders[subCenter], availableIds);
+      }
+
+      return {
+        mainCenter: centerFilter,
+        subCenterOrder,
+        orders,
+      };
+    });
+  }, [centerFilter, customersBySubCenter, subCenterFilter]);
+
+  const printOrderSections = useMemo(() => {
+    if (centerFilter === "All" || printOrderState.mainCenter !== centerFilter) return [];
+
+    return printOrderState.subCenterOrder.map((subCenter) => {
+      const catalog = customersBySubCenter.get(subCenter) || [];
+      const byId = new Map(catalog.map((option) => [option.customerId, option]));
+      const items = (printOrderState.orders[subCenter] || [])
+        .map((customerId) => byId.get(customerId))
+        .filter(Boolean);
+
+      return {
+        subCenter,
+        items,
+        isActive: subCenter === subCenterFilter,
+      };
+    });
+  }, [centerFilter, customersBySubCenter, printOrderState, subCenterFilter]);
+
+  const printOrderCustomerCount = useMemo(
+    () => printOrderSections.reduce((sum, section) => sum + section.items.length, 0),
+    [printOrderSections]
+  );
+
+  const usingSavedPrintOrder = centerFilter !== "All" && printOrderCustomerCount > 0;
+
+  const reportRowsForPrintExport = useMemo(() => {
+    if (!usingSavedPrintOrder) return reportRows;
+
+    const rowByCustomerId = new Map();
+    centerReportRows.forEach((row) => {
+      if (!rowByCustomerId.has(row.customerId)) rowByCustomerId.set(row.customerId, row);
+    });
+
+    const ordered = [];
+    printOrderState.subCenterOrder.forEach((subCenter) => {
+      (printOrderState.orders[subCenter] || []).forEach((customerId) => {
+        const row = rowByCustomerId.get(customerId);
+        if (row) ordered.push(row);
       });
-  }, [
-    allCenters,
-    centerFilter,
-    subCenterFilter,
-    entriesByCustomerId,
-    frequencyFilter,
-    paymentStatusFilter,
-    paidState,
-    scopedCustomers,
-    search,
-    selectedEmployee,
-    employees,
-  ]);
+    });
+    return ordered;
+  }, [centerReportRows, printOrderState, reportRows, usingSavedPrintOrder]);
 
   const stats = useMemo(() => {
     const customerIds = new Set(reportRows.map((row) => row.customerId));
@@ -567,14 +749,22 @@ export default function CollectionReportPanel() {
   const printEmployee = selectedEmployee || loggedInEmployee;
 
   const buildExportPayload = useCallback(() => {
-    let sections = groupReportRowsBySubCenter({
-      reportRows,
-      mainCenter: centerFilter,
-      allCenters,
-      employee: printEmployee || null,
-    });
-    if (subCenterFilter !== "All") {
-      sections = sections.filter((section) => section.subCenter === subCenterFilter);
+    const usingPrintOrder = usingSavedPrintOrder;
+    const exportRows = usingPrintOrder ? reportRowsForPrintExport : reportRows;
+    let sections;
+
+    if (usingPrintOrder) {
+      sections = buildOrderedPrintSections(exportRows);
+    } else {
+      sections = groupReportRowsBySubCenter({
+        reportRows: exportRows,
+        mainCenter: centerFilter,
+        allCenters,
+        employee: printEmployee || null,
+      });
+      if (subCenterFilter !== "All") {
+        sections = sections.filter((section) => section.subCenter === subCenterFilter);
+      }
     }
 
     const employeeLabel =
@@ -592,12 +782,17 @@ export default function CollectionReportPanel() {
       filterLines: [
         `Employee: ${employeeLabel}`,
         `Main center: ${centerFilter}`,
-        `Sub-center: ${subCenterFilter === "All" ? "All" : subCenterFilter}`,
+        `Sub-center: ${subCenterFilter === "All" ? "All saved" : subCenterFilter}`,
         `Collection type: ${frequencyFilter === "All" ? "All" : frequencyFilter}`,
         `Payment: ${paymentStatusFilter === "All" ? "All" : paymentStatusFilter}`,
+        ...(usingPrintOrder
+          ? [
+              `Print order: ${printOrderCustomerCount} customer(s) across ${printOrderState.subCenterOrder.length} sub-center(s)`,
+            ]
+          : []),
       ],
       summaryCards: [
-        { label: "Customers", value: String(stats.totalCustomers) },
+        { label: "Customers", value: String(usingPrintOrder ? printOrderCustomerCount : stats.totalCustomers) },
         { label: "Collection", value: formatCurrency(stats.totalCollected) },
         { label: "Pending customer", value: String(stats.pendingCustomers) },
         { label: "Pending amount", value: formatCurrency(stats.pendingCollection) },
@@ -611,14 +806,22 @@ export default function CollectionReportPanel() {
     paidState,
     paymentStatusFilter,
     printEmployee,
+    printOrderCustomerCount,
+    printOrderState.subCenterOrder,
     reportRows,
+    reportRowsForPrintExport,
     stats,
     subCenterFilter,
+    usingSavedPrintOrder,
   ]);
 
   const handlePrint = useCallback(() => {
     setPrintLoading(true);
     try {
+      if (usingSavedPrintOrder && !reportRowsForPrintExport.length) {
+        window.alert("No customers in print order for the selected center and sub-centers.");
+        return;
+      }
       const payload = buildExportPayload();
       if (!payload.sections.some((section) => section.rows?.length)) {
         window.alert("No customers found for the selected filters.");
@@ -631,11 +834,15 @@ export default function CollectionReportPanel() {
     } finally {
       setPrintLoading(false);
     }
-  }, [buildExportPayload]);
+  }, [buildExportPayload, reportRowsForPrintExport.length, usingSavedPrintOrder]);
 
   const handlePdf = useCallback(async () => {
     setPdfLoading(true);
     try {
+      if (usingSavedPrintOrder && !reportRowsForPrintExport.length) {
+        window.alert("No customers in print order for the selected center and sub-centers.");
+        return;
+      }
       const payload = buildExportPayload();
       if (!payload.sections.some((section) => section.rows?.length)) {
         window.alert("No customers found for the selected filters.");
@@ -648,7 +855,7 @@ export default function CollectionReportPanel() {
     } finally {
       setPdfLoading(false);
     }
-  }, [buildExportPayload]);
+  }, [buildExportPayload, reportRowsForPrintExport.length, usingSavedPrintOrder]);
 
   const handleExcel = useCallback(async () => {
     setExcelLoading(true);
@@ -865,6 +1072,33 @@ export default function CollectionReportPanel() {
           </div>
         </div>
       </div>
+
+      <CollectionReportPrintOrder
+        sections={printOrderSections}
+        onRemove={(subCenter, customerId) => {
+          setPrintOrderState((current) => ({
+            ...current,
+            orders: {
+              ...current.orders,
+              [subCenter]: (current.orders[subCenter] || []).filter((id) => id !== customerId),
+            },
+          }));
+        }}
+        onReorder={(subCenter, fromIndex, toIndex) => {
+          setPrintOrderState((current) => {
+            const list = [...(current.orders[subCenter] || [])];
+            const [moved] = list.splice(fromIndex, 1);
+            list.splice(toIndex, 0, moved);
+            return {
+              ...current,
+              orders: {
+                ...current.orders,
+                [subCenter]: list,
+              },
+            };
+          });
+        }}
+      />
 
       <div className="mt-4 min-w-0 max-w-full overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-sm [contain:inline-size]">
         <div className="w-full overflow-x-auto overscroll-x-contain pb-1 [scrollbar-color:rgba(148,163,184,0.9)_rgba(241,245,249,0.95)] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/90 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-100">
