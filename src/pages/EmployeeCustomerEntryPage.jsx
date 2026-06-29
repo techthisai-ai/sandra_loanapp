@@ -79,8 +79,7 @@ function resolveCustomerApprovalStatus(customer) {
 export default function EmployeeCustomerEntryPage() {
   const { customers, loading } = useLoanDataSync();
   const { user, profile } = useAuth();
-  const { assignedCenters, allCenters, hasAssignedCenter, assignedCentersLabel, scopeCustomers } =
-    useEmployeeCenterScope();
+  const { assignedCenters, allCenters, hasAssignedCenter, scopeCustomers } = useEmployeeCenterScope();
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("All");
 
@@ -156,15 +155,11 @@ export default function EmployeeCustomerEntryPage() {
         )}
       </div>
 
-      {hasAssignedCenter ? (
-        <p className="mb-2 rounded-xl border border-blue-100 bg-blue-50/60 px-2.5 py-1.5 text-[11px] text-blue-900">
-          Assigned centres: <span className="font-semibold">{assignedCentersLabel}</span>
-        </p>
-      ) : (
+      {!hasAssignedCenter ? (
         <p className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
           No centre assigned yet. Ask your administrator to set your assigned centre.
         </p>
-      )}
+      ) : null}
 
       <div className="mb-2 grid grid-cols-3 gap-1.5">
         <EntryStatCard
